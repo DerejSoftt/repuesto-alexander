@@ -1,0 +1,260 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - DDMAX - MOTO IMPORT</title>
+    <link rel="shortcut icon" href="{% static 'image/favicon2.ico' %}" type="image/x-icon">
+
+    <style>
+        :root {
+            --primary-orange: hsl(25, 95%, 53%);
+            --primary-orange-dark: hsl(25, 95%, 45%);
+            --text-light: hsl(210, 20%, 98%);
+            --card-text: hsl(222.2, 84%, 4.9%);
+            --border-color: hsl(214.3, 31.8%, 91.4%);
+            --input-bg: hsl(0, 0%, 100%);
+            --input-border: hsl(214.3, 31.8%, 91.4%);
+            --placeholder-color: hsl(215.4, 16.3%, 56.9%);
+            --error-color: hsl(0, 84.2%, 60.2%);
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image: url('../images/Logo2_2.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            color: var(--card-text);
+        }
+
+        .card {
+            background: linear-gradient(to bottom right, hsla(0, 0%, 100%, 0.7), hsla(25, 95%, 90%, 0.7));
+            backdrop-filter: blur(8px);
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 90%;
+            max-width: 24rem;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .card-header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-header img {
+            width: 170px;
+            height: auto;
+            margin: 0 auto;
+            display: block;
+        }
+
+        .card-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            margin-top: 0.3rem;
+        }
+
+        .card-description {
+            font-size: 0.9rem;
+            color: hsl(215.4, 16.3%, 46.9%);
+            margin-bottom: 1rem;
+        }
+
+        .card-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            display: block;
+            width: calc(100% - 1.5rem);
+            padding: 0.625rem 0.75rem;
+            border: 1px solid var(--input-border);
+            border-radius: 0.375rem;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            font-size: 1rem;
+            line-height: 1.5rem;
+            background-color: var(--input-bg);
+            color: var(--card-text);
+        }
+
+        .form-group input::placeholder {
+            color: var(--placeholder-color);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-orange);
+            box-shadow: 0 0 0 2px hsla(25, 95%, 53%, 0.25);
+        }
+
+        .card-footer {
+            padding-top: 1rem;
+            margin-bottom: 0;
+        }
+
+        .btn {
+            text-decoration: none;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0.7rem 0.0rem;
+            border: 1px solid transparent;
+            border-radius: 0.375rem;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-light);
+            background-color: var(--primary-orange);
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            margin: 0;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-orange-dark);
+        }
+
+        .btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px hsla(25, 95%, 53%, 0.5), 0 0 0 4px hsla(25, 95%, 53%, 0.25);
+        }
+
+        .error-messages {
+            background-color: hsla(0, 84.2%, 60.2%, 0.1);
+            border: 1px solid var(--error-color);
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            color: var(--error-color);
+        }
+
+        .error-messages ul {
+            margin: 0;
+            padding-left: 1.25rem;
+        }
+
+        .error-messages li {
+            margin-bottom: 0.25rem;
+        }
+
+        .error-messages li:last-child {
+            margin-bottom: 0;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="card-header">
+            <img src="{% static 'image/favicon2.ico' %}" alt="logo">
+            <h1 class="card-title">DDMAX - MOTO IMPORT</h1>
+            <p class="card-description">Ingresa tu usuario y contraseña para acceder a tu cuenta.</p>
+        </div>
+
+        {% if messages %}
+        <div class="error-messages">
+            <ul>
+                {% for message in messages %}
+                <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{% url 'login' %}" class="card-content">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="username">Usuario</label>
+                <input id="username" name="username" type="text" placeholder="Usuario"  required>
+            </div>
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input id="password" name="password" type="password" placeholder="Contraceña" required>
+            </div>
+            <div class="card-footer">
+                <button type="submit" class="btn" id="login-button">
+                    <span id="button-text">Iniciar Sesión</span>
+                    <span id="loading-spinner" class="loading hidden"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.querySelector('form');
+            const loginButton = document.getElementById('login-button');
+            const buttonText = document.getElementById('button-text');
+            const loadingSpinner = document.getElementById('loading-spinner');
+
+            loginForm.addEventListener('submit', function(e) {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+
+                if (!username || !password) {
+                    e.preventDefault();
+                    alert('Por favor, complete todos los campos');
+                    return;
+                }
+
+                buttonText.textContent = 'Iniciando sesión...';
+                loadingSpinner.classList.remove('hidden');
+                loginButton.disabled = true;
+            });
+
+            const errorMessages = document.querySelector('.error-messages');
+            if (errorMessages) {
+                setTimeout(() => {
+                    errorMessages.style.display = 'none';
+                }, 5000);
+            }
+        });
+    </script>
+</body>
+</html>

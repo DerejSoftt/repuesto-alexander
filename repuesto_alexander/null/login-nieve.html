@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Venta de Teléfonos</title>
+    <style>
+        /* Variables CSS para los colores */
+        :root {
+            --primary-orange: hsl(25, 95%, 53%);
+            --primary-orange-dark: hsl(25, 95%, 45%);
+            --text-light: hsl(210, 20%, 98%);
+            --card-text: hsl(222.2, 84%, 4.9%);
+            --border-color: hsl(214.3, 31.8%, 91.4%);
+            --input-bg: hsla(0, 0%, 100%, 0.1);
+            --input-border: hsla(255, 255%, 255%, 0.2);
+            --placeholder-color: hsl(215.4, 16.3%, 56.9%);
+        }
+
+        /* Reset y estilos generales */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Canvas para el efecto de partículas */
+        #particleCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d1b69 100%);
+        }
+
+        /* Overlay para mejor contraste */
+        .background-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            z-index: 2;
+        }
+
+        /* Contenedor principal */
+        .container {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        /* Contenedor de la tarjeta de login */
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.75rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            width: 100%;
+            max-width: 24rem;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* Encabezado de la tarjeta */
+        .card-header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .icon-container {
+            margin: 0 auto 1rem auto;
+            width: 3rem;
+            height: 3rem;
+            background: rgba(251, 146, 60, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-header svg {
+            height: 1.5rem;
+            width: 1.5rem;
+            color: rgb(251, 146, 60);
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: white;
+        }
+
+        .card-description {
+            font-size: 0.875rem;
+            color: rgb(209, 213, 219);
+        }
+
+        /* Contenido de la tarjeta */
+        .card-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: white;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.625rem 0.75rem;
+            border: 1px solid var(--input-border);
+            border-radius: 0.375rem;
+            font-size: 1rem;
+            line-height: 1.5rem;
+            background-color: var(--input-bg);
+            color: white;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .form-group input::placeholder {
+            color: rgb(156, 163, 175);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: rgb(251, 146, 60);
+            box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.5);
+        }
+
+        /* Botón */
+        .card-footer {
+            padding-top: 1rem;
+        }
+
+        .btn {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0.625rem 1rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: white;
+            background-color: rgb(234, 88, 12);
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background-color: rgb(194, 65, 12);
+        }
+
+        .btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.5), 0 0 0 4px rgba(251, 146, 60, 0.25);
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .container {
+                padding: 0.5rem;
+            }
+            
+            .card {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas para el efecto de partículas -->
+    <canvas id="particleCanvas"></canvas>
+    
+    <!-- Overlay de fondo -->
+    <div class="background-overlay"></div>
+
+    <!-- Contenedor principal -->
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="icon-container">
+                    <!-- Icono de teléfono -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
+                        <path d="M12 18h.01"/>
+                    </svg>
+                </div>
+                <h1 class="card-title">Iniciar Sesión</h1>
+                <p class="card-description">Ingresa tu usuario y contraseña para acceder a tu cuenta.</p>
+            </div>
+            
+            <div class="card-content">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Usuario</label>
+                        <input id="username" type="text" placeholder="tu_usuario" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Contraseña</label>
+                        <input id="password" type="password" placeholder="Clave" required>
+                    </div>
+                    <div class="card-footer">
+                        <button type="submit" class="btn">Iniciar Sesión</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración del efecto de partículas
+        class ParticleSystem {
+            constructor() {
+                this.canvas = document.getElementById('particleCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.particles = [];
+                this.particleCount = 100;
+                
+                this.init();
+                this.animate();
+                
+                // Redimensionar canvas cuando cambie el tamaño de la ventana
+                window.addEventListener('resize', () => this.resizeCanvas());
+            }
+            
+            init() {
+                this.resizeCanvas();
+                this.createParticles();
+            }
+            
+            resizeCanvas() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+            
+            createParticles() {
+                this.particles = [];
+                for (let i = 0; i < this.particleCount; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.canvas.width,
+                        y: Math.random() * this.canvas.height,
+                        size: Math.random() * 3 + 1,
+                        speed: Math.random() * 2 + 0.5,
+                        opacity: Math.random() * 0.8 + 0.2,
+                        drift: Math.random() * 0.5 - 0.25
+                    });
+                }
+            }
+            
+            drawStar(x, y, size, opacity) {
+                this.ctx.save();
+                this.ctx.globalAlpha = opacity;
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = '#ffffff';
+                
+                this.ctx.beginPath();
+                const spikes = 6;
+                const outerRadius = size;
+                const innerRadius = size * 0.5;
+                
+                for (let i = 0; i < spikes * 2; i++) {
+                    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                    const angle = (i * Math.PI) / spikes;
+                    const px = x + Math.cos(angle) * radius;
+                    const py = y + Math.sin(angle) * radius;
+                    
+                    if (i === 0) {
+                        this.ctx.moveTo(px, py);
+                    } else {
+                        this.ctx.lineTo(px, py);
+                    }
+                }
+                
+                this.ctx.closePath();
+                this.ctx.fill();
+                this.ctx.restore();
+            }
+            
+            updateParticles() {
+                this.particles.forEach(particle => {
+                    // Actualizar posición
+                    particle.y += particle.speed;
+                    particle.x += particle.drift;
+                    
+                    // Efecto de ondulación
+                    particle.x += Math.sin(particle.y * 0.01) * 0.5;
+                    
+                    // Reiniciar partícula cuando sale de la pantalla
+                    if (particle.y > this.canvas.height) {
+                        particle.y = -10;
+                        particle.x = Math.random() * this.canvas.width;
+                    }
+                    
+                    if (particle.x > this.canvas.width) {
+                        particle.x = 0;
+                    } else if (particle.x < 0) {
+                        particle.x = this.canvas.width;
+                    }
+                });
+            }
+            
+            draw() {
+                // Limpiar canvas
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Dibujar partículas
+                this.particles.forEach(particle => {
+                    this.drawStar(particle.x, particle.y, particle.size, particle.opacity);
+                });
+            }
+            
+            animate() {
+                this.updateParticles();
+                this.draw();
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+        
+        // Inicializar el sistema de partículas cuando se carga la página
+        window.addEventListener('load', () => {
+            new ParticleSystem();
+        });
+        
+        // Manejar el formulario de login
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (username && password) {
+                // Aquí puedes agregar la lógica de autenticación
+                alert('¡Login exitoso! (Aquí conectarías con tu backend)');
+                // window.location.href = './inicio.html'; // Descomenta para redireccionar
+            } else {
+                alert('Por favor, completa todos los campos.');
+            }
+        });
+    </script>
+</body>
+</html>

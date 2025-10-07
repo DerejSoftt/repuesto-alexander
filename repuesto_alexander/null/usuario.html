@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios - D'uro Cell</title>
+    <!-- Boxicons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <style>
+        /* Estilos generales y de diseño copiados de sucursales.html y adaptados */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+        }
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .sidebar-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .sidebar-header p {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 3px;
+        }
+        .sidebar-menu {
+            padding: 20px 0;
+            flex: 1;
+        }
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 25px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+            position: relative;
+        }
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-left-color: rgba(255, 255, 255, 0.8);
+            padding-left: 30px;
+        }
+        .menu-item.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-left-color: white;
+        }
+        .menu-item i {
+            font-size: 1.3rem;
+            margin-right: 15px;
+            width: 25px;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+        .menu-item:hover i,
+        .menu-item.active i {
+            opacity: 1;
+        }
+        .menu-item span {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        .sidebar-footer {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .menu-toggle:hover {
+            background: #ee5a24;
+            transform: scale(1.05);
+        }
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            min-height: 100vh;
+            padding: 20px;
+            transition: margin-left 0.3s ease;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+        .header {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+        .content-container {
+            padding: 40px;
+        }
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+        .stat-icon {
+            font-size: 2.5rem;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        .stat-icon.total-users {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Azul/Morado */
+        }
+        .stat-icon.active-users {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%); /* Verde */
+        }
+        .stat-icon.inactive-users {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); /* Rojo */
+        }
+        .stat-info {
+            text-align: left;
+        }
+        .stat-info h3 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        .stat-info p {
+            opacity: 0.9;
+            font-size: 1rem;
+            color: #666;
+        }
+        /* Filters Section */
+        .filters-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            align-items: flex-end;
+        }
+        .filter-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+        }
+        .filter-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        .filter-input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .filter-input.select {
+            appearance: none;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            background-size: 16px;
+            cursor: pointer;
+        }
+        /* Table Styles */
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 25px;
+            border-bottom: 1px solid #e1e8ed;
+        }
+        .table-title {
+            font-size: 1.5rem;
+            color: #333;
+            font-weight: 700;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 700px; /* Ajusta según la cantidad de columnas */
+        }
+        .table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e1e8ed;
+            vertical-align: middle;
+            font-size: 0.9rem;
+        }
+        .table tbody tr:hover {
+            background: #f8f9fa;
+            transform: scale(1.01);
+            transition: all 0.3s ease;
+        }
+        .table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .status-activa {
+            background: #28a745;
+            color: white;
+        }
+        .status-inactiva {
+            background: #dc3545;
+            color: white;
+        }
+        .actions {
+            display: flex;
+            gap: 5px;
+            white-space: nowrap;
+        }
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            font-size: 1.1rem;
+        }
+        .no-data i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        /* Buttons */
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+            padding: 8px 12px;
+            font-size: 0.85rem;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.4);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+            padding: 8px 12px;
+            font-size: 0.85rem;
+        }
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(220, 53, 69, 0.4);
+        }
+        .btn-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(23, 162, 184, 0.3);
+            padding: 8px 12px;
+            font-size: 0.85rem;
+        }
+        .btn-info:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(23, 162, 184, 0.4);
+        }
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            width: 95%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease;
+        }
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            transition: background 0.3s ease;
+        }
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .modal-body {
+            padding: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="tel"],
+        .form-group input[type="email"],
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .modal-footer {
+            padding: 20px 30px;
+            border-top: 1px solid #e1e8ed;
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+        }
+        .btn-outline {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+        .btn-outline:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .pagination button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: #764ba2;
+        }
+        .pagination button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .pagination span {
+            font-weight: 600;
+            color: #555;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        /* Desktop specific styles */
+        @media (min-width: 769px) {
+            .sidebar {
+                position: fixed;
+                transform: translateX(0);
+                height: 100vh;
+            }
+            .main-content {
+                margin-left: 280px;
+                min-height: 100vh;
+            }
+            .menu-toggle {
+                display: none;
+            }
+            .sidebar-overlay {
+                display: none !important;
+            }
+        }
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 100%;
+                max-width: 300px;
+                height: 100vh;
+            }
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 10px;
+                min-height: 100vh;
+            }
+            .menu-toggle {
+                display: block;
+            }
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            .header {
+                padding: 20px;
+                padding-top: 60px;
+            }
+            .header h1 {
+                font-size: 2rem;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .content-container {
+                padding: 20px;
+            }
+            .filters-grid {
+                grid-template-columns: 1fr;
+            }
+            .table-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .modal-content {
+                width: 95%;
+                margin: 20px;
+            }
+            .modal-header {
+                padding: 20px;
+            }
+            .modal-body {
+                padding: 20px;
+            }
+            .modal-footer {
+                flex-direction: column;
+            }
+            body.sidebar-open {
+                overflow: hidden;
+            }
+        }
+        /* Scrollbar personalizado */
+        .sidebar::-webkit-scrollbar,
+        .modal-content::-webkit-scrollbar,
+        .table-container::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .sidebar::-webkit-scrollbar-track,
+        .modal-content::-webkit-scrollbar-track,
+        .table-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .sidebar::-webkit-scrollbar-thumb,
+        .modal-content::-webkit-scrollbar-thumb,
+        .table-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+        .sidebar::-webkit-scrollbar-thumb:hover,
+        .modal-content::-webkit-scrollbar-thumb:hover,
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <!-- Menu Toggle Button -->
+    <button class="menu-toggle" onclick="toggleSidebar()">
+        <i class='bx bx-menu'></i>
+    </button>
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>
+                <i class='bx bx-mobile-alt'></i>
+                DEREJSOFT
+            </h2>
+            <p>Derejsoft - superadmin</p>
+            <p>derejsoft2003@gmail.com</p>
+        </div>
+        <div class="sidebar-menu">
+            <a href="#" class="menu-item">
+                <i class='bx bx-home-alt'></i>
+                <span>Inicio</span>
+            </a>
+            <a href="ventas.html" class="menu-item">
+                <i class='bx bx-dollar-circle'></i>
+                <span>Facturacion</span>
+            </a>
+            <a href="registrodecliente.html" class="menu-item">
+                <i class='bx bx-user-plus'></i>
+                <span>Registrar Clientes</span>
+            </a>
+            <a href="entrada.html" class="menu-item">
+                <i class='bx bx-shopping-bag'></i>
+                <span>Entrada de mercancia</span>
+            </a>
+            <a href="cuentaporcobrar.html" class="menu-item">
+                <i class='bx bx-credit-card'></i>
+                <span>Cuentas por Cobrar</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-bar-chart-alt-2'></i>
+                <span>Reportes</span>
+            </a>
+            <a href="listadecliente.html" class="menu-item">
+                <i class='bx bx-user'></i>
+                <span>Clientes</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-trending-up'></i>
+                <span>Cuadre</span>
+            </a>
+            <a href="gestiondesuplidores.html" class="menu-item">
+                <i class='bx bx-store'></i>
+                <span>Suplidores</span>
+            </a>
+            <a href="sucursales.html" class="menu-item">
+                <i class='bx bx-building-house'></i>
+                <span>Sucursales</span>
+            </a>
+            <a href="Roles.html" class="menu-item">
+                <i class='bx bx-user-check'></i>
+                <span>Roles</span>
+            </a>
+            <a href="usuarios.html" class="menu-item active">
+                <i class='bx bx-group'></i>
+                <span>Usuarios</span>
+            </a>
+            <a href="cajas.html" class="menu-item">
+                <i class='bx bx-credit-card-alt'></i>
+                <span>Cajas</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-cog'></i>
+                <span>Ajustes</span>
+            </a>
+            <a href="login.html" class="menu-item">
+                <i class='bx bx-log-out'></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <p>Dalecompra v 1.2.2</p>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container">
+            <div class="header">
+                <h1>
+                    <i class='bx bx-group'></i>
+                    Gestión de Usuarios
+                </h1>
+                <p>Administra los usuarios del sistema D'uro Cell</p>
+            </div>
+            <div class="content-container">
+                <!-- Stats Grid for Users -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon total-users">
+                            <i class='bx bx-user-plus'></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalUsers">0</h3>
+                            <p>Total de Usuarios</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon active-users">
+                            <i class='bx bx-user-check'></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="activeUsers">0</h3>
+                            <p>Usuarios Activos</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon inactive-users">
+                            <i class='bx bx-user-minus'></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="inactiveUsers">0</h3>
+                            <p>Usuarios Inactivos</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters Section -->
+                <div class="filters-section">
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <label for="searchUser">Buscar Usuario</label>
+                            <input type="text" class="filter-input" placeholder="Nombre, rol o sucursal..." id="searchUser">
+                        </div>
+                        <div class="filter-group">
+                            <label for="roleFilter">Rol</label>
+                            <select class="filter-input select" id="roleFilter">
+                                <option value="">Todos los roles</option>
+                                <!-- Options populated by JS -->
+                            </select>
+                        </div>
+                        <div class="filter-group" id="branchFilterGroup">
+                            <label for="branchFilter">Sucursal</label>
+                            <select class="filter-input select" id="branchFilter">
+                                <option value="">Todas las sucursales</option>
+                                <!-- Options populated by JS -->
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="statusFilter">Estado</label>
+                            <select class="filter-input select" id="statusFilter">
+                                <option value="">Todos los estados</option>
+                                <option value="activo">Activo</option>
+                                <option value="inactivo">Inactivo</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <button class="btn btn-primary" onclick="openCreateUserModal()">
+                                <i class='bx bx-plus'></i>
+                                Nuevo Usuario
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 class="table-title">Lista de Usuarios</h2>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="table" id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Rol</th>
+                                    <th>Sucursal</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                                <!-- Data will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                        <div class="no-data" id="noDataMessage" style="display: none;">
+                            <i class='bx bx-user'></i>
+                            <p>No hay usuarios registrados</p>
+                        </div>
+                    </div>
+                    <div class="pagination" id="paginationControls">
+                        <button id="prevPageBtn" disabled onclick="changePage(-1)">Anterior</button>
+                        <span id="pageInfo">Página 1 de 1</span>
+                        <button id="nextPageBtn" disabled onclick="changePage(1)">Siguiente</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Crear Usuario -->
+    <div class="modal" id="createUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>
+                    <i class='bx bx-user-plus'></i>
+                    Crear Nuevo Usuario
+                </h2>
+                <button class="close-btn" onclick="closeCreateUserModal()">
+                    <i class='bx bx-x'></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="createUserForm">
+                    <div class="form-group">
+                        <label for="createUserName">Nombre</label>
+                        <input type="text" id="createUserName" class="filter-input" placeholder="Ej: Juan Pérez" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="createUserEmail">Email</label>
+                        <input type="email" id="createUserEmail" class="filter-input" placeholder="ejemplo@durocell.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="createUserPassword">Contraseña</label>
+                        <input type="password" id="createUserPassword" class="filter-input" required>
+                    </div>
+                    <div class="form-group" id="createUserBranchGroup">
+                        <label for="createUserBranch">Sucursal</label>
+                        <select id="createUserBranch" class="filter-input select" required>
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="createUserRole">Rol</label>
+                        <select id="createUserRole" class="filter-input select" required>
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="createUserStatus">Estado</label>
+                        <select id="createUserStatus" class="filter-input select" required>
+                            <option value="activo" selected>Activo</option>
+                            <option value="inactivo">Inactivo</option>
+                        </select>
+                    </div>
+                    <div id="createMessageContainer" class="message-container"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeCreateUserModal()">
+                    <i class='bx bx-x'></i>
+                    Cancelar
+                </button>
+                <button type="submit" form="createUserForm" class="btn btn-primary">
+                    <i class='bx bx-save'></i>
+                    Guardar Usuario
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Editar Usuario -->
+    <div class="modal" id="editUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>
+                    <i class='bx bx-edit'></i>
+                    Editar Usuario
+                </h2>
+                <button class="close-btn" onclick="closeEditUserModal()">
+                    <i class='bx bx-x'></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editUserForm">
+                    <input type="hidden" id="editUserId">
+                    <div class="form-group">
+                        <label for="editUserName">Nombre</label>
+                        <input type="text" id="editUserName" class="filter-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editUserEmail">Email</label>
+                        <input type="email" id="editUserEmail" class="filter-input" readonly> <!-- Email no editable -->
+                    </div>
+                    <div class="form-group" id="editUserBranchGroup">
+                        <label for="editUserBranch">Sucursal</label>
+                        <select id="editUserBranch" class="filter-input select" required>
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editUserRole">Rol</label>
+                        <select id="editUserRole" class="filter-input select" required>
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editUserStatus">Estado</label>
+                        <select id="editUserStatus" class="filter-input select" required>
+                            <option value="activo">Activo</option>
+                            <option value="inactivo">Inactiva</option>
+                        </select>
+                    </div>
+                    <div id="editMessageContainer" class="message-container"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeEditUserModal()">
+                    <i class='bx bx-x'></i>
+                    Cancelar
+                </button>
+                <button type="submit" form="editUserForm" class="btn btn-primary">
+                    <i class='bx bx-save'></i>
+                    Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // SIMULACIÓN DEL ROL DEL USUARIO ACTUAL
+        // Cambia a 'NormalUser' para probar el comportamiento de un usuario normal
+        const currentUserRole = 'SuperAdmin'; // O 'NormalUser'
+        // Si es 'NormalUser', simula su sucursal asignada (ej. Sucursal Principal)
+        const currentUserBranchId = 1; 
+
+        // Datos de sucursales (copiados de sucursales.html para que el dropdown funcione)
+        let branches = JSON.parse(localStorage.getItem('branches')) || [];
+        if (branches.length === 0) {
+            branches = [
+                { id: 1, codigo: "SDQ-001", nombre: "Sucursal Principal", ciudad: "Santo Domingo", encargado: "Juan Pérez", telefono: "(809) 111-2222", estado: "activa" },
+                { id: 2, codigo: "STI-002", nombre: "Sucursal Santiago", ciudad: "Santiago", encargado: "María Rodríguez", telefono: "(809) 222-3333", estado: "activa" },
+                { id: 3, codigo: "PUN-003", nombre: "Sucursal Punta Cana", ciudad: "Punta Cana", encargado: "Carlos Gómez", telefono: "(809) 333-4444", estado: "inactiva" },
+                { id: 4, codigo: "LAV-004", nombre: "Sucursal La Vega", ciudad: "La Vega", encargado: "Ana Díaz", telefono: "(809) 444-5555", estado: "activa" },
+                { id: 5, codigo: "PMA-005", nombre: "Sucursal Puerto Plata", ciudad: "Puerto Plata", encargado: "Luis Hernández", telefono: "(809) 555-6666", estado: "activa" },
+                { id: 6, codigo: "SFC-006", nombre: "Sucursal San Francisco", ciudad: "San Francisco de Macorís", encargado: "Sofía Martínez", telefono: "(809) 666-7777", estado: "inactiva" },
+                { id: 7, codigo: "HIG-007", nombre: "Sucursal Higüey", ciudad: "Higüey", encargado: "Pedro Santana", telefono: "(809) 777-8888", estado: "activa" },
+                { id: 8, codigo: "BCH-008", nombre: "Sucursal Boca Chica", ciudad: "Boca Chica", encargado: "Laura Pérez", telefono: "(809) 888-9999", estado: "activa" },
+                { id: 9, codigo: "ROM-009", nombre: "Sucursal La Romana", ciudad: "La Romana", encargado: "Miguel Ángel", telefono: "(809) 999-0000", estado: "activa" },
+                { id: 10, codigo: "AZU-010", nombre: "Sucursal Azua", ciudad: "Azua", encargado: "Elena García", telefono: "(809) 000-1111", estado: "inactiva" },
+                { id: 11, codigo: "MOC-011", nombre: "Sucursal Moca", ciudad: "Moca", encargado: "Roberto Núñez", telefono: "(809) 111-2222", estado: "activa" },
+                { id: 12, codigo: "COT-012", nombre: "Sucursal Cotuí", ciudad: "Cotuí", encargado: "Isabel Reyes", telefono: "(809) 222-3333", estado: "activa" }
+            ];
+            localStorage.setItem('branches', JSON.stringify(branches));
+        }
+
+        // Datos de roles (copiados de Roles.html para que el dropdown funcione)
+        let roles = JSON.parse(localStorage.getItem('roles')) || [];
+        if (roles.length === 0) {
+            roles = [
+                { id: 1, nombre: "Super Administrador", descripcion: "Control total del sistema.", estado: "activo", fechaCreacion: "2023-01-15", usuariosAsignados: 1, permisos: [], sucursalId: null, esGlobal: true },
+                { id: 2, nombre: "Administrador", descripcion: "Gestión de sucursales, ventas y clientes.", estado: "activo", fechaCreacion: "2023-02-01", usuariosAsignados: 3, permisos: [], sucursalId: 1, esGlobal: false },
+                { id: 3, nombre: "Vendedor", descripcion: "Registro de ventas y clientes.", estado: "activo", fechaCreacion: "2023-03-10", usuariosAsignados: 15, permisos: [], sucursalId: 1, esGlobal: false },
+                { id: 4, nombre: "Cajero", descripcion: "Manejo de transacciones de caja.", estado: "activo", fechaCreacion: "2023-04-05", usuariosAsignados: 8, permisos: [], sucursalId: 1, esGlobal: false },
+                { id: 5, nombre: "Administrador", descripcion: "Gestión de sucursales, ventas y clientes.", estado: "activo", fechaCreacion: "2023-06-01", usuariosAsignados: 1, permisos: [], sucursalId: 2, esGlobal: false },
+                { id: 6, nombre: "Vendedor", descripcion: "Registro de ventas y clientes.", estado: "activo", fechaCreacion: "2023-07-10", usuariosAsignados: 5, permisos: [], sucursalId: 2, esGlobal: false }
+            ];
+            localStorage.setItem('roles', JSON.stringify(roles));
+        }
+
+        // Variables globales para usuarios
+        let users = JSON.parse(localStorage.getItem('users')) || [];
+        let currentPage = 1;
+        const rowsPerPage = 10;
+
+        // Datos de prueba si no hay usuarios
+        if (users.length === 0) {
+            users = [
+                { id: 1, nombre: "Admin Global", email: "super@durocell.com", rolId: 1, sucursalId: null, estado: "activo", cajaAsignadaId: null },
+                { id: 2, nombre: "Admin Sucursal 1", email: "admin1@durocell.com", rolId: 2, sucursalId: 1, estado: "activo", cajaAsignadaId: null },
+                { id: 3, nombre: "Vendedor Juan", email: "juan@durocell.com", rolId: 3, sucursalId: 1, estado: "activo", cajaAsignadaId: null },
+                { id: 4, nombre: "Cajero Maria", email: "maria@durocell.com", rolId: 4, sucursalId: 1, estado: "activo", cajaAsignadaId: null },
+                { id: 5, nombre: "Admin Sucursal 2", email: "admin2@durocell.com", rolId: 5, sucursalId: 2, estado: "activo", cajaAsignadaId: null },
+                { id: 6, nombre: "Vendedor Pedro", email: "pedro@durocell.com", rolId: 6, sucursalId: 2, estado: "activo", cajaAsignadaId: null },
+            ];
+            localStorage.setItem('users', JSON.stringify(users));
+        }
+
+        // Referencias a elementos del DOM
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.querySelector('.sidebar-overlay');
+        const tableBody = document.getElementById('tableBody');
+        const noDataMessage = document.getElementById('noDataMessage');
+
+        const createUserModal = document.getElementById('createUserModal');
+        const createUserForm = document.getElementById('createUserForm');
+        const createMessageContainer = document.getElementById('createMessageContainer');
+        const createUserBranchGroup = document.getElementById('createUserBranchGroup');
+        const createUserBranchSelect = document.getElementById('createUserBranch');
+        const createUserRoleSelect = document.getElementById('createUserRole');
+
+        const editUserModal = document.getElementById('editUserModal');
+        const editUserForm = document.getElementById('editUserForm');
+        const editMessageContainer = document.getElementById('editMessageContainer');
+        const editUserBranchGroup = document.getElementById('editUserBranchGroup');
+        const editUserBranchSelect = document.getElementById('editUserBranch');
+        const editUserRoleSelect = document.getElementById('editUserRole');
+
+        // Funciones para el sidebar
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            sidebarOverlay.classList.toggle('active');
+            if (window.innerWidth <= 768) {
+                document.body.classList.toggle('sidebar-open');
+            }
+        }
+
+        function closeSidebar() {
+            sidebar.classList.remove('active');
+            sidebarOverlay.classList.remove('active');
+            document.body.classList.remove('sidebar-open');
+        }
+
+        // Cerrar sidebar al hacer clic en un enlace (móvil)
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    closeSidebar();
+                }
+            });
+        });
+
+        // Función para obtener la clase CSS del estado
+        function getStatusClass(status) {
+            if (status === 'activo') return 'status-activa';
+            if (status === 'inactivo') return 'status-inactiva';
+            return '';
+        }
+
+        // Función para obtener el nombre del estado
+        function getStatusName(status) {
+            if (status === 'activo') return 'Activo';
+            if (status === 'inactivo') return 'Inactivo';
+            return status;
+        }
+
+        // Función para obtener el nombre de la sucursal por ID
+        function getBranchNameById(id) {
+            if (id === null) return 'Global';
+            const branch = branches.find(b => b.id === id);
+            return branch ? branch.nombre : 'N/A';
+        }
+
+        // Función para obtener el nombre del rol por ID
+        function getRoleNameById(id) {
+            const role = roles.find(r => r.id === id);
+            return role ? role.nombre : 'N/A';
+        }
+
+        // Función para actualizar estadísticas
+        function updateStats(filteredUsers = users) {
+            const total = filteredUsers.length;
+            const activos = filteredUsers.filter(u => u.estado === 'activo').length;
+            const inactivos = total - activos;
+
+            document.getElementById('totalUsers').textContent = total;
+            document.getElementById('activeUsers').textContent = activos;
+            document.getElementById('inactiveUsers').textContent = inactivos;
+        }
+
+        // Función para renderizar la tabla
+        function renderTable(data = users) {
+            // Filtrar usuarios según el rol del usuario actual
+            let displayData = data;
+            if (currentUserRole !== 'SuperAdmin') {
+                displayData = data.filter(user => user.sucursalId === currentUserBranchId || user.sucursalId === null); // Mostrar usuarios de su sucursal y globales
+            }
+
+            if (displayData.length === 0) {
+                tableBody.innerHTML = '';
+                noDataMessage.style.display = 'block';
+                document.getElementById('paginationControls').style.display = 'none';
+                return;
+            }
+            noDataMessage.style.display = 'none';
+            document.getElementById('paginationControls').style.display = 'flex';
+
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = startIndex + rowsPerPage;
+            const paginatedData = displayData.slice(startIndex, endIndex);
+
+            let tableRowsHTML = '';
+            paginatedData.forEach(user => {
+                tableRowsHTML += `
+                    <tr data-user-id="${user.id}">
+                        <td><strong>${user.nombre}</strong></td>
+                        <td>${getRoleNameById(user.rolId)}</td>
+                        <td>${getBranchNameById(user.sucursalId)}</td>
+                        <td>
+                            <span class="status-badge ${getStatusClass(user.estado)}">
+                                ${getStatusName(user.estado)}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn btn-info" onclick="editUser(${user.id})" title="Editar Usuario">
+                                    <i class='bx bx-edit'></i>
+                                </button>
+                                ${user.estado === 'activo' ? `
+                                <button class="btn btn-danger" onclick="toggleUserStatus(${user.id})" title="Desactivar">
+                                    <i class='bx bx-toggle-right'></i>
+                                </button>
+                                ` : `
+                                <button class="btn btn-success" onclick="toggleUserStatus(${user.id})" title="Activar">
+                                    <i class='bx bx-toggle-left'></i>
+                                </button>
+                                `}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            tableBody.innerHTML = tableRowsHTML;
+            updatePaginationControls(displayData.length);
+        }
+
+        // Funciones de paginación
+        function updatePaginationControls(totalItems) {
+            const totalPages = Math.ceil(totalItems / rowsPerPage);
+            document.getElementById('pageInfo').textContent = `Página ${currentPage} de ${totalPages}`;
+            document.getElementById('prevPageBtn').disabled = currentPage === 1;
+            document.getElementById('nextPageBtn').disabled = currentPage === totalPages || totalPages === 0;
+        }
+
+        function changePage(direction) {
+            const searchTerm = document.getElementById('searchUser').value.toLowerCase().trim();
+            const roleFilter = document.getElementById('roleFilter').value;
+            const branchFilter = document.getElementById('branchFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            const filteredData = users.filter(user => {
+                const matchesSearch = !searchTerm ||
+                    user.nombre.toLowerCase().includes(searchTerm) ||
+                    getRoleNameById(user.rolId).toLowerCase().includes(searchTerm) ||
+                    getBranchNameById(user.sucursalId).toLowerCase().includes(searchTerm);
+                const matchesRole = !roleFilter || user.rolId === parseInt(roleFilter);
+                const matchesBranch = !branchFilter || user.sucursalId === parseInt(branchFilter) || (branchFilter === 'null' && user.sucursalId === null);
+                const matchesStatus = !statusFilter || user.estado === statusFilter;
+
+                // Permisos de visualización para usuario normal
+                if (currentUserRole !== 'SuperAdmin') {
+                    const isUserGlobal = roles.find(r => r.id === user.rolId)?.esGlobal;
+                    if (isUserGlobal) { // Si el rol del usuario es global, siempre se muestra
+                        return matchesSearch && matchesRole && matchesBranch && matchesStatus;
+                    } else { // Si el rol no es global, solo se muestra si es de su sucursal
+                        return (user.sucursalId === currentUserBranchId) && matchesSearch && matchesRole && matchesBranch && matchesStatus;
+                    }
+                }
+                return matchesSearch && matchesRole && matchesBranch && matchesStatus;
+            });
+
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            const newPage = currentPage + direction;
+
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                renderTable(filteredData);
+            }
+        }
+
+        // Función para aplicar filtros
+        function applyFilters() {
+            currentPage = 1; // Reset page to 1 when filters change
+            changePage(0); // Re-render table with current filters
+        }
+
+        // Event listeners para filtros
+        document.getElementById('searchUser').addEventListener('input', applyFilters);
+        document.getElementById('roleFilter').addEventListener('change', applyFilters);
+        document.getElementById('branchFilter').addEventListener('change', applyFilters);
+        document.getElementById('statusFilter').addEventListener('change', applyFilters);
+
+        // Función para poblar dropdowns de sucursales
+        function populateBranchDropdown(selectElement, selectedBranchId = null) {
+            selectElement.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Seleccione una sucursal';
+            selectElement.appendChild(defaultOption);
+
+            if (currentUserRole === 'SuperAdmin') {
+                const globalOption = document.createElement('option');
+                globalOption.value = 'null'; // Usar 'null' como string para el valor
+                globalOption.textContent = 'Global';
+                selectElement.appendChild(globalOption);
+
+                branches.forEach(branch => {
+                    const option = document.createElement('option');
+                    option.value = branch.id;
+                    option.textContent = branch.nombre;
+                    selectElement.appendChild(option);
+                });
+                selectElement.disabled = false;
+            } else {
+                const userBranch = branches.find(b => b.id === currentUserBranchId);
+                if (userBranch) {
+                    const option = document.createElement('option');
+                    option.value = userBranch.id;
+                    option.textContent = userBranch.nombre;
+                    selectElement.appendChild(option);
+                    selectElement.value = userBranch.id;
+                    selectElement.disabled = true; // Usuario normal no puede cambiar su sucursal
+                } else {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'No hay sucursal asignada';
+                    selectElement.appendChild(option);
+                    selectElement.disabled = true;
+                }
+            }
+            if (selectedBranchId !== null) {
+                selectElement.value = selectedBranchId === null ? 'null' : selectedBranchId;
+            }
+        }
+
+        // Función para poblar dropdowns de roles
+        function populateRoleDropdown(selectElement, selectedRoleId = null, branchIdForFiltering = null) {
+            selectElement.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Seleccione un rol';
+            selectElement.appendChild(defaultOption);
+
+            let rolesToDisplay = roles;
+
+            if (currentUserRole !== 'SuperAdmin') {
+                // Usuario normal solo ve roles de su sucursal o roles globales
+                rolesToDisplay = roles.filter(r => r.esGlobal || r.sucursalId === currentUserBranchId);
+            } else if (branchIdForFiltering !== null) {
+                // Super Admin puede filtrar roles por la sucursal seleccionada en el formulario
+                rolesToDisplay = roles.filter(r => r.esGlobal || r.sucursalId === branchIdForFiltering);
+            }
+
+            rolesToDisplay.forEach(role => {
+                const option = document.createElement('option');
+                option.value = role.id;
+                option.textContent = role.nombre + (role.esGlobal ? ' (Global)' : ` (${getBranchNameById(role.sucursalId)})`);
+                selectElement.appendChild(option);
+            });
+            if (selectedRoleId !== null) {
+                selectElement.value = selectedRoleId;
+            }
+        }
+
+        // Event listener para cambiar roles disponibles al cambiar la sucursal en el modal de creación
+        createUserBranchSelect.addEventListener('change', () => {
+            const selectedBranchId = createUserBranchSelect.value === 'null' ? null : parseInt(createUserBranchSelect.value);
+            populateRoleDropdown(createUserRoleSelect, null, selectedBranchId);
+        });
+
+        // Event listener para cambiar roles disponibles al cambiar la sucursal en el modal de edición
+        editUserBranchSelect.addEventListener('change', () => {
+            const selectedBranchId = editUserBranchSelect.value === 'null' ? null : parseInt(editUserBranchSelect.value);
+            populateRoleDropdown(editUserRoleSelect, null, selectedBranchId);
+        });
+
+        // --- Funciones para el Modal de Creación de Usuario ---
+        function openCreateUserModal() {
+            createUserForm.reset();
+            hideMessage(createMessageContainer);
+
+            // Configurar visibilidad y opciones de sucursal
+            if (currentUserRole === 'SuperAdmin') {
+                createUserBranchGroup.style.display = 'block';
+                populateBranchDropdown(createUserBranchSelect);
+            } else {
+                createUserBranchGroup.style.display = 'block'; // Mostrar para que vea su sucursal
+                populateBranchDropdown(createUserBranchSelect, currentUserBranchId); // Preseleccionar y deshabilitar
+            }
+            
+            // Configurar opciones de rol (inicialmente sin sucursal seleccionada para SuperAdmin, o con la del usuario para NormalUser)
+            const initialBranchIdForRoles = currentUserRole === 'SuperAdmin' ? null : currentUserBranchId;
+            populateRoleDropdown(createUserRoleSelect, null, initialBranchIdForRoles);
+
+            createUserModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeCreateUserModal() {
+            createUserModal.classList.remove('active');
+            document.body.style.overflow = 'auto';
+            createUserForm.reset();
+            hideMessage(createMessageContainer);
+        }
+
+        createUserModal.addEventListener('click', function(e) {
+            if (e.target === createUserModal) {
+                closeCreateUserModal();
+            }
+        });
+
+        createUserForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideMessage(createMessageContainer);
+
+            const userName = document.getElementById('createUserName').value.trim();
+            const userEmail = document.getElementById('createUserEmail').value.trim();
+            const userPassword = document.getElementById('createUserPassword').value.trim();
+            const userStatus = document.getElementById('createUserStatus').value;
+            const selectedRoleId = parseInt(document.getElementById('createUserRole').value);
+            let selectedBranchId = document.getElementById('createUserBranch').value === 'null' ? null : parseInt(document.getElementById('createUserBranch').value);
+
+            // Validaciones
+            if (!userName || !userEmail || !userPassword || !selectedRoleId || (selectedBranchId === undefined && currentUserRole === 'SuperAdmin')) {
+                showMessage('Por favor, complete todos los campos requeridos.', 'error', createMessageContainer);
+                return;
+            }
+
+            if (users.some(u => u.email.toLowerCase() === userEmail.toLowerCase())) {
+                showMessage('Error: Ya existe un usuario con este email.', 'error', createMessageContainer);
+                return;
+            }
+
+            const selectedRole = roles.find(r => r.id === selectedRoleId);
+            if (!selectedRole) {
+                showMessage('Error: Rol seleccionado no válido.', 'error', createMessageContainer);
+                return;
+            }
+
+            // Reglas de permisos para creación
+            if (currentUserRole !== 'SuperAdmin') {
+                // Usuario normal solo puede crear usuarios para su propia sucursal
+                selectedBranchId = currentUserBranchId;
+                if (selectedRole.esGlobal || selectedRole.sucursalId !== currentUserBranchId) {
+                    showMessage('Error: No tiene permiso para asignar este rol o sucursal.', 'error', createMessageContainer);
+                    return;
+                }
+            } else {
+                // Super Admin: si el rol no es global, debe tener una sucursal asignada
+                if (!selectedRole.esGlobal && selectedBranchId === null) {
+                    showMessage('Para roles no globales, debe seleccionar una sucursal.', 'error', createMessageContainer);
+                    return;
+                }
+                // Si el rol es global, la sucursal debe ser null
+                if (selectedRole.esGlobal) {
+                    selectedBranchId = null;
+                }
+            }
+
+            // Validación: Solo un administrador activo por sucursal
+            if (selectedRole.nombre === 'Administrador' && userStatus === 'activo') {
+                const existingAdmin = users.find(u => 
+                    u.sucursalId === selectedBranchId && 
+                    u.estado === 'activo' && 
+                    roles.find(r => r.id === u.rolId)?.nombre === 'Administrador'
+                );
+                if (existingAdmin) {
+                    showMessage(`Ya existe un administrador activo para la sucursal ${getBranchNameById(selectedBranchId)}.`, 'error', createMessageContainer);
+                    return;
+                }
+            }
+
+            const newUser = {
+                id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
+                nombre: userName,
+                email: userEmail,
+                rolId: selectedRoleId,
+                sucursalId: selectedBranchId,
+                estado: userStatus,
+                cajaAsignadaId: null // Por defecto, sin caja asignada al crear
+            };
+
+            users.push(newUser);
+            localStorage.setItem('users', JSON.stringify(users));
+
+            showMessage(`Usuario "${newUser.nombre}" creado exitosamente.`, 'success', createMessageContainer);
+            createUserForm.reset();
+            
+            setTimeout(() => {
+                closeCreateUserModal();
+                applyFilters();
+            }, 1500);
+        });
+
+        // --- Funciones para el Modal de Edición de Usuario ---
+        function editUser(id) {
+            const user = users.find(u => u.id === id);
+            if (!user) return;
+
+            // Permiso de edición: Solo Super Admin puede editar usuarios de otras sucursales o globales
+            // Usuario normal solo puede editar usuarios de su propia sucursal (incluido él mismo)
+            const userRoleObj = roles.find(r => r.id === user.rolId);
+            const isUserGlobal = userRoleObj?.esGlobal;
+
+            if (currentUserRole !== 'SuperAdmin' && !isUserGlobal && user.sucursalId !== currentUserBranchId) {
+                alert('No tiene permiso para editar usuarios de otras sucursales.');
+                return;
+            }
+
+            document.getElementById('editUserId').value = user.id;
+            document.getElementById('editUserName').value = user.nombre;
+            document.getElementById('editUserEmail').value = user.email; // Email no editable
+
+            // Configurar visibilidad y opciones de sucursal
+            if (currentUserRole === 'SuperAdmin') {
+                editUserBranchGroup.style.display = 'block';
+                populateBranchDropdown(editUserBranchSelect, user.sucursalId);
+            } else {
+                editUserBranchGroup.style.display = 'block'; // Mostrar para que vea su sucursal
+                populateBranchDropdown(editUserBranchSelect, currentUserBranchId); // Preseleccionar y deshabilitar
+            }
+            
+            // Configurar opciones de rol
+            const branchIdForRoles = currentUserRole === 'SuperAdmin' ? user.sucursalId : currentUserBranchId;
+            populateRoleDropdown(editUserRoleSelect, user.rolId, branchIdForRoles);
+            
+            document.getElementById('editUserStatus').value = user.estado;
+            hideMessage(editMessageContainer);
+
+            editUserModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeEditUserModal() {
+            editUserModal.classList.remove('active');
+            document.body.style.overflow = 'auto';
+            editUserForm.reset();
+            hideMessage(editMessageContainer);
+        }
+
+        editUserModal.addEventListener('click', function(e) {
+            if (e.target === editUserModal) {
+                closeEditUserModal();
+            }
+        });
+
+        editUserForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideMessage(editMessageContainer);
+
+            const userId = parseInt(document.getElementById('editUserId').value);
+            const userIndex = users.findIndex(u => u.id === userId);
+            if (userIndex === -1) return;
+
+            const originalUser = { ...users[userIndex] }; // Copia del usuario original
+
+            const updatedUserName = document.getElementById('editUserName').value.trim();
+            const updatedUserStatus = document.getElementById('editUserStatus').value;
+            const updatedRoleId = parseInt(document.getElementById('editUserRole').value);
+            let updatedBranchId = document.getElementById('editUserBranch').value === 'null' ? null : parseInt(document.getElementById('editUserBranch').value);
+
+            // Validaciones
+            if (!updatedUserName || !updatedRoleId || (updatedBranchId === undefined && currentUserRole === 'SuperAdmin')) {
+                showMessage('Por favor, complete todos los campos requeridos.', 'error', editMessageContainer);
+                return;
+            }
+
+            const updatedRole = roles.find(r => r.id === updatedRoleId);
+            if (!updatedRole) {
+                showMessage('Error: Rol seleccionado no válido.', 'error', editMessageContainer);
+                return;
+            }
+
+            // Reglas de permisos para edición
+            if (currentUserRole !== 'SuperAdmin') {
+                // Usuario normal solo puede editar usuarios para su propia sucursal
+                updatedBranchId = currentUserBranchId;
+                if (updatedRole.esGlobal || updatedRole.sucursalId !== currentUserBranchId) {
+                    showMessage('Error: No tiene permiso para asignar este rol o sucursal.', 'error', editMessageContainer);
+                    return;
+                }
+            } else {
+                // Super Admin: si el rol no es global, debe tener una sucursal asignada
+                if (!updatedRole.esGlobal && updatedBranchId === null) {
+                    showMessage('Para roles no globales, debe seleccionar una sucursal.', 'error', editMessageContainer);
+                    return;
+                }
+                // Si el rol es global, la sucursal debe ser null
+                if (updatedRole.esGlobal) {
+                    updatedBranchId = null;
+                }
+            }
+
+            // Validación: Solo un administrador activo por sucursal
+            // Se verifica si el rol cambia a 'Administrador' activo O si el estado cambia a 'activo' para un 'Administrador'
+            const isBecomingActiveAdmin = (updatedRole.nombre === 'Administrador' && updatedUserStatus === 'activo');
+            const wasActiveAdmin = (originalUser.estado === 'activo' && roles.find(r => r.id === originalUser.rolId)?.nombre === 'Administrador');
+
+            if (isBecomingActiveAdmin && (!wasActiveAdmin || originalUser.sucursalId !== updatedBranchId || originalUser.id !== userId)) {
+                const existingAdmin = users.find(u => 
+                    u.id !== userId && // Excluir al usuario actual
+                    u.sucursalId === updatedBranchId && 
+                    u.estado === 'activo' && 
+                    roles.find(r => r.id === u.rolId)?.nombre === 'Administrador'
+                );
+                if (existingAdmin) {
+                    showMessage(`Ya existe un administrador activo para la sucursal ${getBranchNameById(updatedBranchId)}.`, 'error', editMessageContainer);
+                    return;
+                }
+            }
+
+            users[userIndex].nombre = updatedUserName;
+            users[userIndex].rolId = updatedRoleId;
+            users[userIndex].sucursalId = updatedBranchId;
+            users[userIndex].estado = updatedUserStatus;
+
+            localStorage.setItem('users', JSON.stringify(users));
+            showMessage(`Usuario "${users[userIndex].nombre}" actualizado exitosamente.`, 'success', editMessageContainer);
+
+            setTimeout(() => {
+                closeEditUserModal();
+                applyFilters();
+            }, 1500);
+        });
+
+        // Función para activar/desactivar usuario
+        function toggleUserStatus(id) {
+            const userIndex = users.findIndex(u => u.id === id);
+            if (userIndex === -1) return;
+
+            const user = users[userIndex];
+            const newStatus = user.estado === 'activo' ? 'inactivo' : 'activo';
+
+            // Permiso de activación/desactivación: Solo Super Admin puede cambiar estado de usuarios de otras sucursales o globales
+            // Usuario normal solo puede cambiar estado de usuarios de su propia sucursal (incluido él mismo)
+            const userRoleObj = roles.find(r => r.id === user.rolId);
+            const isUserGlobal = userRoleObj?.esGlobal;
+
+            if (currentUserRole !== 'SuperAdmin' && !isUserGlobal && user.sucursalId !== currentUserBranchId) {
+                alert('No tiene permiso para cambiar el estado de usuarios de otras sucursales.');
+                return;
+            }
+
+            // Validación: No desactivar al único administrador activo de una sucursal
+            if (userRoleObj?.nombre === 'Administrador' && user.estado === 'activo' && newStatus === 'inactivo') {
+                const activeAdminsInBranch = users.filter(u => 
+                    u.id !== user.id && // Excluir al usuario actual
+                    u.sucursalId === user.sucursalId && 
+                    u.estado === 'activo' && 
+                    roles.find(r => r.id === u.rolId)?.nombre === 'Administrador'
+                );
+                if (activeAdminsInBranch.length === 0) {
+                    alert('No se puede desactivar este administrador, ya que es el único administrador activo para esta sucursal.');
+                    return;
+                }
+            }
+
+            const confirmation = confirm(`¿Estás seguro de que quieres ${newStatus === 'activo' ? 'activar' : 'desactivar'} al usuario "${user.nombre}"?`);
+
+            if (confirmation) {
+                user.estado = newStatus;
+                localStorage.setItem('users', JSON.stringify(users));
+                applyFilters();
+                alert(`Usuario "${user.nombre}" ha sido ${newStatus === 'activo' ? 'activado' : 'desactivado'} con éxito.`);
+            }
+        }
+
+        // Función para mostrar mensajes (reutilizable)
+        function showMessage(message, type, container) {
+            container.textContent = message;
+            container.className = `message-container message-${type}`;
+            container.style.display = 'block';
+        }
+
+        // Función para ocultar mensajes (reutilizable)
+        function hideMessage(container) {
+            container.style.display = 'none';
+        }
+
+        // Cerrar sidebar al redimensionar ventana
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                closeSidebar();
+            }
+        });
+
+        // Inicializar la página
+        window.addEventListener('load', function() {
+            // Poblar filtros de la tabla
+            populateBranchDropdown(document.getElementById('branchFilter'));
+            populateRoleDropdown(document.getElementById('roleFilter'));
+            
+            // Ocultar filtro de sucursal para usuario normal
+            if (currentUserRole !== 'SuperAdmin') {
+                document.getElementById('branchFilterGroup').style.display = 'none';
+            }
+
+            applyFilters(); // Cargar tabla y estadísticas iniciales
+            console.log(`${users.length} usuarios cargados`);
+        });
+    </script>
+</body>
+</html>

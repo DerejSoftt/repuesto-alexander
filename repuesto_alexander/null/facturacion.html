@@ -1,0 +1,1889 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caja Registradora - D'uro Cell</title>
+    <!-- Boxicons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .sidebar-header p {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 3px;
+        }
+
+        .sidebar-menu {
+            padding: 20px 0;
+            flex: 1;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 25px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+            position: relative;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-left-color: rgba(255, 255, 255, 0.8);
+            padding-left: 30px;
+        }
+
+        .menu-item.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-left-color: white;
+        }
+
+        .menu-item i {
+            font-size: 1.3rem;
+            margin-right: 15px;
+            width: 25px;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .menu-item:hover i,
+        .menu-item.active i {
+            opacity: 1;
+        }
+
+        .menu-item span {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .sidebar-footer {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .menu-toggle:hover {
+            background: #ee5a24;
+            transform: scale(1.05);
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            min-height: 100vh;
+            padding: 20px;
+            transition: margin-left 0.3s ease;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .content-container {
+            padding: 40px;
+        }
+
+        /* Estilos específicos para la caja registradora */
+        .sales-interface {
+            display: none;
+        }
+
+        .sales-interface.active {
+            display: block;
+        }
+
+        .sales-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .sales-header h1 {
+            font-size: 2rem;
+            color: #333;
+            margin: 0;
+        }
+
+        .sales-header p {
+            color: #666;
+            margin: 0;
+        }
+
+        .sales-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .sales-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e1e8ed;
+        }
+
+        .card-header h3 {
+            font-size: 1.5rem;
+            color: #333;
+            margin: 0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .input-group {
+            position: relative;
+            display: flex;
+        }
+
+        .input-group .form-control {
+            flex: 1;
+        }
+
+        .input-group-text {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            pointer-events: none;
+            font-weight: 600;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+
+        .btn-sm {
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+
+        .btn-lg {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+        }
+
+        .btn-outline:hover {
+            background-color: #f8f9fa;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #ee5a24 0%, #ff6b6b 100%);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 25px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .table th {
+            text-align: left;
+            padding: 12px 15px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid #e1e8ed;
+        }
+
+        .table td {
+            padding: 15px;
+            border-bottom: 1px solid #e1e8ed;
+            vertical-align: middle;
+        }
+
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-success {
+            background-color: rgba(76, 201, 240, 0.1);
+            color: #4cc9f0;
+        }
+
+        .badge-warning {
+            background-color: rgba(248, 150, 30, 0.1);
+            color: #f8961e;
+        }
+
+        .badge-danger {
+            background-color: rgba(247, 37, 133, 0.1);
+            color: #f72585;
+        }
+
+        .total-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #e1e8ed;
+        }
+
+        .total-label {
+            font-size: 1.2rem;
+            color: #555;
+        }
+
+        .total-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .discount-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #e1e8ed;
+        }
+
+        .discount-label {
+            font-size: 1rem;
+            color: #555;
+        }
+
+        .discount-value {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #f72585;
+        }
+
+        .final-total-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            margin-bottom: 25px;
+        }
+
+        .final-total-label {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: '333';
+        }
+
+        .final-total-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #764ba2;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            color: #e1e8ed;
+        }
+
+        .client-search-results,
+        .product-search-results {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+            border: 1px solid #e1e8ed;
+            border-radius: 10px;
+        }
+
+        .client-item,
+        .product-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e1e8ed;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .client-item:hover,
+        .product-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .client-item:last-child,
+        .product-item:last-child {
+            border-bottom: none;
+        }
+
+        .client-name,
+        .product-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .client-details,
+        .product-details {
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .product-price {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .payment-type-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .payment-type-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .payment-type-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .payment-type-btn:not(.active) {
+            background-color: #f8f9fa;
+            color: #555;
+            border: 1px solid #e1e8ed;
+        }
+
+        .payment-type-btn:not(.active):hover {
+            background-color: #e1e8ed;
+        }
+
+        .payment-method-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .payment-method-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .payment-method-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .payment-method-btn:not(.active) {
+            background-color: #f8f9fa;
+            color: #555;
+            border: 1px solid #e1e8ed;
+        }
+
+        .payment-method-btn:not(.active):hover {
+            background-color: #e1e8ed;
+        }
+
+        .client-info {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .client-info.hidden {
+            display: none;
+        }
+
+        .cash-info {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .cash-info.hidden {
+            display: none;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .text-muted {
+            color: #888;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 500px;
+            padding: 30px;
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-body {
+            margin-bottom: 30px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content {
+                margin-left: 0;
+                padding: 15px;
+            }
+
+            .content-container {
+                padding: 20px;
+            }
+
+            .sales-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .sales-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .modal-content {
+                margin: 0 20px;
+            }
+
+            .modal-footer {
+                flex-direction: column;
+            }
+
+            .modal-footer .btn {
+                width: 100%;
+            }
+        }
+
+        /* Desktop specific styles */
+        @media (min-width: 769px) {
+            .sidebar {
+                position: fixed;
+                transform: translateX(0);
+                height: 100vh;
+            }
+
+            .main-content {
+                margin-left: 280px;
+                min-height: 100vh;
+            }
+
+            .menu-toggle {
+                display: none;
+            }
+
+            .sidebar-overlay {
+                display: none !important;
+            }
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 100%;
+                max-width: 300px;
+                height: 100vh;
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 10px;
+                min-height: 100vh;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            body.sidebar-open {
+                overflow: hidden;
+            }
+        }
+
+        /* Scrollbar personalizado */
+        .sidebar::-webkit-scrollbar,
+        .client-search-results::-webkit-scrollbar,
+        .product-search-results::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track,
+        .client-search-results::-webkit-scrollbar-track,
+        .product-search-results::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar::-webkit-scrollbar-thumb,
+        .client-search-results::-webkit-scrollbar-thumb,
+        .product-search-results::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover,
+        .client-search-results::-webkit-scrollbar-thumb:hover,
+        .product-search-results::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Menu Toggle Button -->
+    <button class="menu-toggle" onclick="toggleSidebar()">
+        <i class='bx bx-menu'></i>
+    </button>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>
+                <i class='bx bx-mobile-alt'></i>
+                D'uro Cell
+            </h2>
+            <p>Usuario: <span id="user-name">Admin</span></p>
+            <p id="user-email">admin@durocell.com</p>
+        </div>
+        <div class="sidebar-menu">
+            <a href="#" class="menu-item">
+                <i class='bx bx-home-alt'></i>
+                <span>Inicio</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-package'></i>
+                <span>Inventario</span>
+            </a>
+            <a href="#" class="menu-item active">
+                <i class='bx bx-dollar-circle'></i>
+                <span>facturacion</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-user-plus'></i>
+                <span>Clientes</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-shopping-bag'></i>
+                <span>Compras</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-credit-card'></i>
+                <span>Cuentas por Cobrar</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-bar-chart-alt-2'></i>
+                <span>Reportes</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-trending-up'></i>
+                <span>Cuadre</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-store'></i>
+                <span>Proveedores</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-cog'></i>
+                <span>Ajustes</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-log-out'></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <p>D'uro Cell v 1.2.2</p>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container">
+            <div class="header">
+                <h1>
+                    <i class='bx bx-dollar-circle'></i>
+                    Caja Registradora
+                </h1>
+                <p>Gestiona tus ventas de forma rápida y eficiente</p>
+            </div>
+            <div class="content-container">
+                <!-- CSRF Token -->
+                <input type="hidden" id="csrf-token" value="">
+                
+                <!-- Paso 1: Apertura de Caja -->
+                <div id="opening-dialog" class="modal-overlay active">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title">
+                                <i class='bx bx-wallet'></i>
+                                Apertura de Caja
+                            </h2>
+                        </div>
+                        <div class="modal-body">
+                            <p>Ingrese el monto inicial para comenzar:</p>
+                            <div class="form-group">
+                                <label for="initial-cash" class="form-label">Monto Inicial</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">RD$</span>
+                                    <input type="number" id="initial-cash" class="form-control" placeholder="0.00" step="0.01" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="open-cash-button" class="btn btn-primary btn-lg">
+                                <i class='bx bx-check'></i>
+                                Abrir Caja
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interfaz Principal de Ventas -->
+                <div id="sales-interface" class="sales-interface">
+                    <header class="sales-header">
+                        <div>
+                            <h1>Nueva Venta</h1>
+                            <p class="text-muted">Agregue productos y complete la transacción</p>
+                        </div>
+                        <div>
+                            <span class="badge badge-success" id="caja-status">Caja Abierta</span>
+                            <button id="close-cash-button" class="btn btn-danger">
+                                <i class='bx bx-x'></i>
+                                Cerrar Caja
+                            </button>
+                        </div>
+                    </header>
+
+                    <div class="sales-grid">
+                        <!-- Búsqueda de Productos -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Buscar Productos</h3>
+                            </div>
+                            <div class="form-group">
+                                <label for="product-search" class="form-label">Buscar Producto</label>
+                                <input type="text" id="product-search" class="form-control" placeholder="Nombre o código del producto">
+                                <div id="product-search-loading" class="hidden" style="text-align: center; padding: 10px;">
+                                    <div class="loading"></div>
+                                </div>
+                            </div>
+                            <div class="product-search-results" id="product-results">
+                                <!-- Resultados de búsqueda de productos -->
+                            </div>
+                            <div class="form-group">
+                                <label for="product-quantity" class="form-label">Cantidad</label>
+                                <input type="number" id="product-quantity" class="form-control" value="1" min="1">
+                            </div>
+                            <button id="add-product-button" class="btn btn-primary">
+                                <i class='bx bx-plus'></i>
+                                Agregar Producto
+                            </button>
+                        </div>
+
+                        <!-- Resumen de Venta con Selección de Tipo -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Resumen de Venta</h3>
+                            </div>
+                            
+                            <!-- Selector de Tipo de Pago -->
+                            <div class="form-group">
+                                <label class="form-label">Tipo de Venta</label>
+                                <div class="payment-type-selector">
+                                    <div id="cash-payment-btn" class="payment-type-btn active">Contado</div>
+                                    <div id="credit-payment-btn" class="payment-type-btn">Crédito</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Información del Cliente (solo para crédito) -->
+                            <div id="client-info-container" class="client-info hidden">
+                                <div class="form-group">
+                                    <label for="client-search" class="form-label">Cliente</label>
+                                    <input type="text" id="client-search" class="form-control" placeholder="Buscar cliente...">
+                                    <div id="client-search-loading" class="hidden" style="text-align: center; padding: 10px;">
+                                        <div class="loading"></div>
+                                    </div>
+                                </div>
+                                <div class="client-search-results" id="client-results">
+                                    <!-- Resultados de búsqueda de clientes -->
+                                </div>
+                            </div>
+                            
+                            <!-- Información del Cliente (solo para contado) -->
+                            <div id="cash-info-container" class="cash-info">
+                                <div class="form-group">
+                                    <label for="cash-client-name" class="form-label">Nombre del Cliente</label>
+                                    <input type="text" id="cash-client-name" class="form-control" placeholder="Nombre completo">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cash-client-document" class="form-label">Cédula/RIF</label>
+                                    <input type="text" id="cash-client-document" class="form-control" placeholder="Cédula o RIF">
+                                </div>
+                                
+                                <!-- Método de pago (solo para contado) -->
+                                <div class="form-group">
+                                    <label class="form-label">Método de Pago</label>
+                                    <div class="payment-method-selector">
+                                        <div id="cash-method-btn" class="payment-method-btn active">Efectivo</div>
+                                        <div id="card-method-btn" class="payment-method-btn">Tarjeta</div>
+                                        <div id="transfer-method-btn" class="payment-method-btn">Transferencia</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Total de la Venta -->
+                            <div class="total-display">
+                                <span class="total-label">Subtotal</span>
+                                <span id="total-amount" class="total-value">RD$0.00</span>
+                            </div>
+                            
+                            <!-- Descuento en porcentaje -->
+                            <div class="form-group">
+                                <label for="discount-input" class="form-label">Descuento (%)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">%</span>
+                                    <input type="number" id="discount-input" class="form-control" placeholder="0" step="1" min="0" max="100" value="0">
+                                </div>
+                            </div>
+                            
+                            <!-- Mostrar descuento aplicado y total final -->
+                            <div class="discount-display">
+                                <span class="discount-label">Descuento aplicado</span>
+                                <span id="discount-amount" class="discount-value">RD$0.00</span>
+                            </div>
+                            
+                            <div class="final-total-display">
+                                <span class="final-total-label">Total a Pagar</span>
+                                <span id="final-total-amount" class="final-total-value">RD$0.00</span>
+                            </div>
+                            
+                            <button id="complete-sale-button" class="btn btn-primary btn-lg">
+                                <i class='bx bx-check'></i>
+                                Finalizar Venta
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Productos Agregados -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Productos en la Venta</h3>
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio Unitario</th>
+                                    <th>Subtotal</th>
+                                    <th style="text-align: right;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sale-items">
+                                <tr>
+                                    <td colspan="5" class="empty-state">
+                                        <div class="empty-state-icon">🛒</div>
+                                        <p>No hay productos agregados</p>
+                                        <p class="text-muted">Busque y agregue productos a la venta</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Diálogo de Cierre de Caja -->
+                <div id="closing-dialog" class="modal-overlay">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title">
+                                <i class='bx bx-wallet'></i>
+                                Cierre de Caja
+                            </h2>
+                        </div>
+                        <div class="modal-body">
+                            <p>Ingrese el monto final en efectivo:</p>
+                            <div class="form-group">
+                                <label for="final-cash" class="form-label">Efectivo Contado</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">RD$</span>
+                                    <input type="number" id="final-cash" class="form-control" placeholder="0.00" step="0.01" min="0">
+                                </div>
+                            </div>
+                            
+                            <div class="card" style="margin-top: 30px;">
+                                <h4 style="margin-bottom: 20px;">Resumen de Caja</h4>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                    <div>
+                                        <p class="form-label">Efectivo Inicial</p>
+                                        <p id="initial-cash-display" style="font-weight: 500;">RD$0.00</p>
+                                    </div>
+                                    <div>
+                                        <p class="form-label">Ventas Totales</p>
+                                        <p id="total-sales-display" style="font-weight: 500;">RD$0.00</p>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                    <div>
+                                        <p class="form-label">Monto Esperado</p>
+                                        <p id="expected-amount" style="font-weight: 600;">RD$0.00</p>
+                                    </div>
+                                    <div>
+                                        <p class="form-label">Diferencia</p>
+                                        <p id="difference-amount" style="font-weight: 600;">RD$0.00</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="cancel-close-button" class="btn btn-outline">
+                                <i class='bx bx-x'></i>
+                                Cancelar
+                            </button>
+                            <button id="confirm-close-button" class="btn btn-primary">
+                                <i class='bx bx-check'></i>
+                                Cerrar Caja
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+document.addEventListener("DOMContentLoaded", () => {
+    // Estado de la aplicación
+    const state = {
+        initialCash: 0,
+        cajaId: null,
+        paymentType: 'cash',
+        paymentMethod: 'efectivo',
+        selectedClient: null,
+        selectedProduct: null,
+        saleItems: [],
+        totalSales: 0,
+        discountPercentage: 0,
+        discountAmount: 0,
+        finalTotal: 0
+    };
+
+    // Elementos del DOM
+    const DOM = {
+        openingDialog: document.getElementById('opening-dialog'),
+        initialCashInput: document.getElementById('initial-cash'),
+        openCashButton: document.getElementById('open-cash-button'),
+        
+        salesInterface: document.getElementById('sales-interface'),
+        closeCashButton: document.getElementById('close-cash-button'),
+        cajaStatus: document.getElementById('caja-status'),
+        
+        cashPaymentBtn: document.getElementById('cash-payment-btn'),
+        creditPaymentBtn: document.getElementById('credit-payment-btn'),
+        clientInfoContainer: document.getElementById('client-info-container'),
+        clientSearch: document.getElementById('client-search'),
+        clientResults: document.getElementById('client-results'),
+        clientSearchLoading: document.getElementById('client-search-loading'),
+        
+        cashInfoContainer: document.getElementById('cash-info-container'),
+        cashClientName: document.getElementById('cash-client-name'),
+        cashClientDocument: document.getElementById('cash-client-document'),
+        
+        cashMethodBtn: document.getElementById('cash-method-btn'),
+        cardMethodBtn: document.getElementById('card-method-btn'),
+        transferMethodBtn: document.getElementById('transfer-method-btn'),
+        
+        productSearch: document.getElementById('product-search'),
+        productResults: document.getElementById('product-results'),
+        productQuantity: document.getElementById('product-quantity'),
+        addProductButton: document.getElementById('add-product-button'),
+        productSearchLoading: document.getElementById('product-search-loading'),
+        
+        saleItemsTable: document.getElementById('sale-items'),
+        totalAmount: document.getElementById('total-amount'),
+        discountInput: document.getElementById('discount-input'),
+        discountAmount: document.getElementById('discount-amount'),
+        finalTotalAmount: document.getElementById('final-total-amount'),
+        completeSaleButton: document.getElementById('complete-sale-button'),
+        
+        closingDialog: document.getElementById('closing-dialog'),
+        finalCashInput: document.getElementById('final-cash'),
+        initialCashDisplay: document.getElementById('initial-cash-display'),
+        totalSalesDisplay: document.getElementById('total-sales-display'),
+        expectedAmount: document.getElementById('expected-amount'),
+        differenceAmount: document.getElementById('difference-amount'),
+        cancelCloseButton: document.getElementById('cancel-close-button'),
+        confirmCloseButton: document.getElementById('confirm-close-button'),
+        
+        csrfToken: document.getElementById('csrf-token'),
+        userName: document.getElementById('user-name'),
+        userEmail: document.getElementById('user-email')
+    };
+
+    // Función para obtener el token CSRF
+    function getCSRFToken() {
+        // Obtener el token CSRF del meta tag o cookie
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='))
+            ?.split('=')[1];
+        
+        if (cookieValue) return cookieValue;
+        
+        // Fallback: intentar obtener del meta tag
+        const metaToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (metaToken) return metaToken.value;
+        
+        // Si no hay token, usar un valor por defecto (no recomendado para producción)
+        return '';
+    }
+
+    // Formatear moneda en pesos dominicanos
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('es-DO', {
+            style: 'currency',
+            currency: 'DOP',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount).replace('DOP', 'RD$');
+    };
+
+    // Mostrar u ocultar loading
+    function toggleLoading(element, show) {
+        if (show) {
+            element.classList.remove('hidden');
+        } else {
+            element.classList.add('hidden');
+        }
+    }
+
+    // Renderizar resultados de búsqueda de clientes
+    const renderClientResults = (clients) => {
+        DOM.clientResults.innerHTML = '';
+        
+        if (clients.length === 0) {
+            DOM.clientResults.innerHTML = `
+                <div class="empty-state" style="padding: 15px;">
+                    <p>No se encontraron clientes</p>
+                </div>
+            `;
+            return;
+        }
+        
+        clients.forEach(client => {
+            const clientElement = document.createElement('div');
+            clientElement.className = 'client-item';
+            clientElement.dataset.id = client.id;
+            clientElement.innerHTML = `
+                <div class="client-name">${client.nombre}</div>
+                <div class="client-details">Doc: ${client.identificacion} | Tel: ${client.telefono}</div>
+                <div class="client-details">${client.direccion}</div>
+            `;
+            
+            clientElement.addEventListener('click', () => {
+                document.querySelectorAll('.client-item').forEach(item => {
+                    item.style.backgroundColor = '';
+                });
+                
+                clientElement.style.backgroundColor = '#f0f0f0';
+                state.selectedClient = client;
+                DOM.clientSearch.value = client.nombre;
+            });
+            
+            DOM.clientResults.appendChild(clientElement);
+        });
+    };
+
+    // Renderizar resultados de búsqueda de productos (CORREGIDO)
+    const renderProductResults = (products) => {
+        DOM.productResults.innerHTML = '';
+        
+        console.log('Renderizando productos:', products);
+        
+        if (products.length === 0) {
+            DOM.productResults.innerHTML = `
+                <div class="empty-state" style="padding: 15px;">
+                    <p>No se encontraron productos</p>
+                </div>
+            `;
+            return;
+        }
+        
+        products.forEach(product => {
+            console.log('Procesando producto:', product);
+            
+            const productElement = document.createElement('div');
+            productElement.className = 'product-item';
+            productElement.dataset.id = product.id;
+            
+            // CORRECCIÓN: Usar el campo 'price' que ahora viene del backend
+            const precio = parseFloat(product.price) || 0;
+            
+            productElement.innerHTML = `
+                <div>
+                    <div class="product-name">${product.nombre}</div>
+                    <div class="product-details">Marca: ${product.marca} | Modelo: ${product.modelo || 'N/A'}</div>
+                </div>
+                <div class="product-price">${formatCurrency(precio)}</div>
+            `;
+            
+            productElement.addEventListener('click', () => {
+                document.querySelectorAll('.product-item').forEach(item => {
+                    item.style.backgroundColor = '';
+                });
+                
+                productElement.style.backgroundColor = '#f0f0f0';
+                
+                // CORRECCIÓN: Usar el campo 'price' correctamente
+                state.selectedProduct = {
+                    id: product.id,
+                    nombre: product.nombre,
+                    marca: product.marca,
+                    modelo: product.modelo || 'N/A',
+                    price: precio // Usamos el precio ya parseado
+                };
+                
+                console.log('Producto seleccionado:', state.selectedProduct);
+                DOM.productSearch.value = product.nombre;
+            });
+            
+            DOM.productResults.appendChild(productElement);
+        });
+    };
+
+    // Renderizar items de la venta
+    const renderSaleItems = () => {
+        DOM.saleItemsTable.innerHTML = '';
+        
+        if (state.saleItems.length === 0) {
+            DOM.saleItemsTable.innerHTML = `
+                <tr>
+                    <td colspan="5" class="empty-state">
+                        <div class="empty-state-icon">🛒</div>
+                        <p>No hay productos agregados</p>
+                        <p class="text-muted">Busque y agregue productos a la venta</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        state.saleItems.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.name}</td>
+                <td>${item.quantity}</td>
+                <td>${formatCurrency(item.price)}</td>
+                <td>${formatCurrency(item.subtotal)}</td>
+                <td style="text-align: right;">
+                    <button class="btn btn-icon btn-outline btn-sm delete-item" data-id="${item.id}">
+                        <i class='bx bx-trash'></i>
+                    </button>
+                </td>
+            `;
+            DOM.saleItemsTable.appendChild(row);
+        });
+        
+        document.querySelectorAll('.delete-item').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const itemId = e.target.closest('button').dataset.id;
+                state.saleItems = state.saleItems.filter(item => item.id !== itemId);
+                updateTotal();
+                renderSaleItems();
+            });
+        });
+    };
+
+    // Actualizar total de la venta
+    const updateTotal = () => {
+        state.totalSales = state.saleItems.reduce((total, item) => total + item.subtotal, 0);
+        DOM.totalAmount.textContent = formatCurrency(state.totalSales);
+        updateDiscount();
+    };
+
+    // Actualizar descuento y total final
+    const updateDiscount = () => {
+        const discountInput = parseInt(DOM.discountInput.value) || 0;
+        state.discountPercentage = Math.min(discountInput, 100);
+        state.discountAmount = state.totalSales * (state.discountPercentage / 100);
+        state.finalTotal = Math.max(0, state.totalSales - state.discountAmount);
+        
+        DOM.discountAmount.textContent = formatCurrency(state.discountAmount);
+        DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
+    };
+
+    // Cambiar tipo de pago
+    const setPaymentType = (type) => {
+        state.paymentType = type;
+        
+        if (type === 'cash') {
+            DOM.cashPaymentBtn.classList.add('active');
+            DOM.creditPaymentBtn.classList.remove('active');
+            DOM.clientInfoContainer.classList.add('hidden');
+            DOM.cashInfoContainer.classList.remove('hidden');
+            state.selectedClient = null;
+        } else {
+            DOM.cashPaymentBtn.classList.remove('active');
+            DOM.creditPaymentBtn.classList.add('active');
+            DOM.clientInfoContainer.classList.remove('hidden');
+            DOM.cashInfoContainer.classList.add('hidden');
+            DOM.clientSearch.value = '';
+        }
+    };
+
+    // Cambiar método de pago
+    const setPaymentMethod = (method) => {
+        state.paymentMethod = method;
+        
+        DOM.cashMethodBtn.classList.remove('active');
+        DOM.cardMethodBtn.classList.remove('active');
+        DOM.transferMethodBtn.classList.remove('active');
+        
+        if (method === 'efectivo') {
+            DOM.cashMethodBtn.classList.add('active');
+        } else if (method === 'tarjeta') {
+            DOM.cardMethodBtn.classList.add('active');
+        } else if (method === 'transferencia') {
+            DOM.transferMethodBtn.classList.add('active');
+        }
+    };
+
+    // Evento: Abrir caja
+    DOM.openCashButton.addEventListener('click', () => {
+        const initialCash = parseFloat(DOM.initialCashInput.value);
+        
+        if (isNaN(initialCash) || initialCash < 0) {
+            alert('Por favor ingrese un monto válido');
+            return;
+        }
+        
+        DOM.openCashButton.disabled = true;
+        DOM.openCashButton.innerHTML = '<div class="loading"></div> Abriendo...';
+        
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                action: 'abrir_caja',
+                monto_inicial: initialCash
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            DOM.openCashButton.disabled = false;
+            DOM.openCashButton.innerHTML = '<i class="bx bx-check"></i> Abrir Caja';
+            
+            if (data.success) {
+                state.initialCash = initialCash;
+                state.cajaId = data.caja_id;
+                DOM.openingDialog.classList.remove('active');
+                DOM.salesInterface.classList.add('active');
+                DOM.cajaStatus.textContent = 'Caja Abierta - ID: ' + data.caja_id;
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            DOM.openCashButton.disabled = false;
+            DOM.openCashButton.innerHTML = '<i class="bx bx-check"></i> Abrir Caja';
+            console.error('Error:', error);
+            alert('Error al abrir la caja');
+        });
+    });
+
+    // Evento: Seleccionar pago en efectivo
+    DOM.cashPaymentBtn.addEventListener('click', () => {
+        setPaymentType('cash');
+    });
+
+    // Evento: Seleccionar pago a crédito
+    DOM.creditPaymentBtn.addEventListener('click', () => {
+        setPaymentType('credit');
+    });
+
+    // Evento: Seleccionar método de pago en efectivo
+    DOM.cashMethodBtn.addEventListener('click', () => {
+        setPaymentMethod('efectivo');
+    });
+
+    // Evento: Seleccionar método de pago con tarjeta
+    DOM.cardMethodBtn.addEventListener('click', () => {
+        setPaymentMethod('tarjeta');
+    });
+
+    // Evento: Seleccionar método de pago por transferencia
+    DOM.transferMethodBtn.addEventListener('click', () => {
+        setPaymentMethod('transferencia');
+    });
+
+    // Evento: Cambio en el campo de descuento
+    DOM.discountInput.addEventListener('input', () => {
+        updateDiscount();
+    });
+
+    // Evento: Buscar clientes
+    let clientSearchTimeout;
+    DOM.clientSearch.addEventListener('input', () => {
+        const searchTerm = DOM.clientSearch.value;
+        
+        // Limpiar timeout anterior
+        clearTimeout(clientSearchTimeout);
+        
+        if (searchTerm.length < 2) {
+            DOM.clientResults.innerHTML = '';
+            return;
+        }
+        
+        // Debounce de 300ms
+        clientSearchTimeout = setTimeout(() => {
+            toggleLoading(DOM.clientSearchLoading, true);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    action: 'buscar_clientes',
+                    query: searchTerm
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                toggleLoading(DOM.clientSearchLoading, false);
+                if (data.success) {
+                    renderClientResults(data.clientes);
+                }
+            })
+            .catch(error => {
+                toggleLoading(DOM.clientSearchLoading, false);
+                console.error('Error:', error);
+            });
+        }, 300);
+    });
+
+    // Evento: Buscar productos
+    let productSearchTimeout;
+    DOM.productSearch.addEventListener('input', () => {
+        const searchTerm = DOM.productSearch.value;
+        
+        // Limpiar timeout anterior
+        clearTimeout(productSearchTimeout);
+        
+        if (searchTerm.length < 2) {
+            DOM.productResults.innerHTML = '';
+            return;
+        }
+        
+        // Debounce de 300ms
+        productSearchTimeout = setTimeout(() => {
+            toggleLoading(DOM.productSearchLoading, true);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    action: 'buscar_productos',
+                    query: searchTerm
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                toggleLoading(DOM.productSearchLoading, false);
+                console.log('Respuesta del servidor:', data);
+                if (data.success) {
+                    renderProductResults(data.productos);
+                } else {
+                    console.error('Error en la búsqueda:', data.error);
+                }
+            })
+            .catch(error => {
+                toggleLoading(DOM.productSearchLoading, false);
+                console.error('Error:', error);
+            });
+        }, 300);
+    });
+
+    // Evento: Agregar producto (CORREGIDO)
+    DOM.addProductButton.addEventListener('click', () => {
+        if (!state.selectedProduct) {
+            alert('Por favor seleccione un producto');
+            return;
+        }
+        
+        // Validar que el precio existe y es válido - CORRECCIÓN MEJORADA
+        if (!state.selectedProduct.price || isNaN(state.selectedProduct.price) || state.selectedProduct.price <= 0) {
+            alert('Error: El producto seleccionado no tiene un precio válido. Por favor contacte al administrador.');
+            console.error('Producto sin precio válido:', state.selectedProduct);
+            return;
+        }
+        
+        const quantity = parseInt(DOM.productQuantity.value);
+        
+        if (isNaN(quantity) || quantity <= 0) {
+            alert('Por favor ingrese una cantidad válida');
+            return;
+        }
+        
+        const existingItem = state.saleItems.find(item => item.productId === state.selectedProduct.id);
+        
+        if (existingItem) {
+            existingItem.quantity += quantity;
+            existingItem.subtotal = existingItem.quantity * existingItem.price;
+        } else {
+            const newItem = {
+                id: Date.now().toString(),
+                productId: state.selectedProduct.id,
+                name: state.selectedProduct.nombre,
+                price: parseFloat(state.selectedProduct.price),
+                quantity: quantity,
+                subtotal: quantity * parseFloat(state.selectedProduct.price)
+            };
+            
+            state.saleItems.push(newItem);
+            console.log('Item agregado:', newItem);
+        }
+        
+        // Limpiar selección
+        state.selectedProduct = null;
+        DOM.productSearch.value = '';
+        DOM.productQuantity.value = '1';
+        DOM.productResults.innerHTML = '';
+        
+        updateTotal();
+        renderSaleItems();
+    });
+
+    // Evento: Finalizar venta
+    DOM.completeSaleButton.addEventListener('click', () => {
+        if (state.saleItems.length === 0) {
+            alert('No hay productos en la venta');
+            return;
+        }
+        
+        // Validar información del cliente según el tipo de venta
+        if (state.paymentType === 'credit' && !state.selectedClient) {
+            alert('Por favor seleccione un cliente para venta a crédito');
+            return;
+        }
+        
+        if (state.paymentType === 'cash' && (!DOM.cashClientName.value || !DOM.cashClientDocument.value)) {
+            alert('Por favor complete la información del cliente para venta de contado');
+            return;
+        }
+        
+        DOM.completeSaleButton.disabled = true;
+        DOM.completeSaleButton.innerHTML = '<div class="loading"></div> Procesando...';
+        
+        // Preparar datos para la venta
+        const saleData = {
+            action: 'realizar_venta',
+            caja_id: state.cajaId,
+            tipo_venta: state.paymentType === 'cash' ? 'contado' : 'credito',
+            metodo_pago: state.paymentMethod,
+            items: state.saleItems.map(item => ({
+                id: item.productId,
+                cantidad: item.quantity
+            })),
+            descuento: state.discountPercentage
+        };
+        
+        // Agregar información del cliente según el tipo de venta
+        if (state.paymentType === 'credit') {
+            saleData.cliente_id = state.selectedClient.id;
+        } else {
+            saleData.nombre_cliente_contado = DOM.cashClientName.value;
+            saleData.documento_cliente_contado = DOM.cashClientDocument.value;
+        }
+        
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify(saleData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            DOM.completeSaleButton.disabled = false;
+            DOM.completeSaleButton.innerHTML = '<i class="bx bx-check"></i> Finalizar Venta';
+            
+            if (data.success) {
+                alert('Venta realizada con éxito. ID: ' + data.venta_id);
+                
+                // Reiniciar estado de la venta
+                state.saleItems = [];
+                state.selectedProduct = null;
+                state.selectedClient = null;
+                state.totalSales = 0;
+                state.discountPercentage = 0;
+                state.discountAmount = 0;
+                state.finalTotal = 0;
+                
+                DOM.productSearch.value = '';
+                DOM.productQuantity.value = '1';
+                DOM.productResults.innerHTML = '';
+                DOM.clientSearch.value = '';
+                DOM.clientResults.innerHTML = '';
+                DOM.cashClientName.value = '';
+                DOM.cashClientDocument.value = '';
+                DOM.discountInput.value = '0';
+                
+                updateTotal();
+                renderSaleItems();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            DOM.completeSaleButton.disabled = false;
+            DOM.completeSaleButton.innerHTML = '<i class="bx bx-check"></i> Finalizar Venta';
+            console.error('Error:', error);
+            alert('Error al procesar la venta');
+        });
+    });
+
+    // Evento: Cerrar caja
+    DOM.closeCashButton.addEventListener('click', () => {
+        DOM.closingDialog.classList.add('active');
+        
+        // Mostrar información actual
+        DOM.initialCashDisplay.textContent = formatCurrency(state.initialCash);
+        DOM.totalSalesDisplay.textContent = formatCurrency(state.totalSales);
+        
+        const expectedAmount = state.initialCash + state.totalSales;
+        DOM.expectedAmount.textContent = formatCurrency(expectedAmount);
+        
+        DOM.finalCashInput.value = expectedAmount.toFixed(2);
+        
+        // Actualizar diferencia
+        DOM.finalCashInput.addEventListener('input', () => {
+            const finalCash = parseFloat(DOM.finalCashInput.value) || 0;
+            const difference = finalCash - expectedAmount;
+            DOM.differenceAmount.textContent = formatCurrency(difference);
+            
+            if (difference < 0) {
+                DOM.differenceAmount.style.color = '#e74c3c';
+            } else if (difference > 0) {
+                DOM.differenceAmount.style.color = '#27ae60';
+            } else {
+                DOM.differenceAmount.style.color = '';
+            }
+        });
+    });
+
+    // Evento: Cancelar cierre de caja
+    DOM.cancelCloseButton.addEventListener('click', () => {
+        DOM.closingDialog.classList.remove('active');
+    });
+
+    // Evento: Confirmar cierre de caja
+    DOM.confirmCloseButton.addEventListener('click', () => {
+        const finalCash = parseFloat(DOM.finalCashInput.value);
+        
+        if (isNaN(finalCash) || finalCash < 0) {
+            alert('Por favor ingrese un monto válido');
+            return;
+        }
+        
+        DOM.confirmCloseButton.disabled = true;
+        DOM.confirmCloseButton.innerHTML = '<div class="loading"></div> Cerrando...';
+        
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({
+                action: 'cerrar_caja',
+                caja_id: state.cajaId,
+                monto_final: finalCash,
+                observaciones: ''
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            DOM.confirmCloseButton.disabled = false;
+            DOM.confirmCloseButton.innerHTML = '<i class="bx bx-check"></i> Cerrar Caja';
+            
+            if (data.success) {
+                alert('Caja cerrada con éxito');
+                DOM.closingDialog.classList.remove('active');
+                DOM.salesInterface.classList.remove('active');
+                DOM.openingDialog.classList.add('active');
+                DOM.initialCashInput.value = '';
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            DOM.confirmCloseButton.disabled = false;
+            DOM.confirmCloseButton.innerHTML = '<i class="bx bx-check"></i> Cerrar Caja';
+            console.error('Error:', error);
+            alert('Error al cerrar la caja');
+        });
+    });
+
+    // Inicializar
+    DOM.csrfToken.value = getCSRFToken();
+    setPaymentType('cash');
+    setPaymentMethod('efectivo');
+    updateTotal();
+});
+
+// Funciones para el menú lateral
+function toggleSidebar() {
+    document.body.classList.toggle('sidebar-open');
+}
+
+function closeSidebar() {
+    document.body.classList.remove('sidebar-open');
+}
+    </script>
+</body>
+</html>

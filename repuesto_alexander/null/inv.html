@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Inventario - Teléfonos</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
+      margin: 0;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      color: #333;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    form {
+      margin-bottom: 20px;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin: 8px 0 4px;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table th, table td {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    table th {
+      background: #007bff;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>📱 Inventario de Teléfonos</h2>
+
+    <!-- Producto general -->
+    <form id="formProducto">
+      <h3>Registrar Producto General</h3>
+      <label>Marca:</label>
+      <input type="text" id="marca" required>
+
+      <label>Modelo:</label>
+      <input type="text" id="modelo" required>
+
+      <label>Color:</label>
+      <input type="text" id="color" required>
+
+      <label>Capacidad:</label>
+      <select id="capacidad">
+        <option>64GB</option>
+        <option>128GB</option>
+        <option>256GB</option>
+        <option>512GB</option>
+      </select>
+
+      <label>Precio Unitario:</label>
+      <input type="number" id="precio" required>
+
+      <button type="button" onclick="agregarProducto()">Agregar Producto</button>
+    </form>
+
+    <!-- Detalles IMEI -->
+    <form id="formDetalle">
+      <h3>Registrar IMEI (Detalle)</h3>
+      <label>IMEI:</label>
+      <input type="text" id="imei" required>
+
+      <label>Estado:</label>
+      <select id="estado">
+        <option>Disponible</option>
+        <option>Vendido</option>
+        <option>Devuelto</option>
+      </select>
+
+      <button type="button" onclick="agregarDetalle()">Agregar IMEI</button>
+    </form>
+
+    <!-- Tabla productos -->
+    <h3>Productos Generales</h3>
+    <table id="tablaProductos">
+      <thead>
+        <tr>
+          <th>Marca</th>
+          <th>Modelo</th>
+          <th>Color</th>
+          <th>Capacidad</th>
+          <th>Precio</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- Tabla detalles -->
+    <h3>Detalle de IMEIs</h3>
+    <table id="tablaDetalles">
+      <thead>
+        <tr>
+          <th>IMEI</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    function agregarProducto() {
+      const marca = document.getElementById("marca").value;
+      const modelo = document.getElementById("modelo").value;
+      const color = document.getElementById("color").value;
+      const capacidad = document.getElementById("capacidad").value;
+      const precio = document.getElementById("precio").value;
+
+      const tabla = document.getElementById("tablaProductos").querySelector("tbody");
+      const fila = tabla.insertRow();
+      fila.innerHTML = `<td>${marca}</td><td>${modelo}</td><td>${color}</td><td>${capacidad}</td><td>${precio}</td>`;
+    }
+
+    function agregarDetalle() {
+      const imei = document.getElementById("imei").value;
+      const estado = document.getElementById("estado").value;
+
+      const tabla = document.getElementById("tablaDetalles").querySelector("tbody");
+      const fila = tabla.insertRow();
+      fila.innerHTML = `<td>${imei}</td><td>${estado}</td>`;
+    }
+  </script>
+
+</body>
+</html>

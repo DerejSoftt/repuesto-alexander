@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrar Rol - D'uro Cell</title>
+    <!-- Boxicons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <style>
+        /* Estilos generales y de diseño copiados de sucursales.html y adaptados */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+        }
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .sidebar-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .sidebar-header p {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 3px;
+        }
+        .sidebar-menu {
+            padding: 20px 0;
+            flex: 1;
+        }
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 25px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+            position: relative;
+        }
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-left-color: rgba(255, 255, 255, 0.8);
+            padding-left: 30px;
+        }
+        .menu-item.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-left-color: white;
+        }
+        .menu-item i {
+            font-size: 1.3rem;
+            margin-right: 15px;
+            width: 25px;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+        .menu-item:hover i,
+        .menu-item.active i {
+            opacity: 1;
+        }
+        .menu-item span {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        .sidebar-footer {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .menu-toggle:hover {
+            background: #ee5a24;
+            transform: scale(1.05);
+        }
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            min-height: 100vh;
+            padding: 40px 20px; /* Aumentado el padding superior para bajar el contenido */
+            transition: margin-left 0.3s ease;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex; /* Added for centering */
+            align-items: flex-start; /* Changed to flex-start to respect padding-top */
+            justify-content: center; /* Added for centering */
+        }
+        .container {
+            max-width: 700px; /* Adjusted for form width */
+            width: 95%; /* Responsive width */
+            margin: 0 auto; /* Removed margin-top/bottom, now handled by main-content padding */
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Blue/Purple gradient */
+            color: white;
+            padding: 25px 30px; /* Adjusted padding */
+            text-align: center;
+            position: relative;
+            display: flex; /* For icon and text alignment */
+            flex-direction: column; /* Changed to column for h1 and p stacking */
+            align-items: center;
+            justify-content: center;
+            gap: 10px; /* Adjusted gap between h1 and p */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Separator */
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+        }
+        .header h1 {
+            font-size: 2rem; /* Adjusted font size */
+            margin: 0; /* Remove default margin */
+            position: relative;
+            z-index: 1;
+            display: flex; /* For icon and text alignment within h1 */
+            align-items: center;
+            justify-content: center;
+            gap: 15px; /* Gap between icon and text in h1 */
+        }
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+            margin-top: 0; /* Ensure no extra margin from default p styles */
+        }
+        .content-container {
+            padding: 30px; /* Adjusted padding */
+        }
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="tel"],
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .form-group input.error,
+        .form-group select.error,
+        .form-group textarea.error {
+            border-color: #dc3545;
+        }
+        .error-message {
+            color: #dc3545;
+            font-size: 0.85rem;
+            margin-top: 5px;
+            display: none;
+        }
+        .form-group.checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 25px;
+        }
+        .form-group.checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+        .form-group.checkbox-group label {
+            margin-bottom: 0;
+            font-weight: normal;
+            cursor: pointer;
+        }
+        /* Permissions Checkboxes */
+        .permissions-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            padding: 10px 0;
+            border: 1px solid #e1e8ed;
+            border-radius: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        .permissions-checkboxes label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: normal;
+            cursor: pointer;
+            color: #555;
+        }
+        .permissions-checkboxes input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+        /* Buttons */
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e1e8ed;
+        }
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-outline {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+        .btn-outline:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+        /* Message Container */
+        .message-container {
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-weight: 500;
+            display: none; /* Hidden by default */
+        }
+        .message-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        /* Desktop specific styles */
+        @media (min-width: 769px) {
+            .sidebar {
+                position: fixed;
+                transform: translateX(0);
+                height: 100vh;
+            }
+            .main-content {
+                margin-left: 280px;
+                min-height: 100vh;
+            }
+            .menu-toggle {
+                display: none;
+            }
+            .sidebar-overlay {
+                display: none !important;
+            }
+        }
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 100%;
+                max-width: 300px;
+                height: 100vh;
+            }
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 10px;
+                min-height: 100vh;
+            }
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            .header {
+                padding: 20px;
+                padding-top: 60px;
+            }
+            .header h1 {
+                font-size: 1.8rem;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .content-container {
+                padding: 20px;
+            }
+            .form-actions {
+                flex-direction: column;
+            }
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            body.sidebar-open {
+                overflow: hidden;
+            }
+        }
+        /* Scrollbar personalizado */
+        .sidebar::-webkit-scrollbar,
+        .container::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .sidebar::-webkit-scrollbar-track,
+        .container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .sidebar::-webkit-scrollbar-thumb,
+        .container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+        .sidebar::-webkit-scrollbar-thumb:hover,
+        .container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <!-- Menu Toggle Button -->
+    <button class="menu-toggle" onclick="toggleSidebar()">
+        <i class='bx bx-menu'></i>
+    </button>
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>
+                <i class='bx bx-mobile-alt'></i>
+                DEREJSOFT
+            </h2>
+            <p>Derejsoft - superadmin</p>
+            <p>derejsoft2003@gmail.com</p>
+        </div>
+        <div class="sidebar-menu">
+            <a href="#" class="menu-item">
+                <i class='bx bx-home-alt'></i>
+                <span>Inicio</span>
+            </a>
+            <a href="ventas.html" class="menu-item">
+                <i class='bx bx-dollar-circle'></i>
+                <span>Facturacion</span>
+            </a>
+            <a href="registrodecliente.html" class="menu-item">
+                <i class='bx bx-user-plus'></i>
+                <span>Registrar Clientes</span>
+            </a>
+            <a href="entrada.html" class="menu-item">
+                <i class='bx bx-shopping-bag'></i>
+                <span>Entrada de mercancia</span>
+            </a>
+            <a href="cuentaporcobrar.html" class="menu-item">
+                <i class='bx bx-credit-card'></i>
+                <span>Cuentas por Cobrar</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-bar-chart-alt-2'></i>
+                <span>Reportes</span>
+            </a>
+            <a href="listadecliente.html" class="menu-item">
+                <i class='bx bx-user'></i>
+                <span>Clientes</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-trending-up'></i>
+                <span>Cuadre</span>
+            </a>
+            <a href="gestiondesuplidores.html" class="menu-item">
+                <i class='bx bx-store'></i>
+                <span>Suplidores</span>
+            </a>
+            <a href="sucursales.html" class="menu-item">
+                <i class='bx bx-building-house'></i>
+                <span>Sucursales</span>
+            </a>
+            <a href="Roles.html" class="menu-item active">
+                <i class='bx bx-user-check'></i>
+                <span>Roles</span>
+            </a>
+            <a href="usuarios.html" class="menu-item">
+                <i class='bx bx-group'></i>
+                <span>Usuarios</span>
+            </a>
+            <a href="iniciocaja.html" class="menu-item">
+                <i class='bx bx-credit-card-alt'></i>
+                <span>Facturacion</span>
+            </a>
+            <a href="#" class="menu-item">
+                <i class='bx bx-cog'></i>
+                <span>Ajustes</span>
+            </a>
+            <a href="login.html" class="menu-item">
+                <i class='bx bx-log-out'></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <p>Dalecompra v 1.2.2</p>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container">
+            <div class="header">
+                <i class='bx bx-user-check'></i>
+                <h1>Agregar Roles</h1>
+                <p>Completa los datos para añadir un nuevo rol a Derejsoft</p>
+            </div>
+            <div class="content-container">
+                <form id="roleForm">
+                    <div class="form-group">
+                        <label for="roleName">Nombre del Rol</label>
+                        <input type="text" id="roleName" placeholder="Ej: Administrador General" required>
+                        <span class="error-message" id="roleNameError"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="roleDescription">Descripción</label>
+                        <textarea id="roleDescription" rows="3" placeholder="Breve descripción del rol y sus responsabilidades."></textarea>
+                        <span class="error-message" id="roleDescriptionError"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="roleStatus">Estado</label>
+                        <select id="roleStatus" required>
+                            <option value="activo" selected>Activo</option>
+                            <option value="inactivo">Inactivo</option>
+                        </select>
+                        <span class="error-message" id="roleStatusError"></span>
+                    </div>
+                    <div class="form-group" id="branchGroup">
+                        <label for="roleBranch">Sucursal</label>
+                        <select id="roleBranch" required>
+                            <!-- Options populated by JS -->
+                        </select>
+                        <span class="error-message" id="roleBranchError"></span>
+                    </div>
+                    <div class="form-group checkbox-group" id="isGlobalGroup">
+                        <input type="checkbox" id="isGlobal">
+                        <label for="isGlobal">Es Global (aplica a todas las sucursales)</label>
+                    </div>
+                    <div class="form-group">
+                        <label>Permisos</label>
+                        <div class="permissions-checkboxes" id="permissionsCheckboxes">
+                            <!-- Checkboxes will be generated by JS -->
+                        </div>
+                        <span class="error-message" id="permissionsError"></span>
+                    </div>
+                    <div id="messageContainer" class="message-container"></div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline" onclick="window.location.href='Roles.html'">
+                            <i class='bx bx-x'></i>
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class='bx bx-save'></i>
+                            Guardar Rol
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // SIMULACIÓN DEL ROL DEL USUARIO ACTUAL
+        // Cambia a 'NormalUser' para probar el comportamiento de un usuario normal
+        const currentUserRole = 'SuperAdmin'; // O 'NormalUser'
+        // Si es 'NormalUser', simula su sucursal asignada (ej. Sucursal Principal)
+        const currentUserBranchId = 1; 
+
+        // Datos de sucursales (copiados de sucursales.html para que el dropdown funcione)
+        let branches = JSON.parse(localStorage.getItem('branches')) || [];
+        if (branches.length === 0) {
+            branches = [
+                { id: 1, codigo: "SDQ-001", nombre: "Sucursal Principal", ciudad: "Santo Domingo", encargado: "Juan Pérez", telefono: "(809) 111-2222", estado: "activa" },
+                { id: 2, codigo: "STI-002", nombre: "Sucursal Santiago", ciudad: "Santiago", encargado: "María Rodríguez", telefono: "(809) 222-3333", estado: "activa" },
+                { id: 3, codigo: "PUN-003", nombre: "Sucursal Punta Cana", ciudad: "Punta Cana", encargado: "Carlos Gómez", telefono: "(809) 333-4444", estado: "inactiva" },
+                { id: 4, codigo: "LAV-004", nombre: "Sucursal La Vega", ciudad: "La Vega", encargado: "Ana Díaz", telefono: "(809) 444-5555", estado: "activa" },
+                { id: 5, codigo: "PMA-005", nombre: "Sucursal Puerto Plata", ciudad: "Puerto Plata", encargado: "Luis Hernández", telefono: "(809) 555-6666", estado: "activa" },
+                { id: 6, codigo: "SFC-006", nombre: "Sucursal San Francisco", ciudad: "San Francisco de Macorís", encargado: "Sofía Martínez", telefono: "(809) 666-7777", estado: "inactiva" },
+                { id: 7, codigo: "HIG-007", nombre: "Sucursal Higüey", ciudad: "Higüey", encargado: "Pedro Santana", telefono: "(809) 777-8888", estado: "activa" },
+                { id: 8, codigo: "BCH-008", nombre: "Sucursal Boca Chica", ciudad: "Boca Chica", encargado: "Laura Pérez", telefono: "(809) 888-9999", estado: "activa" },
+                { id: 9, codigo: "ROM-009", nombre: "Sucursal La Romana", ciudad: "La Romana", encargado: "Miguel Ángel", telefono: "(809) 999-0000", estado: "activa" },
+                { id: 10, codigo: "AZU-010", nombre: "Sucursal Azua", ciudad: "Azua", encargado: "Elena García", telefono: "(809) 000-1111", estado: "inactiva" },
+                { id: 11, codigo: "MOC-011", nombre: "Sucursal Moca", ciudad: "Moca", encargado: "Roberto Núñez", telefono: "(809) 111-2222", estado: "activa" },
+                { id: 12, codigo: "COT-012", nombre: "Sucursal Cotuí", ciudad: "Cotuí", encargado: "Isabel Reyes", telefono: "(809) 222-3333", estado: "activa" }
+            ];
+            localStorage.setItem('branches', JSON.stringify(branches));
+        }
+
+        // Variables globales para roles
+        let roles = JSON.parse(localStorage.getItem('roles')) || [];
+
+        // Permisos disponibles para los roles
+        const availablePermissions = [
+            "Gestionar Sucursales",
+            "Gestionar Ventas",
+            "Gestionar Clientes",
+            "Gestionar Suplidores",
+            "Ver Reportes",
+            "Ajustes del Sistema",
+            "Gestionar Roles",
+            "Gestionar Inventario",
+            "Gestionar Usuarios",
+            "Gestionar Cajas"
+        ];
+
+        // Datos de prueba si no hay roles (actualizados para incluir sucursalId y esGlobal)
+        if (roles.length === 0) {
+            roles = [
+                { id: 1, nombre: "Super Administrador", descripcion: "Control total del sistema.", estado: "activo", fechaCreacion: "2023-01-15", usuariosAsignados: 1, permisos: availablePermissions, sucursalId: null, esGlobal: true },
+                { id: 2, nombre: "Administrador", descripcion: "Gestión de sucursales, ventas y clientes para la sucursal principal.", estado: "activo", fechaCreacion: "2023-02-01", usuariosAsignados: 3, permisos: ["Gestionar Sucursales", "Gestionar Ventas", "Gestionar Clientes", "Ver Reportes", "Gestionar Inventario", "Gestionar Usuarios", "Gestionar Cajas"], sucursalId: 1, esGlobal: false },
+                { id: 3, nombre: "Vendedor", descripcion: "Registro de ventas y clientes.", estado: "activo", fechaCreacion: "2023-03-10", usuariosAsignados: 15, permisos: ["Gestionar Ventas", "Gestionar Clientes"], sucursalId: 1, esGlobal: false },
+                { id: 4, nombre: "Cajero", descripcion: "Manejo de transacciones de caja.", estado: "activo", fechaCreacion: "2023-04-05", usuariosAsignados: 8, permisos: ["Gestionar Ventas", "Gestionar Cajas"], sucursalId: 1, esGlobal: false },
+                { id: 5, nombre: "Almacenista Global", descripcion: "Gestión de inventario a nivel global.", estado: "inactivo", fechaCreacion: "2023-05-20", usuariosAsignados: 2, permisos: ["Gestionar Inventario"], sucursalId: null, esGlobal: true }
+            ];
+            localStorage.setItem('roles', JSON.stringify(roles));
+        }
+
+        // Referencias a elementos del DOM
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.querySelector('.sidebar-overlay');
+        const roleForm = document.getElementById('roleForm');
+        const roleNameInput = document.getElementById('roleName');
+        const roleDescriptionInput = document.getElementById('roleDescription');
+        const roleStatusSelect = document.getElementById('roleStatus');
+        const roleBranchSelect = document.getElementById('roleBranch');
+        const isGlobalCheckbox = document.getElementById('isGlobal');
+        const permissionsCheckboxesContainer = document.getElementById('permissionsCheckboxes');
+        const branchGroup = document.getElementById('branchGroup');
+        const isGlobalGroup = document.getElementById('isGlobalGroup');
+        const messageContainer = document.getElementById('messageContainer');
+
+        // Error message elements
+        const roleNameError = document.getElementById('roleNameError');
+        const roleDescriptionError = document.getElementById('roleDescriptionError');
+        const roleStatusError = document.getElementById('roleStatusError');
+        const roleBranchError = document.getElementById('roleBranchError');
+        const permissionsError = document.getElementById('permissionsError');
+
+        // Funciones para el sidebar
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            sidebarOverlay.classList.toggle('active');
+            if (window.innerWidth <= 768) {
+                document.body.classList.toggle('sidebar-open');
+            }
+        }
+
+        function closeSidebar() {
+            sidebar.classList.remove('active');
+            sidebarOverlay.classList.remove('active');
+            document.body.classList.remove('sidebar-open');
+        }
+
+        // Cerrar sidebar al hacer clic en un enlace (móvil)
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    closeSidebar();
+                }
+            });
+        });
+
+        // Función para generar checkboxes de permisos
+        function generatePermissionsCheckboxes(containerElement, selectedPermissions = []) {
+            containerElement.innerHTML = '';
+            availablePermissions.forEach(permission => {
+                const isChecked = selectedPermissions.includes(permission);
+                containerElement.innerHTML += `
+                    <label>
+                        <input type="checkbox" name="permissions" value="${permission}" ${isChecked ? 'checked' : ''}>
+                        ${permission}
+                    </label>
+                `;
+            });
+        }
+
+        // Función para obtener permisos seleccionados de los checkboxes
+        function getSelectedPermissions(containerElement) {
+            const checkboxes = containerElement.querySelectorAll('input[name="permissions"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        // Función para poblar el dropdown de sucursales
+        function populateBranchDropdown(selectElement, selectedBranchId = null) {
+            selectElement.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Seleccione una sucursal';
+            selectElement.appendChild(defaultOption);
+
+            if (currentUserRole === 'SuperAdmin') {
+                // Super Admin ve todas las sucursales y la opción 'Global'
+                const globalOption = document.createElement('option');
+                globalOption.value = 'null'; // Usar 'null' como string para el valor
+                globalOption.textContent = 'Global (Todas las Sucursales)';
+                selectElement.appendChild(globalOption);
+
+                branches.forEach(branch => {
+                    const option = document.createElement('option');
+                    option.value = branch.id;
+                    option.textContent = branch.nombre;
+                    selectElement.appendChild(option);
+                });
+                selectElement.disabled = false;
+            } else {
+                // Usuario normal solo ve su sucursal o se preselecciona
+                const userBranch = branches.find(b => b.id === currentUserBranchId);
+                if (userBranch) {
+                    const option = document.createElement('option');
+                    option.value = userBranch.id;
+                    option.textContent = userBranch.nombre;
+                    selectElement.appendChild(option);
+                    selectElement.value = userBranch.id;
+                    selectElement.disabled = true; // No puede cambiar su sucursal
+                } else {
+                    // Fallback si la sucursal del usuario no se encuentra
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'No hay sucursal asignada';
+                    selectElement.appendChild(option);
+                    selectElement.disabled = true;
+                }
+            }
+            // Set the selected value after populating options
+            if (selectedBranchId !== null) {
+                selectElement.value = selectedBranchId === null ? 'null' : selectedBranchId;
+            } else if (selectElement.value === '') { // If no specific selection, ensure default is selected
+                selectElement.value = '';
+            }
+        }
+
+        // Función para mostrar mensajes (reutilizable)
+        function showMessage(message, type, container) {
+            container.textContent = message;
+            container.className = `message-container message-${type}`;
+            container.style.display = 'block';
+        }
+
+        // Función para ocultar mensajes (reutilizable)
+        function hideMessage(container) {
+            container.style.display = 'none';
+        }
+
+        // Función para mostrar error de validación
+        function showValidationError(element, message) {
+            element.classList.add('error');
+            element.nextElementSibling.textContent = message;
+            element.nextElementSibling.style.display = 'block';
+        }
+
+        // Función para ocultar error de validación
+        function hideValidationError(element) {
+            element.classList.remove('error');
+            element.nextElementSibling.textContent = '';
+            element.nextElementSibling.style.display = 'none';
+        }
+
+        // Event listener para el checkbox "Es Global"
+        isGlobalCheckbox.addEventListener('change', () => {
+            if (isGlobalCheckbox.checked) {
+                roleBranchSelect.value = 'null'; // Si es global, la sucursal es null
+                roleBranchSelect.disabled = true;
+                hideValidationError(roleBranchSelect); // Hide error if it was there
+            } else {
+                roleBranchSelect.disabled = false;
+                // Si no es global, intentar preseleccionar la sucursal del usuario si es normal, o dejar en blanco para superadmin
+                if (currentUserRole !== 'SuperAdmin') {
+                    roleBranchSelect.value = currentUserBranchId;
+                } else {
+                    roleBranchSelect.value = ''; // Permitir seleccionar
+                }
+            }
+        });
+
+        // Manejador de envío del formulario
+        roleForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideMessage(messageContainer); // Ocultar mensajes anteriores
+            
+            // Reset all validation errors
+            hideValidationError(roleNameInput);
+            hideValidationError(roleDescriptionInput);
+            hideValidationError(roleStatusSelect);
+            hideValidationError(roleBranchSelect);
+            hideValidationError(permissionsCheckboxesContainer);
+
+            const roleName = roleNameInput.value.trim();
+            const roleDescription = roleDescriptionInput.value.trim();
+            const roleStatus = roleStatusSelect.value;
+            const selectedPermissions = getSelectedPermissions(permissionsCheckboxesContainer);
+            
+            let roleBranchId = roleBranchSelect.value === 'null' ? null : parseInt(roleBranchSelect.value);
+            let isGlobal = isGlobalCheckbox.checked;
+
+            let isValid = true;
+
+            // Validaciones
+            if (!roleName) {
+                showValidationError(roleNameInput, 'El nombre del rol es requerido.');
+                isValid = false;
+            }
+
+            if (roleStatus === '') {
+                showValidationError(roleStatusSelect, 'El estado del rol es requerido.');
+                isValid = false;
+            }
+
+            if (selectedPermissions.length === 0) {
+                showValidationError(permissionsCheckboxesContainer, 'Debe seleccionar al menos un permiso.');
+                isValid = false;
+            }
+
+            // Reglas de permisos para usuario normal
+            if (currentUserRole !== 'SuperAdmin') {
+                roleBranchId = currentUserBranchId; // Forzar la sucursal del usuario
+                isGlobal = false; // Forzar a no ser global
+            } else {
+                // Si es SuperAdmin y marca global, sucursalId debe ser null
+                if (isGlobal) {
+                    roleBranchId = null;
+                } else if (roleBranchId === null || roleBranchSelect.value === '') {
+                    // Si no es global, debe tener una sucursal asignada
+                    showValidationError(roleBranchSelect, 'Para roles no globales, debe seleccionar una sucursal.');
+                    isValid = false;
+                }
+            }
+
+            // Validar nombre único por sucursal/globalidad
+            if (roles.some(r => 
+                r.nombre.toLowerCase() === roleName.toLowerCase() && 
+                r.sucursalId === roleBranchId && 
+                r.esGlobal === isGlobal
+            )) {
+                showValidationError(roleNameInput, 'Ya existe un rol con este nombre para esta sucursal/globalidad.');
+                isValid = false;
+            }
+
+            if (!isValid) {
+                showMessage('Por favor, corrija los errores en el formulario.', 'error', messageContainer);
+                return;
+            }
+
+            const newRole = {
+                id: roles.length > 0 ? Math.max(...roles.map(r => r.id)) + 1 : 1,
+                nombre: roleName,
+                descripcion: roleDescription,
+                estado: roleStatus,
+                fechaCreacion: new Date().toISOString().split('T')[0], // Formato YYYY-MM-DD
+                usuariosAsignados: 0, // Por defecto 0 al crear
+                permisos: selectedPermissions,
+                sucursalId: roleBranchId,
+                esGlobal: isGlobal
+            };
+
+            roles.push(newRole);
+            localStorage.setItem('roles', JSON.stringify(roles));
+
+            showMessage(`Rol "${newRole.nombre}" creado exitosamente.`, 'success', messageContainer);
+            roleForm.reset(); // Limpiar el formulario
+            generatePermissionsCheckboxes(permissionsCheckboxesContainer); // Reset checkboxes
+
+            // Re-apply branch/global logic after reset
+            if (currentUserRole === 'SuperAdmin') {
+                populateBranchDropdown(roleBranchSelect);
+                isGlobalCheckbox.checked = false;
+                roleBranchSelect.disabled = false;
+            } else {
+                populateBranchDropdown(roleBranchSelect, currentUserBranchId);
+                isGlobalCheckbox.checked = false; // Ensure it's false
+                roleBranchSelect.disabled = true;
+            }
+
+            setTimeout(() => {
+                // Opcional: Redirigir a la página de Roles después de un tiempo
+                window.location.href = 'Roles.html';
+            }, 1500);
+        });
+
+        // Inicializar la página
+        window.addEventListener('load', function() {
+            generatePermissionsCheckboxes(permissionsCheckboxesContainer);
+
+            // Lógica de visibilidad y preselección para Sucursal y Es Global
+            if (currentUserRole === 'SuperAdmin') {
+                branchGroup.style.display = 'block';
+                isGlobalGroup.style.display = 'flex'; // Use flex for checkbox group
+                isGlobalCheckbox.checked = false; // Por defecto no global
+                roleBranchSelect.disabled = false;
+                populateBranchDropdown(roleBranchSelect);
+            } else {
+                branchGroup.style.display = 'block'; // Mostrar para que vea su sucursal
+                isGlobalGroup.style.display = 'none'; // Ocultar para usuario normal
+                isGlobalCheckbox.checked = false; // Asegurar que no sea global
+                populateBranchDropdown(roleBranchSelect, currentUserBranchId); // Preseleccionar y deshabilitar
+            }
+        });
+
+        // Cerrar sidebar al redimensionar ventana
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                closeSidebar();
+            }
+        });
+    </script>
+</body>
+</html>

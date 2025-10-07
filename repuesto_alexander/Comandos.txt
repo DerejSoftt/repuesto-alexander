@@ -1,0 +1,135 @@
+
+#=====================================
+# Crear la Base de datos
+#======================================
+    CREATE DATABASE '#' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+#================================================
+# CREAR EL ENTORNO VIRTUAL
+#================================================
+    python -m venv venv
+
+#================================================
+# EJECUTTAR EL ENTORNO VIRTUAL
+#================================================
+    venv\Scripts\activate
+    
+#-------------------------------
+# Crear Las Migrar base de datos
+#-------------------------------
+    python manage.py makemigrations
+
+#-----------------------
+# Migrar base de datos
+#------------------------
+    python manage.py migrate
+
+#-----------------------
+# Crear superusuario
+#-----------------------
+    python manage.py createsuperuser
+
+#-------------------------------
+# Correr servidor de desarroll
+#-------------------------------
+    python manage.py runserver
+
+#=================================
+# crear Los Requerimientos
+#================================
+    pip freeze > requirements.txt
+
+#------------------------------------
+# Instalacion De Los Requerimientos
+#------------------------------------
+    pip install -r requirements.txt
+
+#=================================
+# Crear Los Archivos staticos
+#================================
+    python manage.py collectstatic
+
+#=================================
+# Crear LA Carpeta Estaticfile
+#================================
+    STATIC_URL = "/static/"
+    STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+    STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+
+
+
+
+
+#===============================================#
+#                                               #
+#   COMANDOS PARA MANEGAR LA BASE DE DATABASE   #
+#                                               #
+#===============================================#
+#------------------------------------------
+#   Mostrar todas las bases de datos
+#===========================================
+    SHOW DATABASES;
+
+#===========================================
+#   Seleccionar una base de datos
+#===========================================
+    USE 'NOMBRE DE BD';
+
+#===========================================
+#   Ver las tablas de esa base de datos
+#===========================================
+    SHOW TABLES;
+
+#===========================================
+#   Ver estructura de una tabla
+#===========================================
+    DESCRIBE nombre_tabla;
+    SHOW COLUMNS FROM nombre_tabla;
+
+#===========================================
+#
+#===========================================
+
+
+
+#===============================================#
+#                                               #
+#  COMANDOS PARA Levantar el servidor WAITRESS  #
+#                                               #
+#===============================================#
+
+#================================================
+# INSTALAR EL servidor
+#================================================
+     pip install waitress
+
+#================================================
+# INSTALAR whitenoise
+#================================================
+    pip install whitenoise
+
+#================================================
+# CONFIGURAR LOS MIDDLEWARE (DEBE IR DE 2do)
+#================================================
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+
+#================================================
+# CONFIGURAR ALMACENAMIENOTO
+#================================================
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+#=================================
+# Crear LA Carpeta Estaticfile
+#================================
+    STATIC_URL = "/static/"
+    STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+    STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+
+#=================================
+# Crear Los Archivos staticos
+#================================
+    python manage.py collectstatic
+
+#================================================
+# INSTALAR EL servidor
+#================================================

@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Venta de Teléfonos</title>
+    <style>
+        /* Variables CSS para los colores */
+        :root {
+            --primary-orange: hsl(25, 95%, 53%);
+            --primary-orange-dark: hsl(25, 95%, 45%);
+            --text-light: hsl(210, 20%, 98%);
+            --card-text: hsl(222.2, 84%, 4.9%);
+            --border-color: hsl(214.3, 31.8%, 91.4%);
+            --input-bg: hsla(0, 0%, 100%, 0.1);
+            --input-border: hsla(255, 255%, 255%, 0.2);
+            --placeholder-color: hsl(215.4, 16.3%, 56.9%);
+        }
+
+        /* Reset y estilos generales */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            min-height: 100dvh; /* Para dispositivos móviles modernos */
+        }
+
+        /* Canvas para el fondo espacial */
+        #spaceCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #16213e 25%, #0f0f23 50%, #000000 100%);
+        }
+
+        /* Overlay para nebulosas */
+        .nebula-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            background: 
+                radial-gradient(ellipse 800px 600px at 20% 30%, rgba(138, 43, 226, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse 600px 400px at 80% 70%, rgba(75, 0, 130, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse 400px 300px at 60% 20%, rgba(25, 25, 112, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse 300px 200px at 30% 80%, rgba(72, 61, 139, 0.05) 0%, transparent 50%);
+            animation: nebulaFloat 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes nebulaFloat {
+            0% { transform: translateX(-10px) translateY(-5px); }
+            100% { transform: translateX(10px) translateY(5px); }
+        }
+
+        /* Contenedor principal */
+        .container {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 1rem;
+        }
+
+        /* Contenedor de la tarjeta de login */
+        .card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 1rem;
+            box-shadow: 
+                0 25px 50px -12px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            margin: auto;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+        }
+
+        /* Encabezado de la tarjeta */
+        .card-header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .icon-container {
+            margin: 0 auto 1rem auto;
+            width: 3.5rem;
+            height: 3.5rem;
+            background: linear-gradient(135deg, rgba(251, 146, 60, 0.2), rgba(251, 146, 60, 0.1));
+            border: 1px solid rgba(251, 146, 60, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(251, 146, 60, 0.3);
+        }
+
+        .card-header svg {
+            height: 1.5rem;
+            width: 1.5rem;
+            color: rgb(251, 146, 60);
+            filter: drop-shadow(0 0 5px rgba(251, 146, 60, 0.5));
+        }
+
+        .card-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: white;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .card-description {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.4;
+        }
+
+        /* Contenido de la tarjeta */
+        .card-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            line-height: 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: rgb(251, 146, 60);
+            box-shadow: 
+                0 0 0 2px rgba(251, 146, 60, 0.3),
+                0 0 20px rgba(251, 146, 60, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        /* Botón */
+        .card-footer {
+            padding-top: 0.5rem;
+        }
+
+        .btn {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0.875rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, rgb(251, 146, 60), rgb(234, 88, 12));
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            box-shadow: 0 4px 15px rgba(251, 146, 60, 0.3);
+            position: relative;
+            overflow: hidden;
+            min-height: 44px; /* Tamaño mínimo para touch */
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(251, 146, 60, 0.4);
+        }
+
+        .btn:focus {
+            outline: none;
+            box-shadow: 
+                0 0 0 2px rgba(251, 146, 60, 0.5),
+                0 8px 25px rgba(251, 146, 60, 0.4);
+        }
+
+        /* Responsive Design */
+        
+        /* Tablets y pantallas medianas */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .card {
+                max-width: 350px;
+                padding: 1.75rem;
+                gap: 1.25rem;
+            }
+            
+            .card-title {
+                font-size: 1.5rem;
+            }
+            
+            .icon-container {
+                width: 3rem;
+                height: 3rem;
+            }
+            
+            .card-header svg {
+                height: 1.25rem;
+                width: 1.25rem;
+            }
+        }
+
+        /* Móviles grandes */
+        @media (max-width: 480px) {
+            .container {
+                padding: 0.75rem;
+                min-height: 100vh;
+                min-height: 100dvh;
+            }
+            
+            .card {
+                max-width: 320px;
+                padding: 1.5rem;
+                gap: 1rem;
+                border-radius: 0.75rem;
+            }
+            
+            .card-title {
+                font-size: 1.375rem;
+            }
+            
+            .card-description {
+                font-size: 0.8125rem;
+            }
+            
+            .icon-container {
+                width: 2.75rem;
+                height: 2.75rem;
+                margin-bottom: 0.75rem;
+            }
+            
+            .card-header svg {
+                height: 1.125rem;
+                width: 1.125rem;
+            }
+            
+            .form-group input {
+                padding: 0.6875rem 0.875rem;
+                font-size: 0.9375rem;
+            }
+            
+            .btn {
+                padding: 0.8125rem 1rem;
+                font-size: 0.8125rem;
+            }
+        }
+
+        /* Móviles pequeños */
+        @media (max-width: 360px) {
+            .container {
+                padding: 0.5rem;
+            }
+            
+            .card {
+                max-width: 300px;
+                padding: 1.25rem;
+                gap: 0.875rem;
+            }
+            
+            .card-title {
+                font-size: 1.25rem;
+            }
+            
+            .card-description {
+                font-size: 0.75rem;
+            }
+            
+            .icon-container {
+                width: 2.5rem;
+                height: 2.5rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .card-header svg {
+                height: 1rem;
+                width: 1rem;
+            }
+            
+            .form-group {
+                gap: 0.375rem;
+            }
+            
+            .form-group label {
+                font-size: 0.8125rem;
+            }
+            
+            .form-group input {
+                padding: 0.625rem 0.75rem;
+                font-size: 0.875rem;
+            }
+            
+            .btn {
+                padding: 0.75rem 1rem;
+                font-size: 0.75rem;
+                min-height: 42px;
+            }
+        }
+
+        /* Pantallas muy pequeñas */
+        @media (max-width: 320px) {
+            .card {
+                max-width: 280px;
+                padding: 1rem;
+            }
+            
+            .card-title {
+                font-size: 1.125rem;
+            }
+        }
+
+        /* Orientación landscape en móviles */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .container {
+                padding: 0.5rem;
+            }
+            
+            .card {
+                max-width: 350px;
+                padding: 1rem;
+                gap: 0.75rem;
+            }
+            
+            .card-header {
+                margin-bottom: 0.5rem;
+            }
+            
+            .icon-container {
+                width: 2.5rem;
+                height: 2.5rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .card-title {
+                font-size: 1.25rem;
+                margin-bottom: 0.25rem;
+            }
+            
+            .card-description {
+                font-size: 0.75rem;
+            }
+            
+            .form-group input {
+                padding: 0.5rem 0.75rem;
+            }
+            
+            .btn {
+                padding: 0.625rem 1rem;
+            }
+        }
+
+        /* Asegurar centrado perfecto */
+        @media (min-height: 600px) {
+            .container {
+                align-items: center;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas para el fondo espacial -->
+    <canvas id="spaceCanvas"></canvas>
+    
+    <!-- Overlay de nebulosas -->
+    <div class="nebula-overlay"></div>
+
+    <!-- Contenedor principal -->
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="icon-container">
+                    <!-- Icono de teléfono -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
+                        <path d="M12 18h.01"/>
+                    </svg>
+                </div>
+                <h1 class="card-title">Iniciar Sesión</h1>
+                <p class="card-description">Ingresa tu usuario y contraseña para acceder a tu cuenta.</p>
+            </div>
+            
+            <div class="card-content">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Usuario</label>
+                        <input id="username" type="text" placeholder="tu_usuario" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Contraseña</label>
+                        <input id="password" type="password" placeholder="Clave" required>
+                    </div>
+                    <div class="card-footer">
+                        <button type="submit" class="btn">Iniciar Sesión</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sistema de fondo espacial adaptativo
+        class SpaceBackground {
+            constructor() {
+                this.canvas = document.getElementById('spaceCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.stars = [];
+                this.shootingStars = [];
+                this.planets = [];
+                this.isMobile = window.innerWidth <= 768;
+                
+                this.init();
+                this.animate();
+                
+                window.addEventListener('resize', () => {
+                    this.isMobile = window.innerWidth <= 768;
+                    this.resizeCanvas();
+                });
+            }
+            
+            init() {
+                this.resizeCanvas();
+                this.createStars();
+                this.createPlanets();
+            }
+            
+            resizeCanvas() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                
+                // Recrear elementos cuando cambie el tamaño
+                if (this.stars.length > 0) {
+                    this.createStars();
+                    this.createPlanets();
+                }
+            }
+            
+            createStars() {
+                this.stars = [];
+                // Menos estrellas en móviles para mejor rendimiento
+                const starCount = this.isMobile ? 100 : 200;
+                
+                for (let i = 0; i < starCount; i++) {
+                    this.stars.push({
+                        x: Math.random() * this.canvas.width,
+                        y: Math.random() * this.canvas.height,
+                        size: Math.random() * (this.isMobile ? 1.5 : 2) + 0.5,
+                        opacity: Math.random() * 0.8 + 0.2,
+                        twinkleSpeed: Math.random() * 0.02 + 0.01,
+                        twinkleOffset: Math.random() * Math.PI * 2,
+                        color: this.getStarColor()
+                    });
+                }
+                
+                // Menos estrellas fugaces en móviles
+                const shootingStarInterval = this.isMobile ? 5000 : 3000;
+                setInterval(() => {
+                    if (Math.random() < 0.3) {
+                        this.createShootingStar();
+                    }
+                }, shootingStarInterval);
+            }
+            
+            createPlanets() {
+                this.planets = [];
+                // Menos planetas en móviles
+                const planetCount = this.isMobile ? 2 : 3;
+                
+                for (let i = 0; i < planetCount; i++) {
+                    this.planets.push({
+                        x: Math.random() * this.canvas.width,
+                        y: Math.random() * this.canvas.height,
+                        size: Math.random() * (this.isMobile ? 20 : 30) + (this.isMobile ? 15 : 20),
+                        color: this.getPlanetColor(),
+                        opacity: Math.random() * 0.3 + 0.1,
+                        drift: {
+                            x: (Math.random() - 0.5) * 0.2,
+                            y: (Math.random() - 0.5) * 0.2
+                        }
+                    });
+                }
+            }
+            
+            getStarColor() {
+                const colors = [
+                    '#ffffff',
+                    '#ffffcc',
+                    '#ffcc99',
+                    '#ccccff',
+                    '#ffccff'
+                ];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+            
+            getPlanetColor() {
+                const colors = [
+                    'rgba(138, 43, 226, 0.3)',
+                    'rgba(75, 0, 130, 0.3)',
+                    'rgba(25, 25, 112, 0.3)',
+                    'rgba(72, 61, 139, 0.3)',
+                    'rgba(123, 104, 238, 0.3)'
+                ];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+            
+            createShootingStar() {
+                this.shootingStars.push({
+                    x: Math.random() * this.canvas.width,
+                    y: Math.random() * this.canvas.height * 0.5,
+                    length: Math.random() * (this.isMobile ? 60 : 80) + 20,
+                    speed: Math.random() * (this.isMobile ? 6 : 8) + 4,
+                    angle: Math.random() * Math.PI / 4 + Math.PI / 4,
+                    opacity: 1,
+                    life: 1
+                });
+            }
+            
+            drawStars() {
+                this.stars.forEach(star => {
+                    const twinkle = Math.sin(Date.now() * star.twinkleSpeed + star.twinkleOffset);
+                    const currentOpacity = star.opacity + twinkle * 0.3;
+                    
+                    this.ctx.save();
+                    this.ctx.globalAlpha = Math.max(0, currentOpacity);
+                    this.ctx.fillStyle = star.color;
+                    this.ctx.shadowBlur = star.size * 2;
+                    this.ctx.shadowColor = star.color;
+                    
+                    this.ctx.beginPath();
+                    this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                });
+            }
+            
+            drawPlanets() {
+                this.planets.forEach(planet => {
+                    planet.x += planet.drift.x;
+                    planet.y += planet.drift.y;
+                    
+                    if (planet.x < -planet.size) planet.x = this.canvas.width + planet.size;
+                    if (planet.x > this.canvas.width + planet.size) planet.x = -planet.size;
+                    if (planet.y < -planet.size) planet.y = this.canvas.height + planet.size;
+                    if (planet.y > this.canvas.height + planet.size) planet.y = -planet.size;
+                    
+                    this.ctx.save();
+                    this.ctx.globalAlpha = planet.opacity;
+                    this.ctx.fillStyle = planet.color;
+                    this.ctx.shadowBlur = planet.size;
+                    this.ctx.shadowColor = planet.color;
+                    
+                    this.ctx.beginPath();
+                    this.ctx.arc(planet.x, planet.y, planet.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                });
+            }
+            
+            drawShootingStars() {
+                this.shootingStars = this.shootingStars.filter(star => {
+                    star.x += Math.cos(star.angle) * star.speed;
+                    star.y += Math.sin(star.angle) * star.speed;
+                    star.life -= 0.02;
+                    star.opacity = star.life;
+                    
+                    if (star.life > 0) {
+                        this.ctx.save();
+                        this.ctx.globalAlpha = star.opacity;
+                        this.ctx.strokeStyle = '#ffffff';
+                        this.ctx.lineWidth = this.isMobile ? 1.5 : 2;
+                        this.ctx.shadowBlur = this.isMobile ? 8 : 10;
+                        this.ctx.shadowColor = '#ffffff';
+                        
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(star.x, star.y);
+                        this.ctx.lineTo(
+                            star.x - Math.cos(star.angle) * star.length,
+                            star.y - Math.sin(star.angle) * star.length
+                        );
+                        this.ctx.stroke();
+                        this.ctx.restore();
+                        
+                        return true;
+                    }
+                    return false;
+                });
+            }
+            
+            animate() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                this.drawPlanets();
+                this.drawStars();
+                this.drawShootingStars();
+                
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+        
+        // Inicializar el fondo espacial
+        window.addEventListener('load', () => {
+            new SpaceBackground();
+        });
+        
+        // Manejar el formulario de login
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (username && password) {
+                alert('¡Login exitoso! (Aquí conectarías con tu backend)');
+                // window.location.href = './inicio.html';
+            } else {
+                alert('Por favor, completa todos los campos.');
+            }
+        });
+    </script>
+</body>
+</html>
