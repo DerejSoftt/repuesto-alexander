@@ -69,13 +69,6 @@ class Proveedor(models.Model):
         return self.nombre_empresa
 
 
-
-
-
-
-
-
-
 class EntradaProducto(models.Model):
     MARCAS = (
         ('honda', 'Honda'),
@@ -91,14 +84,12 @@ class EntradaProducto(models.Model):
         ('bajaj', 'Bajaj'),
         ('otros', 'Otros'),
     )
-
     ESTADOS = (
         ('nuevo', 'Nuevo'),
         ('usado', 'Usado'),
         ('reacondicionado', 'Reacondicionado'),
         ('exhibicion', 'Exhibición'),
     )
-
     COLORES = (
         ('negro', 'Negro'),
         ('blanco', 'Blanco'),
@@ -136,6 +127,28 @@ class EntradaProducto(models.Model):
     precio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio")
     precio_por_mayor = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio por Mayor", blank=True, null=True)
 
+    # Campos para ITBIS
+    porcentaje_itbis = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=18.00,
+        verbose_name="Porcentaje ITBIS"
+    )
+    precio_con_itbis = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Precio con ITBIS",
+        blank=True,
+        null=True
+    )
+    precio_por_mayor_con_itbis = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Precio por Mayor con ITBIS",
+        blank=True,
+        null=True
+    )
+
     # Estado del producto
     activo = models.BooleanField(default=True, verbose_name="Activo")
 
@@ -145,14 +158,11 @@ class EntradaProducto(models.Model):
     # Auditoría
     fecha_registro = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    # Flag para productos base/plantillas
     es_producto_base = models.BooleanField(default=False, verbose_name="Es producto base")
 
     def save(self, *args, **kwargs):
-        # Guardar cantidad anterior para el movimiento de stock
-        cantidad_anterior = None
-        if self.pk:
-            cantidad_anterior = EntradaProducto.objects.get(pk=self.pk).cantidad
-
         # Generar código único si es un nuevo registro
         if not self.codigo_producto:
             random_digits = ''.join(random.choices(string.digits, k=6))
@@ -160,6 +170,25 @@ class EntradaProducto(models.Model):
             while EntradaProducto.objects.filter(codigo_producto=self.codigo_producto).exists():
                 random_digits = ''.join(random.choices(string.digits, k=6))
                 self.codigo_producto = f"PROD-{random_digits}"
+
+        # Convertir porcentaje_itbis a float para el cálculo y luego a Decimal
+        itbis_factor = 1 + (float(self.porcentaje_itbis) / 100)
+        itbis_factor_decimal = Decimal(str(itbis_factor))
+
+        # Calcular precios con ITBIS
+        if self.precio is not None:
+            self.precio_con_itbis = self.precio * itbis_factor_decimal
+        
+        if self.precio_por_mayor is not None:
+            self.precio_por_mayor_con_itbis = self.precio_por_mayor * itbis_factor_decimal
+
+        # Guardar cantidad anterior para el movimiento de stock
+        cantidad_anterior = None
+        if self.pk:
+            try:
+                cantidad_anterior = EntradaProducto.objects.get(pk=self.pk).cantidad
+            except EntradaProducto.DoesNotExist:
+                pass
 
         super().save(*args, **kwargs)
 
@@ -182,11 +211,9 @@ class EntradaProducto(models.Model):
         """Resta cantidad del stock y registra el movimiento"""
         if not self.tiene_stock_suficiente(cantidad):
             return False
-
         cantidad_anterior = self.cantidad
         self.cantidad -= cantidad
         self.save(update_fields=['cantidad'])
-
         self.registrar_movimiento_stock(
             tipo_movimiento='venta',
             cantidad=cantidad,
@@ -203,7 +230,6 @@ class EntradaProducto(models.Model):
         cantidad_anterior = self.cantidad
         self.cantidad += cantidad
         self.save(update_fields=['cantidad'])
-
         self.registrar_movimiento_stock(
             tipo_movimiento='devolucion',
             cantidad=cantidad,
@@ -223,7 +249,6 @@ class EntradaProducto(models.Model):
         try:
             from django.apps import apps
             MovimientoStock = apps.get_model('facturacion', 'MovimientoStock')
-
             MovimientoStock.objects.create(
                 producto=self,
                 tipo_movimiento=tipo_movimiento,
@@ -274,6 +299,7 @@ class EntradaProducto(models.Model):
         verbose_name = "Entrada de Producto"
         verbose_name_plural = "Entradas de Productos"
         ordering = ['-fecha_registro']
+
 
 
 # class EntradaProducto(models.Model):
@@ -447,6 +473,7 @@ class Venta(models.Model):
     descuento_monto = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2)
     montoinicial = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_a_pagar = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
     # Para pagos en efectivo
     efectivo_recibido = models.DecimalField(max_digits=12, decimal_places=2, default=0)

@@ -1372,42 +1372,6 @@
     </form>
     <script>
         // Funciones para el sidebar
-// Funciones para el sidebar
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('active');
-    document.querySelector('.sidebar-overlay').classList.toggle('active');
-    document.body.classList.toggle('sidebar-open');
-}
-
-function closeSidebar() {
-    document.getElementById('sidebar').classList.remove('active');
-    document.querySelector('.sidebar-overlay').classList.remove('active');
-    document.body.classList.remove('sidebar-open');
-}
-
-// Función para manejar valores decimales de forma segura
-const safeDecimal = (value) => {
-    if (value === null || value === undefined || value === '') {
-        return '0';
-    }
-    // Convertir a número y luego a string para evitar problemas de formato
-    const num = parseFloat(value);
-    return isNaN(num) ? '0' : num.toString();
-};
-
-// Función para abrir el modal de imagen
-const openImageModal = (imageUrl) => {
-    const modal = document.getElementById('image-modal');
-    const modalImage = document.getElementById('modal-image');
-    modalImage.src = imageUrl;
-    modal.classList.add('active');
-};
-
-// Función para cerrar el modal de imagen
-const closeImageModal = () => {
-    document.getElementById('image-modal').classList.remove('active');
-};
-
 document.addEventListener("DOMContentLoaded", () => {
     // Estado de la aplicación
     const state = {
@@ -1416,15 +1380,15 @@ document.addEventListener("DOMContentLoaded", () => {
         selectedClient: null,
         selectedProduct: null,
         saleItems: [],
-        totalSales: 0,
+        totalSales: 0, // Subtotal CON ITBIS
+        subtotalSinITBIS: 0, // Subtotal SIN ITBIS
+        itbisAmount: 0,
         discountPercentage: 0,
         discountAmount: 0,
         finalTotal: 0,
         cashReceived: 0,
         changeAmount: 0,
         saleType: 'unitaria', // 'unitaria' o 'mayor'
-        itbisAmount: 0,
-        totalWithITBIS: 0,
     };
 
     // Elementos del DOM
@@ -1524,18 +1488,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Función para mostrar el modal de precio
     const showPriceModal = (product) => {
-        DOM.unitPriceDisplay.textContent = formatCurrency(product.price);
-        DOM.wholesalePriceDisplay.textContent = formatCurrency(product.wholesalePrice || product.price);
-        // Resaltar el precio seleccionado según el tipo de venta
+        DOM.unitPriceDisplay.textContent = formatCurrency(product.priceWithITBIS);
+        DOM.wholesalePriceDisplay.textContent = formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS);
         if (state.saleType === 'mayor') {
             DOM.priceModalMessage.innerHTML = `
-                <strong>Precio seleccionado (Venta por Mayor):</strong> ${formatCurrency(product.wholesalePrice || product.price)}<br>
-                Precio unitario: ${formatCurrency(product.price)}
+                <strong>Precio seleccionado (Venta por Mayor):</strong> ${formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS)}<br>
+                Precio unitario: ${formatCurrency(product.priceWithITBIS)}
             `;
         } else {
             DOM.priceModalMessage.innerHTML = `
-                <strong>Precio seleccionado (Venta Unitaria):</strong> ${formatCurrency(product.price)}<br>
-                Precio por mayor: ${formatCurrency(product.wholesalePrice || product.price)}
+                <strong>Precio seleccionado (Venta Unitaria):</strong> ${formatCurrency(product.priceWithITBIS)}<br>
+                Precio por mayor: ${formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS)}
             `;
         }
         DOM.priceModal.classList.add('active');
@@ -1559,21 +1522,18 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         try {
-            // Mostrar indicador de carga
             DOM.productResults.innerHTML = `
                 <div style="padding: 20px; text-align: center; color: #888;">
                     <i class='bx bx-loader bx-spin' style="font-size: 2rem;"></i>
                     <p>Buscando productos...</p>
                 </div>
             `;
-            // Hacer la petición AJAX
             const response = await fetch(`/buscar-productos/?q=${encodeURIComponent(searchTerm)}`);
             if (!response.ok) {
                 throw new Error(`Error HTTP: ${response.status}`);
             }
             const data = await response.json();
             if (data.success && data.productos && data.productos.length > 0) {
-                // Mostrar resultados
                 let html = '';
                 data.productos.forEach(producto => {
                     const imagenUrl = producto.imagen ? producto.imagen : '/static/image/default-product.png';
@@ -1582,7 +1542,9 @@ document.addEventListener("DOMContentLoaded", () => {
                              data-id="${producto.id}"
                              data-name="${producto.descripcion}"
                              data-price="${producto.precio}"
-                             data-wholesale-price="${producto.precio_por_mayor || producto.precio}"
+                             data-price-with-itbis="${producto.precio_con_itbis}"
+                             data-wholesale-price="${producto.precio_por_mayor}"
+                             data-wholesale-price-with-itbis="${producto.precio_por_mayor_con_itbis}"
                              data-stock="${producto.cantidad}">
                             <div style="display: flex; align-items: center;">
                                 <img src="${imagenUrl}"
@@ -1601,13 +1563,12 @@ document.addEventListener("DOMContentLoaded", () => {
                                     <div class="product-details">Stock: ${producto.cantidad}</div>
                                 </div>
                             </div>
-                            <div class="product-price">${formatCurrency(producto.precio)}</div>
+                            <div class="product-price">${formatCurrency(producto.precio_con_itbis)}</div>
                         </div>
                     `;
                 });
                 DOM.productResults.innerHTML = html;
             } else {
-                // Mostrar mensaje de no resultados
                 DOM.productResults.innerHTML = `
                     <div class="empty-search-state" style="padding: 15px; text-align: center; color: #888;">
                         <p style="margin: 0; font-size: 2rem;"><i class='bx bx-search-alt'></i></p>
@@ -1726,40 +1687,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Actualizar total de la venta
     const updateTotal = () => {
-        state.totalSales = state.saleItems.reduce((total, item) => total + item.subtotal, 0);
-        // Calcular ITBIS
-        updateITBIS();
-        // Aplicar descuento por porcentaje
+        state.totalSales = state.saleItems.reduce((total, item) => total + item.subtotal, 0); // Subtotal CON ITBIS
+        const itbisPercentage = 18;
+        state.subtotalSinITBIS = state.totalSales / (1 + (itbisPercentage / 100));
+        state.itbisAmount = state.totalSales - state.subtotalSinITBIS;
         updateDiscount();
-        DOM.subtotalAmount.textContent = formatCurrency(state.totalSales);
-    };
-
-    // Actualizar ITBIS
-    const updateITBIS = () => {
-        const itbisPercentage = 18; // 18%
-        state.itbisAmount = (state.totalSales * itbisPercentage) / 100;
-        state.totalWithITBIS = state.totalSales + state.itbisAmount;
+        DOM.subtotalAmount.textContent = formatCurrency(state.subtotalSinITBIS); // Mostrar subtotal SIN ITBIS
         DOM.itbisAmount.textContent = formatCurrency(state.itbisAmount);
-        DOM.totalWithITBIS.textContent = formatCurrency(state.totalWithITBIS);
+        DOM.totalWithITBIS.textContent = formatCurrency(state.totalSales); // Total CON ITBIS
     };
 
-    // Actualizar descuento y total final - AHORA POR PORCENTAJE
+    // Actualizar descuento y total final
     const updateDiscount = () => {
         const discountPercentage = parseFloat(DOM.discountInput.value) || 0;
-        // Limitar el descuento máximo a 100%
         state.discountPercentage = Math.max(0, Math.min(discountPercentage, 100));
-        
-        // Calcular el monto del descuento basado en el porcentaje
-        state.discountAmount = (state.totalWithITBIS * state.discountPercentage) / 100;
-        state.finalTotal = state.totalWithITBIS - state.discountAmount;
-        
-        // Actualizar la visualización del descuento
+        state.discountAmount = (state.totalSales * state.discountPercentage) / 100;
+        state.finalTotal = state.totalSales - state.discountAmount;
         DOM.discountAmountDisplay.textContent = `${state.discountPercentage.toFixed(2)}% (${formatCurrency(state.discountAmount)})`;
-        
-        // Actualizar el total final
         DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
-        
-        // Para crédito, el total a pagar es el mismo que el total final
         DOM.totalAPagarField.value = state.finalTotal;
         calculateChange();
     };
@@ -1775,14 +1720,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Cambiar tipo de pago (contado/crédito)
     const setPaymentType = (type) => {
         state.paymentType = type;
-        // Actualizar botones
         DOM.cashPaymentBtn.classList.toggle('active', type === 'contado');
         DOM.creditPaymentBtn.classList.toggle('active', type === 'credito');
-        // Mostrar/ocultar secciones según el tipo
         DOM.clientInfoContainer.classList.toggle('hidden', type === 'contado');
         DOM.cashInfoContainer.classList.toggle('hidden', type === 'credito');
         DOM.cashPaymentFields.classList.toggle('hidden', type !== 'contado' || state.paymentMethod !== 'efectivo');
-        // Actualizar cálculos y total final
         DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
         DOM.totalAPagarField.value = state.finalTotal;
     };
@@ -1790,13 +1732,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Cambiar método de pago (efectivo/tarjeta/transferencia)
     const setPaymentMethod = (method) => {
         state.paymentMethod = method;
-        // Actualizar botones
         DOM.cashMethodBtn.classList.toggle('active', method === 'efectivo');
         DOM.cardMethodBtn.classList.toggle('active', method === 'tarjeta');
         DOM.transferMethodBtn.classList.toggle('active', method === 'transferencia');
-        // Mostrar/ocultar campos de efectivo
         DOM.cashPaymentFields.classList.toggle('hidden', method !== 'efectivo');
-        // Si es efectivo, calcular cambio
         if (method === 'efectivo') {
             calculateChange();
         }
@@ -1805,7 +1744,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Cambiar tipo de venta (unitaria/mayor)
     const setSaleType = (type) => {
         state.saleType = type;
-        // Actualizar botones
         DOM.unitSaleBtn.classList.toggle('active', type === 'unitaria');
         DOM.wholesaleSaleBtn.classList.toggle('active', type === 'mayor');
     };
@@ -1821,7 +1759,6 @@ document.addEventListener("DOMContentLoaded", () => {
             document: clientDocument,
         };
         DOM.clientSearch.value = `${clientName} (${clientDocument})`;
-        // Ocultar resultados
         DOM.clientResults.querySelectorAll('.client-item').forEach(item => {
             item.style.display = 'none';
         });
@@ -1832,13 +1769,17 @@ document.addEventListener("DOMContentLoaded", () => {
         const productId = productElement.getAttribute('data-id');
         const productName = productElement.getAttribute('data-name');
         const productPrice = parseFloat(productElement.getAttribute('data-price'));
+        const productPriceWithITBIS = parseFloat(productElement.getAttribute('data-price-with-itbis'));
         const productWholesalePrice = parseFloat(productElement.getAttribute('data-wholesale-price'));
+        const productWholesalePriceWithITBIS = parseFloat(productElement.getAttribute('data-wholesale-price-with-itbis'));
         const productStock = parseInt(productElement.getAttribute('data-stock'));
         state.selectedProduct = {
             id: productId,
             name: productName,
             price: productPrice,
+            priceWithITBIS: productPriceWithITBIS,
             wholesalePrice: productWholesalePrice,
+            wholesalePriceWithITBIS: productWholesalePriceWithITBIS,
             stock: productStock
         };
         DOM.productSearch.value = productName;
@@ -1846,7 +1787,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (DOM.productQuantity.value > productStock) {
             DOM.productQuantity.value = productStock;
         }
-        // Mostrar modal de precio
         await showPriceModal(state.selectedProduct);
     };
 
@@ -1865,19 +1805,15 @@ document.addEventListener("DOMContentLoaded", () => {
             showAlert(`No hay suficiente stock. Disponible: ${state.selectedProduct.stock}`, 'error');
             return;
         }
-        // Determinar el precio según el tipo de venta
         const currentPrice = state.saleType === 'mayor'
-            ? state.selectedProduct.wholesalePrice
-            : state.selectedProduct.price;
-        // Verificar si el producto ya está en la venta
+            ? state.selectedProduct.wholesalePriceWithITBIS
+            : state.selectedProduct.priceWithITBIS;
         const existingItemIndex = state.saleItems.findIndex(item => item.id === state.selectedProduct.id);
         if (existingItemIndex !== -1) {
-            // Actualizar cantidad si ya existe
             state.saleItems[existingItemIndex].quantity += quantity;
             state.saleItems[existingItemIndex].price = currentPrice;
             state.saleItems[existingItemIndex].subtotal = state.saleItems[existingItemIndex].quantity * currentPrice;
         } else {
-            // Agregar nuevo item
             state.saleItems.push({
                 id: state.selectedProduct.id,
                 name: state.selectedProduct.name,
@@ -1886,10 +1822,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 subtotal: quantity * currentPrice
             });
         }
-        // Actualizar UI
         updateTotal();
         renderSaleItems();
-        // Limpiar selección
         state.selectedProduct = null;
         DOM.productSearch.value = '';
         DOM.productQuantity.value = '1';
@@ -1908,9 +1842,9 @@ document.addEventListener("DOMContentLoaded", () => {
             DOM.clientNameField.value = DOM.cashClientName.value.trim();
             DOM.clientDocumentField.value = DOM.cashClientDocument.value.trim();
         }
-        DOM.subtotalField.value = state.totalSales;
-        DOM.discountPercentageField.value = state.discountPercentage; // Ahora es porcentaje
-        DOM.discountAmountField.value = state.discountAmount; // Monto calculado del descuento
+        DOM.subtotalField.value = state.subtotalSinITBIS; // Subtotal SIN ITBIS
+        DOM.discountPercentageField.value = state.discountPercentage;
+        DOM.discountAmountField.value = state.discountAmount;
         DOM.totalField.value = state.finalTotal;
         DOM.cashReceivedField.value = state.cashReceived;
         DOM.changeAmountField.value = state.changeAmount;
@@ -1925,29 +1859,24 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         if (state.paymentType === 'credito') {
-            // Validaciones para crédito
             if (!state.selectedClient) {
                 showAlert('Debe seleccionar un cliente para venta a crédito', 'error');
                 return;
             }
         } else {
-            // Validaciones para contado
             if (state.paymentMethod === 'efectivo') {
                 if (state.cashReceived < state.finalTotal) {
                     showAlert(`El monto recibido (${formatCurrency(state.cashReceived)}) es menor que el total a pagar (${formatCurrency(state.finalTotal)})`, 'error');
                     return;
                 }
             }
-            // Validar información del cliente para contado
             if (!DOM.cashClientName.value.trim()) {
                 showAlert('Debe ingresar el nombre del cliente', 'error');
                 return;
             }
         }
         try {
-            // Preparar datos
             prepareFormFields();
-            // Enviar mediante AJAX
             const formData = new FormData(DOM.saleForm);
             const response = await fetch(DOM.saleForm.action, {
                 method: 'POST',
@@ -1959,7 +1888,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const result = await response.json();
             if (result.success) {
                 showAlert('Venta procesada correctamente. Redirigiendo al comprobante...', 'success');
-                // Redirigir al comprobante de venta después de 2 segundos
                 setTimeout(() => {
                     window.location.href = `/comprobante-venta/${result.venta_id}/`;
                 }, 2000);
@@ -2035,6 +1963,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 });
+
 
     </script>
 </body>

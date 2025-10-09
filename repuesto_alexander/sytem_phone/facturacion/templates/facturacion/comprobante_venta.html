@@ -208,13 +208,13 @@
     <div class="invoice-container">
         <div class="content-wrapper">
             <div class="header">
-                <img src="{% static 'image/logom.pn' %}" alt="Logo">
+                <img src="{% static 'image/logom5.jpeg' %}" alt="Logo">
                 <div class="company-info">
-                    <div><strong>DDMAX MOTO IMPORT, SRL</strong></div>
-                    <div>RNC: 0-00-00000-0</div>
-                    <div>Tel: 809 656-3374</div>
-                    <div>Direccion: C/Principal, #35 Castañuelas</div>
-                    <div>Te monta con menos </div>
+                    <div><strong>SUPER BESTIA, SRL</strong></div>
+                    <div>RNC: 1-32-46100-2</div>
+                    <div>Tel:(849) 353-5344</div>
+                    <div>Direccion: C/Principal, #1 Loma de Castañuelas, Montecristi</div>
+                   s
                 </div>
             </div>
             
@@ -268,32 +268,35 @@
                 </tbody>
             </table>
             
-            <div class="totals">
-                <div>
-                    <strong>Artículos:</strong>
-                    <span>{{ total_articulos }}</span>
-                </div>
-                <div>
-                    <strong>Sub-Total $:</strong>
-                    <span>${{ venta.subtotal|floatformat:2|intcomma }}</span>
-                </div>
-                <div>
-                    <strong>ITBIS ({{ venta.itbis_porcentaje|floatformat:0 }}%) $:</strong>
-                    <span>${{ venta.itbis_monto|floatformat:2|intcomma }}</span>
-                </div>
-                <!-- <div>
-                    <strong>Sub-Total con ITBIS $:</strong>
-                    <span>${{ subtotal_con_itbis|floatformat:2|intcomma }}</span>
-                </div> -->
-                <div>
-                    <strong>Descuento $:</strong>
-                    <span>${{ venta.descuento_monto|floatformat:2|intcomma }}</span>
-                </div>
-                <div>
-                    <strong>Total $:</strong>
-                    <span>${{ venta.total|floatformat:2|intcomma }}</span>
-                </div>
-            </div>
+         <div class="totals">
+    <div>
+        <strong>Artículos:</strong>
+        <span>{{ total_articulos }}</span>
+    </div>
+    <div>
+        <strong>Sub-Total $:</strong>
+        <span>${{ venta.subtotal|floatformat:2|intcomma }}</span>
+    </div>
+    <div>
+        <strong>ITBIS ({{ venta.itbis_porcentaje|floatformat:0 }}%) $:</strong>
+        <span>${{ venta.itbis_monto|floatformat:2|intcomma }}</span>
+    </div>
+    <div>
+        <strong>Descuento $:</strong>
+        <span>${{ venta.descuento_monto|floatformat:2|intcomma }}</span>
+    </div>
+    <div>
+        <strong>Total $:</strong>
+        <span>${{ venta.total|floatformat:2|intcomma }}</span>
+    </div>
+    <!-- Aquí agregas el total a pagar -->
+    <div>
+        <strong>Total a Pagar $:</strong>
+        <span>${{ venta.total_a_pagar|floatformat:2|intcomma }}</span>
+    </div>
+</div>
+
+
             
             <div class="note">
                 <p><strong>Nota:</strong> 

@@ -846,8 +846,8 @@
                                 <th>Color</th>
                                 <th>Cantidad</th>
                                 <th>Costo</th>
-                                <th>Precio</th>
-                                <th>Precio por Mayor</th>
+                                <th>Precio c/ITBIS</th>
+                                <th>Precio Mayor c/ITBIS</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -1021,7 +1021,6 @@
         const editModal = document.getElementById('editModal');
         const editForm = document.getElementById('editProductForm');
         const csrfToken = document.getElementById('csrfToken').value;
-
         // Modal para imagen ampliada
         const imageModal = document.createElement('div');
         imageModal.className = 'image-modal';
@@ -1034,7 +1033,6 @@
             </button>
         `;
         document.body.appendChild(imageModal);
-
         // Función para abrir el modal de imagen
         function openImageModal(imageUrl) {
             const modalImage = document.getElementById('modalImage');
@@ -1042,20 +1040,17 @@
             imageModal.classList.add('active');
             document.body.style.overflow = 'hidden';
         }
-
         // Función para cerrar el modal de imagen
         function closeImageModal() {
             imageModal.classList.remove('active');
             document.body.style.overflow = 'auto';
         }
-
         // Cerrar modal al hacer clic fuera de la imagen
         imageModal.addEventListener('click', function(e) {
             if (e.target === imageModal) {
                 closeImageModal();
             }
         });
-
         // Funciones para el sidebar
         function toggleSidebar() {
             sidebar.classList.toggle('active');
@@ -1069,7 +1064,6 @@
             sidebarOverlay.classList.remove('active');
             document.body.classList.remove('sidebar-open');
         }
-
         // Cerrar sidebar al hacer clic en un enlace (móvil)
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -1078,7 +1072,6 @@
                 }
             });
         });
-
         // Función para obtener el nombre de la marca
         function getBrandName(brand) {
             const brands = {
@@ -1093,11 +1086,11 @@
                 'kove': 'Kove',
                 'x1000': 'X1000',
                 'hero': 'Hero',
+                'super vestia': 'Super Vestia',
                 'otros': 'Otros'
             };
             return brands[brand] || brand;
         }
-
         // Función para cargar filtros
         function loadFilters() {
             // Cargar marcas únicas
@@ -1110,7 +1103,6 @@
                 brandFilter.appendChild(option);
             });
         }
-
         // Función para renderizar la tabla
         function renderTable() {
             if (filteredProducts.length === 0) {
@@ -1135,8 +1127,8 @@
                         <td>${product.color || 'N/A'}</td>
                         <td><strong>${product.cantidad}</strong></td>
                         <td class="currency">RD$ ${parseFloat(product.costo).toLocaleString()}</td>
-                        <td class="currency">RD$ ${parseFloat(product.precio).toLocaleString()}</td>
-                        <td class="currency">${product.precio_por_mayor ? 'RD$ ' + parseFloat(product.precio_por_mayor).toLocaleString() : 'N/A'}</td>
+                        <td class="currency">RD$ ${product.precio_con_itbis ? parseFloat(product.precio_con_itbis).toLocaleString() : 'N/A'}</td>
+                        <td class="currency">RD$ ${product.precio_por_mayor_con_itbis ? parseFloat(product.precio_por_mayor_con_itbis).toLocaleString() : 'N/A'}</td>
                         <td>
                             <div class="actions">
                                 ${isSuperuser ? `
@@ -1154,7 +1146,6 @@
             }).join('');
             inventoryTableBody.innerHTML = tableHTML;
         }
-
         // Función de búsqueda y filtrado
         function filterProducts() {
             const searchTerm = searchInput.value.toLowerCase().trim();
@@ -1169,11 +1160,9 @@
             });
             renderTable();
         }
-
         // Event listeners para filtros
         searchInput.addEventListener('input', filterProducts);
         brandFilter.addEventListener('change', filterProducts);
-
         // Función para eliminar producto
         function deleteProduct(id) {
             const product = products.find(p => p.id === id);
@@ -1237,7 +1226,6 @@
                 }
             });
         }
-
         // Función para abrir modal de edición
         function editProduct(id) {
             const product = products.find(p => p.id === id);
@@ -1263,7 +1251,6 @@
             editModal.classList.add('active');
             document.body.style.overflow = 'hidden';
         }
-
         // Función para cerrar modal de edición
         function closeEditModal() {
             editModal.classList.remove('active');
@@ -1271,83 +1258,122 @@
             editForm.reset();
             document.getElementById('currentImagePreview').style.display = 'none';
         }
-
         // Cerrar modal al hacer clic fuera de él
         editModal.addEventListener('click', function(e) {
             if (e.target === editModal) {
                 closeEditModal();
             }
         });
-
         // Manejar envío del formulario de edición
-        editForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(editForm);
-            const productId = parseInt(formData.get('productId'));
-            // Crear objeto con los datos del formulario
-            const data = {
-                descripcion: formData.get('descripcion'),
-                marca: formData.get('marca'),
-                compatibilidad: formData.get('compatibilidad'),
-                color: formData.get('color'),
-                costo: parseFloat(formData.get('costo')),
-                precio: parseFloat(formData.get('precio')),
-                precio_por_mayor: formData.get('precio_por_mayor') ? parseFloat(formData.get('precio_por_mayor')) : null,
-                observaciones: formData.get('observaciones')
-            };
-            fetch(`/inventario/editar/${productId}/`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken,
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => {
-                if (response.status === 403) {
-                    return response.json().then(data => {
-                        throw new Error(data.error || 'Permisos insuficientes. Solo superusuarios pueden editar productos.');
-                    });
-                }
-                if (!response.ok) {
-                    return response.json().then(data => {
-                        throw new Error(data.error || 'Error al actualizar el producto');
-                    });
-                }
-                return response.json();
-            })
-            .then(updatedProduct => {
-                const index = products.findIndex(p => p.id === productId);
-                if (index !== -1) {
-                    products[index] = updatedProduct;
-                }
-                filteredProducts = [...products];
-                filterProducts();
-                loadFilters();
-                closeEditModal();
-                Swal.fire(
-                    '¡Actualizado!',
-                    'El producto ha sido actualizado exitosamente.',
-                    'success'
-                );
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                Swal.fire(
-                    'Error',
-                    'Error: ' + error.message,
-                    'error'
-                );
-            });
-        });
+       // Manejar envío del formulario de edición
+editForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(editForm);
+    const productId = parseInt(formData.get('productId'));
+    const imagenInput = document.getElementById('editImagen');
+    
+    // Determinar si hay una nueva imagen
+    const tieneNuevaImagen = imagenInput.files.length > 0;
 
+    if (tieneNuevaImagen) {
+        // Usar FormData para enviar archivos (incluye imagen)
+        enviarConFormData(formData, productId);
+    } else {
+        // Usar JSON para datos normales (sin imagen)
+        enviarConJSON(formData, productId);
+    }
+});
+
+// Función para enviar con FormData (incluye imagen)
+function enviarConFormData(formData, productId) {
+    fetch(`/inventario/editar/${productId}/`, {
+        method: 'PUT',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            // NO establecer Content-Type para FormData, el navegador lo hará automáticamente
+        },
+        body: formData
+    })
+    .then(response => handleEditResponse(response, productId))
+    .catch(error => handleEditError(error));
+}
+
+// Función para enviar con JSON (sin imagen)
+function enviarConJSON(formData, productId) {
+    // Crear objeto con los datos del formulario
+    const data = {
+        descripcion: formData.get('descripcion'),
+        marca: formData.get('marca'),
+        compatibilidad: formData.get('compatibilidad'),
+        color: formData.get('color'),
+        costo: parseFloat(formData.get('costo')),
+        precio: parseFloat(formData.get('precio')),
+        precio_por_mayor: formData.get('precio_por_mayor') ? parseFloat(formData.get('precio_por_mayor')) : null,
+        observaciones: formData.get('observaciones')
+    };
+
+    fetch(`/inventario/editar/${productId}/`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => handleEditResponse(response, productId))
+    .catch(error => handleEditError(error));
+}
+
+// Función para manejar la respuesta de edición
+function handleEditResponse(response, productId) {
+    if (response.status === 403) {
+        return response.json().then(data => {
+            throw new Error(data.error || 'Permisos insuficientes. Solo superusuarios pueden editar productos.');
+        });
+    }
+    if (!response.ok) {
+        return response.json().then(data => {
+            throw new Error(data.error || 'Error al actualizar el producto');
+        });
+    }
+    return response.json().then(updatedProduct => {
+        // Actualizar el producto en la lista local
+        const index = products.findIndex(p => p.id === productId);
+        if (index !== -1) {
+            products[index] = updatedProduct;
+        }
+        
+        // Actualizar la tabla
+        filteredProducts = [...products];
+        filterProducts();
+        loadFilters();
+        
+        // Cerrar modal y mostrar éxito
+        closeEditModal();
+        Swal.fire(
+            '¡Actualizado!',
+            'El producto ha sido actualizado exitosamente.',
+            'success'
+        );
+    });
+}
+
+// Función para manejar errores de edición
+function handleEditError(error) {
+    console.error('Error:', error);
+    Swal.fire(
+        'Error',
+        'Error: ' + error.message,
+        'error'
+    );
+}
         // Cerrar sidebar al redimensionar ventana
         window.addEventListener('resize', function() {
             if (window.innerWidth > 768) {
                 closeSidebar();
             }
         });
-
         // Cargar datos desde el servidor
         function loadDataFromServer() {
             fetch('/inventario/datos/')
@@ -1380,7 +1406,6 @@
                 `;
             });
         }
-
         // Manejar el cierre de sesión con SweetAlert2
         document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
             e.preventDefault();
@@ -1400,7 +1425,6 @@
                 }
             });
         });
-
         // Inicializar la página
         window.addEventListener('load', function() {
             loadDataFromServer();

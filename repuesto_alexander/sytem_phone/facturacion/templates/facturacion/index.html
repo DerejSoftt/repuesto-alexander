@@ -3,172 +3,200 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Sesión - DDMAX - MOTO IMPORT</title>
-    <link rel="shortcut icon" href="{% static 'image/favicon2.ico' %}" type="image/x-icon">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Iniciar Sesión - Piezas de Motocicletas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-orange: hsl(25, 95%, 53%);
-            --primary-orange-dark: hsl(25, 95%, 45%);
-            --text-light: hsl(210, 20%, 98%);
-            --card-text: hsl(222.2, 84%, 4.9%);
-            --border-color: hsl(214.3, 31.8%, 91.4%);
-            --input-bg: hsl(0, 0%, 100%);
-            --input-border: hsl(214.3, 31.8%, 91.4%);
-            --placeholder-color: hsl(215.4, 16.3%, 56.9%);
-            --error-color: hsl(0, 84.2%, 60.2%);
+            --color-primary: #FF7F50;
+            --color-secondary: #40E0D0;
+            --color-accent: #FFD700;
+            --color-text: #FFFFFF;
+            --color-error: #FF6347;
+            --color-success: #98FF98;
+            --color-border: #FFD700;
+            --font-base: 'Poppins', sans-serif;
+            --spacing-unit: 1rem;
+            --border-radius: 0.6rem;
+            --box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
         }
-
-        body {
+        * {
             margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: var(--font-base);
+            background: linear-gradient(to bottom, #000428, #0a0e2a, #00224d);
+            color: var(--color-text);
+            line-height: 1.6;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            background-image: url('../images/Logo2_2.png');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-            color: var(--card-text);
+            padding: var(--spacing-unit);
+            overflow: hidden;
+            position: relative;
         }
-
-        .card {
-            background: linear-gradient(to bottom right, hsla(0, 0%, 100%, 0.7), hsla(25, 95%, 90%, 0.7));
-            backdrop-filter: blur(8px);
-            border-radius: 0.75rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            width: 90%;
-            max-width: 24rem;
-            padding: 1rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
+        /* Estilos para estrellas */
+        .star {
+            position: absolute;
+            background-color: #fff;
+            border-radius: 50%;
+            z-index: 1;
+            animation: twinkle linear infinite;
         }
-
-        .card-header {
-            text-align: center;
-            margin-bottom: 1rem;
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
         }
-
-        .card-header img {
-            width: 170px;
-            height: auto;
+        /* Estilos para estrellas fugaces */
+        .shooting-star {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(-45deg, transparent, #fff, transparent);
+            border-radius: 50%;
+            z-index: 2;
+            animation: shoot linear infinite;
+        }
+        @keyframes shoot {
+            0% {
+                transform: translateY(0) translateX(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) translateX(100vw);
+                opacity: 0;
+            }
+        }
+        /* Estilos para planetas */
+        .planet {
+            position: absolute;
+            border-radius: 50%;
+            z-index: 1;
+            animation: orbit linear infinite;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+        @keyframes orbit {
+            0% { transform: rotate(0deg) translateX(100px) rotate(0deg); }
+            100% { transform: rotate(360deg) translateX(100px) rotate(-360deg); }
+        }
+        /* Estilos para nebulosas */
+        .nebulosa {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(100, 50, 200, 0.3), transparent);
+            z-index: 0;
+            filter: blur(20px);
+            animation: float linear infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        .login-container {
+            width: 100%;
+            max-width: 420px;
             margin: 0 auto;
-            display: block;
+            padding: 0 1rem;
+            position: relative;
+            z-index: 10;
         }
-
-        .card-title {
-            font-size: 1.8rem;
+        .login-card {
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 2rem;
+            width: 100%;
+            border: 1px solid var(--color-accent);
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+            backdrop-filter: blur(5px);
+        }
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 8px;
+            background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+        }
+        .logo-icon {
+            width: 140px;
+            height: auto;
+            max-height: 100px;
+            margin: 0 auto 1.5rem;
+            display: block;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.7));
+        }
+        .login-card h1 {
+            margin-bottom: 2rem;
             font-weight: 700;
-            margin-bottom: 0.5rem;
-            margin-top: 0.3rem;
+            font-size: 1.8rem;
+            color: var(--color-accent);
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
         }
-
-        .card-description {
-            font-size: 0.9rem;
-            color: hsl(215.4, 16.3%, 46.9%);
-            margin-bottom: 1rem;
-        }
-
-        .card-content {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
         .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
+            margin-bottom: 1.75rem;
+            text-align: left;
         }
-
         .form-group label {
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .form-group input {
             display: block;
-            width: calc(100% - 1.5rem);
-            padding: 0.625rem 0.75rem;
-            border: 1px solid var(--input-border);
-            border-radius: 0.375rem;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            margin-bottom: 0.6rem;
+            font-weight: 500;
+            color: var(--color-text);
+        }
+        .form-group input {
+            width: 100%;
+            padding: 0.85rem;
+            border: 2px solid var(--color-border);
+            border-radius: var(--border-radius);
             font-size: 1rem;
-            line-height: 1.5rem;
-            background-color: var(--input-bg);
-            color: var(--card-text);
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--color-text);
+            transition: all 0.3s;
         }
-
-        .form-group input::placeholder {
-            color: var(--placeholder-color);
-        }
-
         .form-group input:focus {
             outline: none;
-            border-color: var(--primary-orange);
-            box-shadow: 0 0 0 2px hsla(25, 95%, 53%, 0.25);
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(255, 127, 80, 0.3);
+            background-color: rgba(255, 255, 255, 0.2);
         }
-
-        .card-footer {
-            padding-top: 1rem;
-            margin-bottom: 0;
-        }
-
-        .btn {
-            text-decoration: none;
-            width: 100%;
-            margin: 0 auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 0.7rem 0.0rem;
-            border: 1px solid transparent;
-            border-radius: 0.375rem;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        .error-message {
+            color: var(--color-error);
             font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--text-light);
-            background-color: var(--primary-orange);
+            margin-top: 0.5rem;
+            display: none;
+        }
+        .login-button {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(90deg, var(--color-primary), #FF6B47);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s ease-in-out;
-            margin: 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            margin-top: 0.5rem;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
         }
-
-        .btn:hover {
-            background-color: var(--primary-orange-dark);
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+            background: linear-gradient(90deg, #FF6B47, var(--color-primary));
         }
-
-        .btn:focus {
+        .login-button:focus {
             outline: none;
-            box-shadow: 0 0 0 2px hsla(25, 95%, 53%, 0.5), 0 0 0 4px hsla(25, 95%, 53%, 0.25);
+            box-shadow: 0 0 0 3px rgba(255, 127, 80, 0.4);
         }
-
-        .error-messages {
-            background-color: hsla(0, 84.2%, 60.2%, 0.1);
-            border: 1px solid var(--error-color);
-            border-radius: 0.375rem;
-            padding: 0.75rem;
-            margin-bottom: 1rem;
-            color: var(--error-color);
-        }
-
-        .error-messages ul {
-            margin: 0;
-            padding-left: 1.25rem;
-        }
-
-        .error-messages li {
-            margin-bottom: 0.25rem;
-        }
-
-        .error-messages li:last-child {
-            margin-bottom: 0;
-        }
-
         .loading {
             display: inline-block;
             width: 20px;
@@ -179,55 +207,97 @@
             animation: spin 1s ease-in-out infinite;
             margin-right: 8px;
         }
-
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-
         .hidden {
             display: none;
+        }
+        .create-account-link {
+            display: block;
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--color-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        .create-account-link:hover {
+            color: var(--color-primary);
+            text-decoration: underline;
+        }
+        /* Accesibilidad */
+        .login-button:focus-visible,
+        .form-group input:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+        }
+        /* Responsive */
+        @media (max-width: 768px) {
+            .login-card {
+                padding: 1.5rem;
+            }
+        }
+        @media (max-width: 480px) {
+            body {
+                padding: 0.5rem;
+            }
+            .login-card {
+                padding: 1.25rem;
+                margin: 0;
+            }
+            .logo-icon {
+                width: 80px;
+                max-height: 80px;
+                margin-bottom: 1rem;
+            }
+            .login-card h1 {
+                font-size: 1.5rem;
+                margin-bottom: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="card">
-        <div class="card-header">
-            <img src="{% static 'image/favicon2.ico' %}" alt="logo">
-            <h1 class="card-title">DDMAX - MOTO IMPORT</h1>
+    <!-- Contenedor para la galaxia -->
+    <div id="galaxy"></div>
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Logo -->
+            <img src="{% static 'image/logom5.jpeg' %}" alt="Logo" class="logo-icon">
+            <h1>DDMAX - MOTO IMPORT</h1>
             <p class="card-description">Ingresa tu usuario y contraseña para acceder a tu cuenta.</p>
+            {% if messages %}
+            <div class="error-messages">
+                <ul>
+                    {% for message in messages %}
+                    <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            <form method="POST" action="{% url 'login' %}" class="form-group">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="username">Usuario</label>
+                    <input id="username" name="username" type="text" placeholder="Usuario" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input id="password" name="password" type="password" placeholder="Contraseña" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="login-button" id="login-button">
+                        <span id="button-text">Iniciar Sesión</span>
+                        <span id="loading-spinner" class="loading hidden"></span>
+                    </button>
+                </div>
+            </form>
         </div>
-
-        {% if messages %}
-        <div class="error-messages">
-            <ul>
-                {% for message in messages %}
-                <li>{{ message }}</li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-
-        <form method="POST" action="{% url 'login' %}" class="card-content">
-            {% csrf_token %}
-            <div class="form-group">
-                <label for="username">Usuario</label>
-                <input id="username" name="username" type="text" placeholder="Usuario"  required>
-            </div>
-            <div class="form-group">
-                <label for="password">Contraseña</label>
-                <input id="password" name="password" type="password" placeholder="Contraceña" required>
-            </div>
-            <div class="card-footer">
-                <button type="submit" class="btn" id="login-button">
-                    <span id="button-text">Iniciar Sesión</span>
-                    <span id="loading-spinner" class="loading hidden"></span>
-                </button>
-            </div>
-        </form>
     </div>
-
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Validación y lógica del formulario
             const loginForm = document.querySelector('form');
             const loginButton = document.getElementById('login-button');
             const buttonText = document.getElementById('button-text');
@@ -248,11 +318,64 @@
                 loginButton.disabled = true;
             });
 
-            const errorMessages = document.querySelector('.error-messages');
-            if (errorMessages) {
+            // Crear galaxia animada
+            const galaxy = document.getElementById('galaxy');
+
+            // Crear estrellas parpadeantes
+            for (let i = 0; i < 200; i++) {
+                const star = document.createElement('div');
+                star.classList.add('star');
+                star.style.top = Math.random() * 100 + 'vh';
+                star.style.left = Math.random() * 100 + 'vw';
+                star.style.width = Math.random() * 2 + 'px';
+                star.style.height = star.style.width;
+                star.style.animationDuration = 2 + Math.random() * 3 + 's';
+                star.style.animationDelay = Math.random() * 5 + 's';
+                galaxy.appendChild(star);
+            }
+
+            // Crear estrellas fugaces
+            setInterval(() => {
+                const shootingStar = document.createElement('div');
+                shootingStar.classList.add('shooting-star');
+                shootingStar.style.top = Math.random() * 30 + 'vh';
+                shootingStar.style.left = Math.random() * 20 + 'vw';
+                shootingStar.style.animationDuration = 2 + Math.random() * 3 + 's';
+                galaxy.appendChild(shootingStar);
                 setTimeout(() => {
-                    errorMessages.style.display = 'none';
+                    shootingStar.remove();
                 }, 5000);
+            }, 3000);
+
+            // Crear planetas
+            const planets = [
+                { size: 30, color: '#4a90e2', orbitRadius: 150, speed: 20 },
+                { size: 20, color: '#e74c3c', orbitRadius: 200, speed: 15 },
+                { size: 25, color: '#2ecc71', orbitRadius: 100, speed: 25 }
+            ];
+
+            planets.forEach(planet => {
+                const planetElement = document.createElement('div');
+                planetElement.classList.add('planet');
+                planetElement.style.width = planet.size + 'px';
+                planetElement.style.height = planet.size + 'px';
+                planetElement.style.background = planet.color;
+                planetElement.style.top = '50%';
+                planetElement.style.left = '50%';
+                planetElement.style.animationDuration = planet.speed + 's';
+                galaxy.appendChild(planetElement);
+            });
+
+            // Crear nebulosas
+            for (let i = 0; i < 3; i++) {
+                const nebulosa = document.createElement('div');
+                nebulosa.classList.add('nebulosa');
+                nebulosa.style.width = 100 + Math.random() * 200 + 'px';
+                nebulosa.style.height = nebulosa.style.width;
+                nebulosa.style.top = Math.random() * 100 + 'vh';
+                nebulosa.style.left = Math.random() * 100 + 'vw';
+                nebulosa.style.animationDuration = 10 + Math.random() * 10 + 's';
+                galaxy.appendChild(nebulosa);
             }
         });
     </script>

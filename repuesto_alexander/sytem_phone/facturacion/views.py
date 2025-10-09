@@ -47,7 +47,7 @@ from functools import wraps
 
 from weasyprint import HTML
 from django.template.loader import render_to_string
-
+from functools import wraps
 
 
 
@@ -685,30 +685,37 @@ def superuser_required(view_func):
 
 
 
-
-
+# Vista para renderizar la página de inventario
 def inventario(request):
     return render(request, "facturacion/inventario.html")
 
-# En la vista inventario_datos
+# Vista para obtener los datos del inventario (JSON)
 def inventario_datos(request):
     try:
         productos = list(EntradaProducto.objects.all().values(
-            'id', 'codigo_producto', 'descripcion', 'marca',
-            'compatibilidad', 'color', 'cantidad',
-            'costo', 'precio', 'precio_por_mayor', 'imagen',
+            'id',
+            'codigo_producto',
+            'descripcion',
+            'marca',
+            'compatibilidad',
+            'color',
+            'cantidad',
+            'costo',
+            'precio_con_itbis',
+            'precio_por_mayor_con_itbis',
+            'imagen',
             'observaciones'
         ))
 
-        # Procesar cada producto para incluir la URL completa de la imagen
+        # Construir la URL completa para las imágenes
         for producto in productos:
             if producto['imagen']:
-                # Construye la URL completa usando MEDIA_URL
                 producto['imagen'] = request.build_absolute_uri(settings.MEDIA_URL + producto['imagen'])
             else:
                 producto['imagen'] = None
 
         proveedores = list(Proveedor.objects.all().values())
+
         return JsonResponse({
             'productos': productos,
             'proveedores': proveedores,
@@ -718,8 +725,9 @@ def inventario_datos(request):
             }
         })
     except Exception as e:
-        return JsonResponse({'error': 'Error interno del servidor: ' + str(e)}, status=500)
+        return JsonResponse({'error': f'Error interno del servidor: {str(e)}'}, status=500)
 
+# Vista para editar un producto (solo superusuarios)
 
 @require_http_methods(["PUT"])
 @csrf_exempt
@@ -728,21 +736,55 @@ def inventario_editar(request, id):
     try:
         producto = EntradaProducto.objects.get(id=id)
 
-        # Obtener datos del cuerpo de la solicitud
-        data = json.loads(request.body)
+        # Determinar si es JSON o FormData
+        if request.content_type == 'application/json':
+            # Procesar datos JSON
+            data = json.loads(request.body)
+            
+            # Actualizar campos desde JSON
+            producto.descripcion = data.get('descripcion', producto.descripcion)
+            producto.marca = data.get('marca', producto.marca)
+            producto.compatibilidad = data.get('compatibilidad', producto.compatibilidad)
+            producto.color = data.get('color', producto.color)
+            producto.costo = Decimal(str(data.get('costo', producto.costo)))
+            producto.precio = Decimal(str(data.get('precio', producto.precio)))
+            
+            precio_por_mayor = data.get('precio_por_mayor')
+            if precio_por_mayor is not None:
+                producto.precio_por_mayor = Decimal(str(precio_por_mayor))
+            else:
+                producto.precio_por_mayor = None
+                
+            producto.observaciones = data.get('observaciones', producto.observaciones)
+            
+        else:
+            # Procesar FormData (incluye imagen)
+            producto.descripcion = request.POST.get('descripcion', producto.descripcion)
+            producto.marca = request.POST.get('marca', producto.marca)
+            producto.compatibilidad = request.POST.get('compatibilidad', producto.compatibilidad)
+            producto.color = request.POST.get('color', producto.color)
+            producto.costo = Decimal(request.POST.get('costo', producto.costo))
+            producto.precio = Decimal(request.POST.get('precio', producto.precio))
+            
+            precio_por_mayor = request.POST.get('precio_por_mayor')
+            if precio_por_mayor:
+                producto.precio_por_mayor = Decimal(precio_por_mayor)
+            else:
+                producto.precio_por_mayor = None
+                
+            producto.observaciones = request.POST.get('observaciones', producto.observaciones)
+            
+            # Procesar imagen si se envió
+            if 'imagen' in request.FILES:
+                producto.imagen = request.FILES['imagen']
 
-        # Actualizar campos
-        producto.descripcion = data.get('descripcion', producto.descripcion)
-        producto.marca = data.get('marca', producto.marca)
-        producto.compatibilidad = data.get('compatibilidad', producto.compatibilidad)
-        producto.color = data.get('color', producto.color)
-        producto.costo = data.get('costo', producto.costo)
-        producto.precio = data.get('precio', producto.precio)
-        producto.precio_por_mayor = data.get('precio_por_mayor', producto.precio_por_mayor)
-        producto.observaciones = data.get('observaciones', producto.observaciones)
-
-        # Guardar el producto
+        # Guardar el producto (esto recalculará los precios con ITBIS)
         producto.save()
+
+        # Construir URL completa para la imagen
+        imagen_url = None
+        if producto.imagen:
+            imagen_url = request.build_absolute_uri(producto.imagen.url)
 
         # Preparar la respuesta con los datos actualizados
         producto_actualizado = {
@@ -756,7 +798,9 @@ def inventario_editar(request, id):
             'costo': float(producto.costo),
             'precio': float(producto.precio),
             'precio_por_mayor': float(producto.precio_por_mayor) if producto.precio_por_mayor else None,
-            'imagen': producto.imagen.url if producto.imagen else None,
+            'precio_con_itbis': float(producto.precio_con_itbis) if producto.precio_con_itbis else None,
+            'precio_por_mayor_con_itbis': float(producto.precio_por_mayor_con_itbis) if producto.precio_por_mayor_con_itbis else None,
+            'imagen': imagen_url,
             'observaciones': producto.observaciones,
         }
 
@@ -764,12 +808,9 @@ def inventario_editar(request, id):
 
     except EntradaProducto.DoesNotExist:
         return JsonResponse({'error': 'Producto no encontrado'}, status=404)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Datos inválidos. Asegúrate de enviar un JSON válido.'}, status=400)
     except Exception as e:
         return JsonResponse({'error': f'Error al actualizar el producto: {str(e)}'}, status=500)
-
-
+# Vista para eliminar un producto (solo superusuarios)
 @require_http_methods(["DELETE"])
 @csrf_exempt
 @superuser_required
@@ -782,8 +823,6 @@ def inventario_eliminar(request, id):
         return JsonResponse({'error': 'Producto no encontrado'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
-
 
 
 @login_required
@@ -1263,7 +1302,6 @@ def safe_int(value, default=0):
         return default
 
 
-
 @csrf_exempt
 @require_POST
 @transaction.atomic
@@ -1276,13 +1314,14 @@ def procesar_venta(request):
         if not data:
             return JsonResponse({'success': False, 'message': 'No se recibieron datos'})
 
-        # Convertir valores de forma segura
+        # Datos de la venta
         payment_type = data.get('payment_type', 'contado')
         payment_method = data.get('payment_method', 'efectivo')
-        subtotal = safe_decimal(data.get('subtotal', 0))
-        discount_percentage = safe_decimal(data.get('discount_percentage', 0))  # Ahora es porcentaje
-        discount_amount = safe_decimal(data.get('discount_amount', 0))  # Monto calculado del descuento
+        subtotal_con_itbis = safe_decimal(data.get('subtotal', 0))  # Este valor YA INCLUYE ITBIS
+        discount_percentage = safe_decimal(data.get('discount_percentage', 0))
+        discount_amount = safe_decimal(data.get('discount_amount', 0))
         total = safe_decimal(data.get('total', 0))
+        total_a_pagar = safe_decimal(data.get('total_a_pagar', 0))  # Campo nuevo
         cash_received = safe_decimal(data.get('cash_received', 0))
         change_amount = safe_decimal(data.get('change_amount', 0))
 
@@ -1293,77 +1332,59 @@ def procesar_venta(request):
         if payment_method not in ['efectivo', 'tarjeta', 'transferencia']:
             return JsonResponse({'success': False, 'message': 'Método de pago inválido'})
 
-        if subtotal <= 0:
+        if subtotal_con_itbis <= 0:
             return JsonResponse({'success': False, 'message': 'El subtotal debe ser mayor a 0'})
 
         if total <= 0:
             return JsonResponse({'success': False, 'message': 'El total debe ser mayor a 0'})
 
-        # Validar que el porcentaje de descuento esté entre 0 y 100
         if discount_percentage < 0 or discount_percentage > 100:
             return JsonResponse({'success': False, 'message': 'El porcentaje de descuento debe estar entre 0 y 100'})
 
-        # Calcular ITBIS (18% fijo)
+        # Calcular ITBIS y subtotal SIN ITBIS
         itbis_porcentaje = Decimal('18.00')
-        itbis_monto = (subtotal * itbis_porcentaje) / Decimal('100.00')
+        subtotal_sin_itbis = subtotal_con_itbis / (1 + (itbis_porcentaje / 100))
+        itbis_monto = subtotal_con_itbis - subtotal_sin_itbis
 
-        # Calcular total con la fórmula: subtotal + ITBIS - descuento
-        subtotal_con_itbis = subtotal + itbis_monto
-        
-        # Recalcular el monto del descuento basado en el porcentaje para validación
+        # Validar descuento
         discount_amount_calculado = (subtotal_con_itbis * discount_percentage) / Decimal('100.00')
         total_calculado = subtotal_con_itbis - discount_amount_calculado
 
-        # Validar que el monto del descuento recibido coincida con el calculado
         if abs(discount_amount - discount_amount_calculado) > Decimal('0.01'):
-            print(f"Advertencia: Monto de descuento no coincide con cálculo")
-            print(f"Descuento recibido: {discount_amount}, Descuento calculado: {discount_amount_calculado}")
             discount_amount = discount_amount_calculado
 
-        # Validar que el total recibido coincida
         if abs(total - total_calculado) > Decimal('0.01'):
-            print(f"Advertencia: Total recibido no coincide con cálculo")
-            print(f"Total recibido: {total}, Total calculado: {total_calculado}")
             total = total_calculado
 
-        # Procesar información del cliente
+        # Procesar cliente
         client_id = data.get('client_id')
         client_name = data.get('client_name', '').strip()
         client_document = data.get('client_document', '').strip()
-
         cliente = None
+
         if payment_type == 'credito':
             if not client_id:
                 return JsonResponse({'success': False, 'message': 'Debe seleccionar un cliente para ventas a crédito'})
 
             try:
+                from .models import Cliente, CuentaPorCobrar
                 cliente = Cliente.objects.get(id=client_id, status=True)
-                
-                # ========== VALIDACIÓN DE LÍMITE DE CRÉDITO ==========
-                # Calcular total de cuentas por cobrar pendientes
                 cuentas_pendientes = CuentaPorCobrar.objects.filter(
                     cliente=cliente,
                     anulada=False,
                     eliminada=False
                 ).exclude(estado='pagada')
-                
                 total_deuda = sum(cuenta.saldo_pendiente for cuenta in cuentas_pendientes)
                 total_con_nueva_venta = total_deuda + total
-                
+
                 if total_con_nueva_venta > cliente.credit_limit:
                     return JsonResponse({
                         'success': False,
-                        'message': f'⚠️ El cliente {cliente.full_name} ha excedido su límite de crédito.\n\n'
-                                  f'• Límite actual: RD${cliente.credit_limit:,.2f}\n'
-                                  f'• Deuda actual: RD${total_deuda:,.2f}\n'
-                                  f'• Nueva venta: RD${total:,.2f}\n'
-                                  f'• Total con nueva venta: RD${total_con_nueva_venta:,.2f}\n\n'
-                                  f'No puede realizar esta venta a crédito.'
+                        'message': f'El cliente {cliente.full_name} ha excedido su límite de crédito.'
                     })
-                # ========== FIN VALIDACIÓN DE LÍMITE DE CRÉDITO ==========
-                
             except Cliente.DoesNotExist:
                 return JsonResponse({'success': False, 'message': 'Cliente no válido'})
+
         else:
             if not client_name:
                 return JsonResponse({'success': False, 'message': 'Debe ingresar el nombre del cliente'})
@@ -1381,7 +1402,8 @@ def procesar_venta(request):
         if not sale_items:
             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
 
-        # Verificar stock antes de procesar la venta
+        # Verificar stock
+        from .models import EntradaProducto
         for item in sale_items:
             try:
                 producto = EntradaProducto.objects.get(id=item['id'], activo=True)
@@ -1398,7 +1420,8 @@ def procesar_venta(request):
             except (ValueError, KeyError):
                 return JsonResponse({'success': False, 'message': f'Cantidad inválida para producto: {item.get("name", "Desconocido")}'})
 
-        # Crear la venta CON campos de ITBIS
+        # Crear la venta
+        from .models import Venta, DetalleVenta
         venta = Venta(
             vendedor=user,
             cliente=cliente,
@@ -1406,30 +1429,31 @@ def procesar_venta(request):
             cliente_documento=client_document,
             tipo_venta=payment_type,
             metodo_pago=payment_method,
-            subtotal=subtotal,
+            subtotal=subtotal_sin_itbis,
             itbis_porcentaje=itbis_porcentaje,
             itbis_monto=itbis_monto,
-            descuento_porcentaje=discount_percentage,  # Ahora guardamos el porcentaje
-            descuento_monto=discount_amount,  # Y también el monto calculado
+            descuento_porcentaje=discount_percentage,
+            descuento_monto=discount_amount,
             total=total,
+            total_a_pagar=total_a_pagar,  # Aquí se guarda el nuevo campo
             montoinicial=0,
             efectivo_recibido=cash_received,
             cambio=change_amount,
             completada=True,
             fecha_venta=timezone.now(),
         )
-
         venta.save()
 
-        # Log de la venta creada
+        # Log de la venta
         print(f"=== VENTA CREADA ===")
         print(f"Factura: {venta.numero_factura}")
-        print(f"Subtotal: RD${venta.subtotal}")
+        print(f"Subtotal (sin ITBIS): RD${venta.subtotal}")
         print(f"ITBIS ({venta.itbis_porcentaje}%): RD${venta.itbis_monto}")
-        print(f"Subtotal con ITBIS: RD${venta.subtotal + venta.itbis_monto}")
+        print(f"Subtotal (con ITBIS): RD${venta.subtotal + venta.itbis_monto}")
         print(f"Descuento %: {venta.descuento_porcentaje}%")
         print(f"Descuento monto: RD${venta.descuento_monto}")
         print(f"Total: RD${venta.total}")
+        print(f"Total a pagar: RD${venta.total_a_pagar}")  # Log del nuevo campo
 
         # Procesar detalles de venta y descontar stock
         productos_para_cuenta = []
@@ -1439,22 +1463,18 @@ def procesar_venta(request):
                 cantidad = int(item['quantity'])
                 precio_unitario = safe_decimal(item['price'])
                 subtotal_item = safe_decimal(item['subtotal'])
-
-                # Validar cálculos
                 calculated_subtotal = precio_unitario * cantidad
+
                 if abs(calculated_subtotal - subtotal_item) > Decimal('0.01'):
                     nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
                     print(f"Advertencia: Subtotal inconsistente para {nombre_producto}")
                     subtotal_item = calculated_subtotal
 
-                # Descontar stock
                 producto.cantidad -= cantidad
                 producto.save(update_fields=['cantidad'])
-
                 nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
                 print(f"Stock actualizado: {nombre_producto} -{cantidad} unidades")
 
-                # Crear detalle de venta
                 detalle = DetalleVenta(
                     venta=venta,
                     producto=producto,
@@ -1463,7 +1483,6 @@ def procesar_venta(request):
                     subtotal=subtotal_item
                 )
                 detalle.save()
-
                 productos_para_cuenta.append(f"{nombre_producto} x{cantidad} - RD${precio_unitario:.2f}")
 
             except EntradaProducto.DoesNotExist:
@@ -1477,9 +1496,7 @@ def procesar_venta(request):
         if payment_type == 'credito' and cliente:
             try:
                 fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
-
                 productos_str = "\n".join(productos_para_cuenta)
-
                 cuenta_por_cobrar = CuentaPorCobrar(
                     venta=venta,
                     cliente=cliente,
@@ -1494,9 +1511,7 @@ Productos:
 {productos_str}"""
                 )
                 cuenta_por_cobrar.save()
-
                 print(f"Cuenta por cobrar creada: {cuenta_por_cobrar.id}")
-
             except Exception as e:
                 transaction.set_rollback(True)
                 return JsonResponse({'success': False, 'message': f'Error al crear cuenta por cobrar: {str(e)}'})
@@ -1513,6 +1528,7 @@ Productos:
                 'descuento_porcentaje': float(venta.descuento_porcentaje),
                 'descuento_monto': float(venta.descuento_monto),
                 'total': float(venta.total),
+                'total_a_pagar': float(venta.total_a_pagar),  # Incluido en la respuesta
                 'efectivo_recibido': float(venta.efectivo_recibido),
                 'cambio': float(venta.cambio),
                 'items_count': len(sale_items)
@@ -1524,21 +1540,14 @@ Productos:
         import traceback
         print(f"Error completo: {traceback.format_exc()}")
         return JsonResponse({'success': False, 'message': f'Error al procesar la venta: {str(e)}'})
-
 # Vista para mostrar el comprobante de venta
+
 @login_required
 def comprobante_venta(request, venta_id):
-    # Obtener la venta y sus detalles
     venta = get_object_or_404(Venta, id=venta_id)
     detalles = venta.detalles.all()
-
-    # Calcular total de artículos
     total_articulos = sum(detalle.cantidad for detalle in detalles)
-
-    # Calcular subtotal con ITBIS para mostrar en el comprobante
-    subtotal_con_itbis = venta.subtotal + venta.itbis_monto
-
-    # Renderizar el template HTML
+    subtotal_con_itbis = venta.subtotal + venta.itbis_monto  # Subtotal con ITBIS
     return render(request, 'facturacion/comprobante_venta.html', {
         'venta': venta,
         'detalles': detalles,
@@ -1546,6 +1555,8 @@ def comprobante_venta(request, venta_id):
         'subtotal_con_itbis': subtotal_con_itbis,
         'now': timezone.now().strftime('%d/%m/%Y')
     })
+
+
 # @csrf_exempt
 # @require_POST
 # @transaction.atomic
@@ -1864,7 +1875,6 @@ def comprobante_venta(request, venta_id):
 #         import traceback
 #         print(f"Error completo: {traceback.format_exc()}")
 #         return JsonResponse({'success': False, 'message': f'Error al procesar la venta: {str(e)}'})
-
 @login_required
 def buscar_productos(request):
     query = request.GET.get('q', '').strip()
@@ -1884,15 +1894,16 @@ def buscar_productos(request):
                 'id': producto.id,
                 'codigo_producto': producto.codigo_producto,
                 'descripcion': producto.descripcion,
-                'marca': producto.get_marca_display(),
-                'compatibilidad': getattr(producto, 'compatibilidad', 'N/A'),
-                'color': getattr(producto, 'color', 'N/A'),
                 'precio': float(producto.precio),
-                'precio_por_mayor': float(producto.precio_por_mayor) if producto.precio_por_mayor else None,
+                'precio_con_itbis': float(producto.precio_con_itbis) if producto.precio_con_itbis else 0.0,
+                'precio_por_mayor': float(producto.precio_por_mayor) if producto.precio_por_mayor else 0.0,
+                'precio_por_mayor_con_itbis': float(producto.precio_por_mayor_con_itbis) if producto.precio_por_mayor_con_itbis else 0.0,
                 'cantidad': producto.cantidad,
                 'imagen': producto.imagen.url if producto.imagen else '/static/image/default-product.png',
-                'estado_stock': producto.estado_stock,
-                'clase_estado_stock': producto.clase_estado_stock
+                # AGREGAR ESTOS CAMPOS:
+                'compatibilidad': producto.compatibilidad or '',
+                'marca': producto.marca or '',
+                'color': producto.color or '',
             })
         return JsonResponse({
             'success': True,
@@ -1904,7 +1915,6 @@ def buscar_productos(request):
             'success': False,
             'message': f'Error en la búsqueda: {str(e)}'
         })
-
 # def comprobante_venta(request, venta_id):
 #     # Obtener la venta
 #     venta = get_object_or_404(Venta, id=venta_id)
@@ -2295,6 +2305,7 @@ def guardar_cliente(request):
         })
 
 
+
 @csrf_exempt
 def obtener_datos_entrada(request, entrada_id):
     """Obtiene datos de una entrada existente para autocompletar el formulario"""
@@ -2305,14 +2316,16 @@ def obtener_datos_entrada(request, entrada_id):
                 'success': True,
                 'entrada': {
                     'marca': entrada.marca,
-                    'modelo': entrada.modelo,
-                    'capacidad': entrada.capacidad or '',
-                    'costo_compra': float(entrada.costo_compra),
-                    'costo_venta': float(entrada.costo_venta),
+                    'compatibilidad': entrada.compatibilidad or '',
                     'color': entrada.color or '',
-                    'estado': entrada.estado or '',
+                    'costo': float(entrada.costo),
+                    'precio': float(entrada.precio),
+                    'precio_por_mayor': float(entrada.precio_por_mayor) if entrada.precio_por_mayor else 0,
                     'porcentaje_itbis': float(entrada.porcentaje_itbis),
-                    'nombre_producto': entrada.nombre_producto
+                    'precio_con_itbis': float(entrada.precio_con_itbis) if entrada.precio_con_itbis else 0,
+                    'precio_por_mayor_con_itbis': float(entrada.precio_por_mayor_con_itbis) if entrada.precio_por_mayor_con_itbis else 0,
+                    'descripcion': entrada.descripcion,
+                    'imagen_url': entrada.imagen.url if entrada.imagen else None,
                 }
             }
             return JsonResponse(data)
@@ -2330,28 +2343,26 @@ def agregar_nuevo_producto(request):
         try:
             nombre = request.POST.get('newProductName', '').strip()
             marca = request.POST.get('newProductBrand', '').strip()
-            
+
             if not nombre:
                 return JsonResponse({'success': False, 'error': 'El nombre del producto es requerido'})
-            
+
             if not marca:
                 return JsonResponse({'success': False, 'error': 'La marca es requerida'})
-            
-            # Verificar si ya existe una plantilla similar
+
             existe = EntradaProducto.objects.filter(
-                nombre_producto__iexact=nombre,
+                descripcion__iexact=nombre,
                 marca=marca,
                 es_producto_base=True,
                 activo=True
             ).exists()
-            
+
             if existe:
                 return JsonResponse({
-                    'success': False, 
+                    'success': False,
                     'error': 'Ya existe una plantilla con este nombre y marca'
                 })
-            
-            # Obtener un proveedor por defecto para plantillas
+
             try:
                 proveedor_default = Proveedor.objects.filter(activo=True).first()
                 if not proveedor_default:
@@ -2368,73 +2379,65 @@ def agregar_nuevo_producto(request):
                     telefono="000-000-0000",
                     activo=True
                 )
-            
-            # Crear la plantilla de producto (solo datos base)
+
             nueva_plantilla = EntradaProducto(
                 numero_factura=f"PLANTILLA-{int(time.time())}",
                 fecha_entrada=timezone.now().date(),
                 proveedor=proveedor_default,
-                nombre_producto=nombre,
+                descripcion=nombre,
                 marca=marca,
-                modelo=nombre,  # Usar el nombre como modelo inicial
-                capacidad="128",
-                imei_serial=f"PLANTILLA-{int(time.time())}",
-                estado="nuevo",
+                compatibilidad=nombre,
                 color="negro",
                 cantidad=1,
                 cantidad_minima=2,
-                costo_compra=0.00,
+                costo=0.00,
+                precio=0.00,
                 porcentaje_itbis=18.00,
-                costo_venta=0.00,
                 observaciones="Plantilla creada mediante modal rápido",
                 activo=True,
-                es_producto_base=True  # Marcar como plantilla
+                es_producto_base=True
             )
-            
             nueva_plantilla.save()
-            
+
             return JsonResponse({
                 'success': True,
                 'plantilla_id': nueva_plantilla.id,
-                'nombre_producto': nueva_plantilla.nombre_producto,
+                'nombre_producto': nueva_plantilla.descripcion,
                 'marca': nueva_plantilla.get_marca_display(),
                 'marca_valor': nueva_plantilla.marca,
-                'mensaje': 'Plantilla creada exitosamente. Complete los detalles en el formulario.'
+                'mensaje': 'Plantilla creada exitosamente.'
             })
-            
+
         except Exception as e:
             return JsonResponse({'success': False, 'error': f'Error al crear la plantilla: {str(e)}'})
-    
+
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
 
 def obtener_productos_disponibles(request):
     """Obtiene plantillas de productos para el dropdown"""
     try:
-        # Obtener solo plantillas (productos base)
         plantillas = EntradaProducto.objects.filter(
-            es_producto_base=True, 
+            es_producto_base=True,
             activo=True
-        ).order_by('nombre_producto', 'marca', 'modelo')
-        
+        ).order_by('descripcion', 'marca')
+
         plantillas_data = []
-        
         for plantilla in plantillas:
             plantillas_data.append({
                 'id': plantilla.id,
-                'texto_completo': f"{plantilla.nombre_producto} - {plantilla.get_marca_display()} - {plantilla.modelo}",
-                'nombre_producto': plantilla.nombre_producto,
+                'texto_completo': f"{plantilla.descripcion} - {plantilla.get_marca_display()}",
+                'descripcion': plantilla.descripcion,
                 'marca': plantilla.marca,
                 'marca_display': plantilla.get_marca_display(),
-                'modelo': plantilla.modelo,
-                'capacidad': plantilla.capacidad or '128',
-                'estado': plantilla.estado or 'nuevo',
+                'compatibilidad': plantilla.compatibilidad or '',
                 'color': plantilla.color or 'negro',
-                'costo_compra': float(plantilla.costo_compra),
-                'costo_venta': float(plantilla.costo_venta)
+                'costo': float(plantilla.costo),
+                'precio': float(plantilla.precio),
+                'precio_por_mayor': float(plantilla.precio_por_mayor) if plantilla.precio_por_mayor else 0,
             })
-        
+
         return JsonResponse({'success': True, 'plantillas': plantillas_data})
-        
+
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
@@ -2448,12 +2451,12 @@ def obtener_datos_plantilla(request, plantilla_id):
                 'success': True,
                 'data': {
                     'marca': plantilla.marca,
-                    'modelo': plantilla.modelo,
-                    'capacidad': plantilla.capacidad or '',
-                    'estado': plantilla.estado or '',
+                    'compatibilidad': plantilla.compatibilidad or '',
                     'color': plantilla.color or '',
-                    'costo_compra': float(plantilla.costo_compra),
-                    'costo_venta': float(plantilla.costo_venta)
+                    'costo': float(plantilla.costo),
+                    'precio': float(plantilla.precio),
+                    'precio_por_mayor': float(plantilla.precio_por_mayor) if plantilla.precio_por_mayor else 0,
+                    'porcentaje_itbis': float(plantilla.porcentaje_itbis),
                 }
             }
             return JsonResponse(data)
@@ -2463,13 +2466,14 @@ def obtener_datos_plantilla(request, plantilla_id):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
 
-
-
 @csrf_exempt
 def entrada(request):
     """Vista principal para registro de entradas de productos"""
     if request.method == 'POST':
         try:
+            # Depuración: Imprimir archivos recibidos
+            print("Archivos recibidos en request.FILES:", request.FILES)
+
             # Obtener datos del formulario
             numero_factura = request.POST.get('numero_factura', '').strip()
             fecha_entrada = request.POST.get('fecha_entrada', '')
@@ -2479,25 +2483,39 @@ def entrada(request):
             marca = request.POST.get('marca', '').strip()
             compatibilidad = request.POST.get('compatibilidad', '').strip()
             color = request.POST.get('color', '')
-            imagen = request.FILES.get('imagen')
+            imagen = request.FILES.get('imagen')  # Obtener imagen de request.FILES
+
+            # Depuración: Imprimir detalles de la imagen
+            if imagen:
+                print(f"Imagen recibida: {imagen.name} (Tamaño: {imagen.size} bytes)")
+            else:
+                print("No se recibió ninguna imagen.")
 
             # Manejar valores numéricos
             try:
                 cantidad = int(request.POST.get('cantidad', 1))
             except (ValueError, TypeError):
                 cantidad = 1
+
             try:
                 costo = float(request.POST.get('costo', 0))
             except (ValueError, TypeError):
                 costo = 0.0
+
             try:
                 precio = float(request.POST.get('precio', 0))
             except (ValueError, TypeError):
                 precio = 0.0
+
             try:
                 precio_por_mayor = float(request.POST.get('precio_por_mayor', 0))
             except (ValueError, TypeError):
                 precio_por_mayor = None
+
+            try:
+                porcentaje_itbis = float(request.POST.get('porcentaje_itbis', 18.00))
+            except (ValueError, TypeError):
+                porcentaje_itbis = 18.00
 
             # Validaciones básicas
             required_fields = [
@@ -2509,6 +2527,7 @@ def entrada(request):
                 ('costo', costo, 'Costo'),
                 ('precio', precio, 'Precio')
             ]
+
             for field_name, field_value, field_display in required_fields:
                 if not field_value:
                     messages.error(request, f'{field_display} es requerido')
@@ -2548,26 +2567,28 @@ def entrada(request):
                 costo=costo,
                 precio=precio,
                 precio_por_mayor=precio_por_mayor,
-                imagen=imagen,
-                activo=True
+                porcentaje_itbis=porcentaje_itbis,
+                imagen=imagen,  # Asignar la imagen al modelo
             )
+
             entrada_producto.save()
+
             messages.success(request, '✅ Producto registrado exitosamente en el inventario')
             return redirect('entrada')
 
         except Exception as e:
             messages.error(request, f'Error al registrar el producto: {str(e)}')
+            print(f"Error al guardar: {str(e)}")  # Depuración
             return redirect('entrada')
 
     # GET request - mostrar el formulario
     proveedores = Proveedor.objects.filter(activo=True)
     fecha_actual = timezone.now().date().isoformat()
+
     return render(request, 'facturacion/entrada.html', {
         'proveedores': proveedores,
         'fecha_actual': fecha_actual
     })
-
-
 
 @csrf_exempt
 def buscar_productos_similares(request):
@@ -2606,7 +2627,6 @@ def buscar_productos_similares(request):
     
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
 
-
 def cuentaporcobrar(request):
     # Obtener parámetros de filtrado
     search = request.GET.get('search', '')
@@ -2636,13 +2656,17 @@ def cuentaporcobrar(request):
     if date_to:
         cuentas = cuentas.filter(venta__fecha_venta__lte=date_to)
 
-    # Calcular estadísticas usando monto_total de CuentaPorCobrar
+    # Calcular estadísticas usando `total_a_pagar` de Venta (SIN ITBIS)
     total_pendiente = Decimal('0.00')
     total_vencido = Decimal('0.00')
     total_por_cobrar = Decimal('0.00')
 
     for cuenta in cuentas:
-        saldo_pendiente = cuenta.monto_total - cuenta.monto_pagado
+        # Usar `total_a_pagar` de Venta
+        monto_total_original = Decimal(str(cuenta.venta.total_a_pagar))
+
+        # Calcular saldo pendiente (usando `total_a_pagar`)
+        saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
 
         if cuenta.estado in ['pendiente', 'parcial']:
             total_pendiente += saldo_pendiente
@@ -2665,68 +2689,35 @@ def cuentaporcobrar(request):
     # Preparar datos para el template
     cuentas_data = []
     for cuenta in cuentas:
-        # Obtener productos de la venta
+        # Usar `total_a_pagar` de Venta
+        monto_total_original = float(cuenta.venta.total_a_pagar)
+
+        # Obtener productos de la venta (USANDO PRECIO SIN ITBIS)
         productos = []
+        if cuenta.venta and hasattr(cuenta.venta, 'detalles'):
+            for detalle in cuenta.venta.detalles.all():
+                nombre_producto = 'Servicio'
+                precio_sin_itbis = float(detalle.precio_unitario)  # Precio sin ITBIS
+                if hasattr(detalle, 'producto') and detalle.producto:
+                    nombre_producto = detalle.producto.descripcion
+                elif hasattr(detalle, 'servicio') and detalle.servicio:
+                    nombre_producto = detalle.servicio.nombre
+                elif hasattr(detalle, 'descripcion') and detalle.descripcion:
+                    nombre_producto = detalle.descripcion
 
-        if cuenta.productos:
-            try:
-                productos_json = json.loads(cuenta.productos)
-                for producto in productos_json:
-                    productos.append({
-                        'nombre': producto.get('nombre', 'Producto'),
-                        'cantidad': producto.get('cantidad', 1),
-                        'precio': float(producto.get('precio', 0))
-                    })
-            except json.JSONDecodeError:
+                cantidad = 1
+                if hasattr(detalle, 'cantidad'):
+                    cantidad = float(detalle.cantidad)
+
                 productos.append({
-                    'nombre': cuenta.productos,
-                    'cantidad': 1,
-                    'precio': float(cuenta.monto_total)
-                })
-        else:
-            try:
-                if cuenta.venta and hasattr(cuenta.venta, 'detalles'):
-                    for detalle in cuenta.venta.detalles.all():
-                        nombre_producto = 'Servicio'
-                        if hasattr(detalle, 'producto') and detalle.producto:
-                            nombre_producto = detalle.producto.nombre
-                        elif hasattr(detalle, 'servicio') and detalle.servicio:
-                            nombre_producto = detalle.servicio.nombre
-                        elif hasattr(detalle, 'descripcion') and detalle.descripcion:
-                            nombre_producto = detalle.descripcion
-
-                        precio = 0
-                        if hasattr(detalle, 'precio'):
-                            precio = float(detalle.precio)
-                        elif hasattr(detalle, 'precio_unitario'):
-                            precio = float(detalle.precio_unitario)
-
-                        cantidad = 1
-                        if hasattr(detalle, 'cantidad'):
-                            cantidad = float(detalle.cantidad)
-
-                        productos.append({
-                            'nombre': nombre_producto,
-                            'cantidad': cantidad,
-                            'precio': precio
-                        })
-                else:
-                    productos.append({
-                        'nombre': 'Producto/Servicio',
-                        'cantidad': 1,
-                        'precio': float(cuenta.monto_total)
-                    })
-            except Exception as e:
-                productos.append({
-                    'nombre': f'Error: {str(e)}',
-                    'cantidad': 1,
-                    'precio': float(cuenta.monto_total)
+                    'nombre': nombre_producto,
+                    'cantidad': cantidad,
+                    'precio': precio_sin_itbis,  # Precio sin ITBIS
                 })
 
         # Obtener información del cliente
         client_name = 'Cliente no disponible'
         client_phone = 'N/A'
-
         if cuenta.cliente:
             client_name = cuenta.cliente.full_name or 'Cliente sin nombre'
             client_phone = cuenta.cliente.primary_phone or 'N/A'
@@ -2734,7 +2725,6 @@ def cuentaporcobrar(request):
         # Obtener información de la factura
         invoice_number = 'N/A'
         sale_date = ''
-
         if cuenta.venta:
             invoice_number = cuenta.venta.numero_factura or 'N/A'
             if cuenta.venta.fecha_venta:
@@ -2745,11 +2735,10 @@ def cuentaporcobrar(request):
         if cuenta.fecha_vencimiento:
             due_date = cuenta.fecha_vencimiento.strftime('%Y-%m-%d')
 
-        # Usar monto_total para "Monto Original" y cálculos
-        monto_total_original = float(cuenta.monto_total)
+        # Usar `total_a_pagar` para "Monto Original" y cálculos
         monto_pagado = float(cuenta.monto_pagado)
 
-        # Calcular saldo pendiente basado en monto_total
+        # Calcular saldo pendiente basado en `total_a_pagar`
         saldo_pendiente = monto_total_original - monto_pagado
 
         # Asegurarse de que el saldo pendiente no sea negativo
@@ -2764,15 +2753,16 @@ def cuentaporcobrar(request):
             'invoiceNumber': invoice_number,
             'clientName': client_name,
             'clientPhone': client_phone,
-            'products': productos,
+            'products': productos,  # Productos con precio sin ITBIS
             'saleDate': sale_date,
             'dueDate': due_date,
-            'totalAmount': monto_total_original,
+            'totalAmount': monto_total_original,  # Monto total sin ITBIS (total_a_pagar)
             'paidAmount': monto_pagado,
-            'pendingBalance': saldo_pendiente,
+            'pendingBalance': saldo_pendiente,  # Saldo pendiente basado en total_a_pagar
             'status': cuenta.estado,
             'observations': cuenta.observaciones or '',
-            'puede_eliminar': puede_eliminar
+            'puede_eliminar': puede_eliminar,
+            'totalConItbis': float(cuenta.venta.total),  # Solo para referencia (con ITBIS)
         })
 
     # Convertir a JSON para pasarlo al template
@@ -2791,8 +2781,6 @@ def cuentaporcobrar(request):
     }
 
     return render(request, "facturacion/cuentaporcobrar.html", context)
-
-
 
 @csrf_exempt
 def registrar_pago(request):
@@ -2814,11 +2802,11 @@ def registrar_pago(request):
                     'message': 'No se puede registrar pago en una cuenta anulada'
                 })
 
-            # Usar monto_total como base para el saldo pendiente
-            monto_total_original = cuenta.monto_total
+            # Usar `total_a_pagar` de Venta
+            monto_total_original = Decimal(str(cuenta.venta.total_a_pagar))
 
-            # Calcular saldo pendiente
-            saldo_pendiente = monto_total_original - cuenta.monto_pagado
+            # Calcular saldo pendiente (usando `total_a_pagar`)
+            saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
 
             # Validar que el monto no exceda el saldo pendiente
             if monto > saldo_pendiente:
@@ -2840,8 +2828,8 @@ def registrar_pago(request):
             # Actualizar monto pagado (sumar el nuevo pago)
             cuenta.monto_pagado += monto
 
-            # Calcular nuevo saldo pendiente
-            nuevo_saldo = monto_total_original - cuenta.monto_pagado
+            # Calcular nuevo saldo (usando `total_a_pagar`)
+            nuevo_saldo = monto_total_original - Decimal(str(cuenta.monto_pagado))
 
             # Actualizar el estado basado en el nuevo saldo
             if nuevo_saldo <= 0:
@@ -2882,27 +2870,36 @@ def registrar_pago(request):
 
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
-
 def generar_comprobante_pdf(request, comprobante_id):
     try:
         comprobante = get_object_or_404(ComprobantePago, id=comprobante_id)
+
         # Crear respuesta HTTP con tipo PDF
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="comprobante_{comprobante.numero_comprobante}.pdf"'
+
         # Configurar el PDF para 80mm de ancho (aprox. 226 puntos)
         width = 226  # 80mm en puntos (1mm = 2.83 puntos)
         height = 1200  # Alto suficiente para el contenido y firmas
+
         # Crear el objeto PDF con tamaño personalizado
         p = canvas.Canvas(response, pagesize=(width, height))
+
         # Configurar márgenes y fuentes para impresora térmica
         margin_left = 10
         y_position = height - 20  # Empezar desde la parte superior
         line_height = 14
         small_line_height = 10
-        # Obtener información de totales
-        monto_original = comprobante.cuenta.venta.total_a_pagar if comprobante.cuenta.venta and comprobante.cuenta.venta.total_a_pagar else comprobante.cuenta.monto_total
-        # Usar la misma fórmula que en el view `registrar_pago`
-        saldo_pendiente = monto_original - comprobante.cuenta.monto_pagado
+
+        # Usar `total_a_pagar` de Venta
+        monto_total_original = Decimal(str(comprobante.cuenta.venta.total_a_pagar))
+
+        # Obtener el total con ITBIS para referencia
+        monto_total_con_itbis = comprobante.cuenta.venta.total if comprobante.cuenta.venta else comprobante.cuenta.monto_total
+
+        # Usar `total_a_pagar` para el saldo pendiente
+        saldo_pendiente = monto_total_original - Decimal(str(comprobante.cuenta.monto_pagado))
+
         # Función para centrar texto
         def draw_centered_text(text, y, font_size=12, bold=False):
             if bold:
@@ -2913,6 +2910,7 @@ def generar_comprobante_pdf(request, comprobante_id):
             x = (width - text_width) / 2
             p.drawString(x, y, text)
             return y - line_height
+
         # Función para texto normal alineado a la izquierda
         def draw_left_text(text, y, font_size=10, bold=False):
             if bold:
@@ -2921,129 +2919,142 @@ def generar_comprobante_pdf(request, comprobante_id):
                 p.setFont("Helvetica", font_size)
             p.drawString(margin_left, y, text)
             return y - line_height
+
         # Encabezado del comprobante
         y_position = draw_centered_text("DDMAX - MOTO IMPORT", y_position, 8, True)  # Tamaño reducido
         y_position = draw_centered_text("COMPROBANTE DE PAGO", y_position, 10, True)
         y_position -= line_height / 2  # Espacio adicional
+
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height
+
         # Información del comprobante
         y_position = draw_left_text(f"Comprobante: {comprobante.numero_comprobante}", y_position, 9)
         y_position = draw_left_text(f"Fecha: {comprobante.fecha_emision.strftime('%d/%m/%Y %H:%M')}", y_position, 9)
         y_position = draw_left_text(f"Cliente: {comprobante.cliente.full_name}", y_position, 9)
+
         # Información de la factura si existe
         if comprobante.cuenta.venta:
             y_position = draw_left_text(f"Factura: {comprobante.cuenta.venta.numero_factura}", y_position, 9)
+
         y_position -= line_height / 2
+
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height
+
         # Información del pago
         y_position = draw_centered_text("DETALLE DEL PAGO", y_position, 10, True)
         y_position -= small_line_height
         y_position = draw_left_text(f"Monto Pagado: RD$ {comprobante.pago.monto:,.2f}", y_position, 9, True)
         y_position = draw_left_text(f"Método: {comprobante.pago.get_metodo_pago_display()}", y_position, 9)
+
         if comprobante.pago.referencia:
             y_position = draw_left_text(f"Referencia: {comprobante.pago.referencia}", y_position, 8)
+
         y_position -= line_height / 2
+
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height
-        # Información de totales
+
+        # Información de totales (usando `total_a_pagar` para saldo pendiente, CON ITBIS para referencia)
         y_position = draw_centered_text("RESUMEN DE CUENTA", y_position, 10, True)
         y_position -= small_line_height
-        y_position = draw_left_text(f"Monto Original: RD$ {monto_original:,.2f}", y_position, 9)
-        # Mostrar saldo pendiente (usando la misma fórmula que en `registrar_pago`)
+        y_position = draw_left_text(f"Monto Original (sin ITBIS): RD$ {monto_total_original:,.2f}", y_position, 9)
+        y_position = draw_left_text(f"Monto Total (con ITBIS): RD$ {monto_total_con_itbis:,.2f}", y_position, 9)
         y_position = draw_left_text(f"Pagado Acumulado: RD$ {comprobante.cuenta.monto_pagado:,.2f}", y_position, 9)
-        y_position = draw_left_text(f"Saldo Pendiente: RD$ {saldo_pendiente:,.2f}", y_position, 9, True)
+        y_position = draw_left_text(f"Saldo Pendiente (sin ITBIS): RD$ {saldo_pendiente:,.2f}", y_position, 9, True)
         y_position -= line_height
+
         # Línea separadora final
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height * 2  # Más espacio antes de las firmas
+
         # SECCIÓN DE FIRMAS
         y_position = draw_centered_text("FIRMA DEL CLIENTE", y_position, 9, True)
         y_position -= small_line_height
+
         # Línea para firma del cliente
         p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
         y_position -= line_height
+
         # Espacio para firma y cédula del cliente
-    #  
         y_position -= line_height * 1.2  # Espacio adicional antes de la cédula
         y_position = draw_left_text("Cédula: _________________________", y_position, 8)
         y_position -= line_height * 1.5
+
         # FIRMA DE LA EMPRESA
         y_position = draw_centered_text("FIRMA DE LA EMPRESA", y_position, 9, True)
         y_position -= small_line_height
+
         # Línea para firma de la empresa
         p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
         y_position -= line_height
+
         # Información de la empresa
         y_position = draw_centered_text("DDMAX - MOTO IMPORT", y_position, 8, True)
         y_position -= line_height * 1.5
+
         # Mensaje de agradecimiento
         y_position = draw_centered_text("¡Gracias por su pago!", y_position, 10, True)
         y_position -= small_line_height
+
         # Información de contacto de la empresa (más pequeña)
         y_position = draw_centered_text("DDMAX - MOTO IMPORT", y_position, 7)
         y_position = draw_centered_text("Tel: (809) 656-3374", y_position, 7)
+
         # Agregar código de barras o QR si es necesario (opcional)
         y_position -= line_height
         draw_centered_text(f"Ref: {comprobante.numero_comprobante}", y_position, 7)
+
         # Finalizar el PDF
         p.showPage()
         p.save()
+
         return response
+
     except Exception as e:
         return JsonResponse({
             'success': False,
             'message': f'Error al generar comprobante: {str(e)}'
         })
 
-
-
-
-
-
-#=====================================================================================================
-# En tu views.py, agrega esta nueva función
-#=====================================================================================================
 def eliminar_cuenta_pagada(request, cuenta_id):
     if request.method == 'POST':
         try:
             cuenta = get_object_or_404(CuentaPorCobrar, id=cuenta_id)
-            
+
             # Verificar que la cuenta esté pagada
             if cuenta.estado != 'pagada':
                 return JsonResponse({
                     'success': False,
                     'message': 'Solo se pueden eliminar cuentas que estén completamente pagadas'
                 })
-            
+
             # Verificar que no esté ya eliminada
             if cuenta.eliminada:
                 return JsonResponse({
                     'success': False,
                     'message': 'Esta cuenta ya ha sido eliminada'
                 })
-            
+
             # Realizar soft delete
             cuenta.eliminar_cuenta()
-            
+
             return JsonResponse({
                 'success': True,
                 'message': f'Cuenta #{cuenta.id} - Factura {cuenta.venta.numero_factura} eliminada exitosamente'
             })
-            
+
         except Exception as e:
             return JsonResponse({
                 'success': False,
                 'message': f'Error al eliminar cuenta: {str(e)}'
             })
-    
+
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
-
-
 #=========================================================================================
 #                          ===== VISTA PARA LISTAR COMPROBANTES =====
 #=========================================================================================
