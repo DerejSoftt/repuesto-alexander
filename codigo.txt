@@ -306,12 +306,6 @@
             font-weight: 600;
             color: #28a745;
         }
-        .readonly-field {
-            background: #f8f9fa !important;
-            border-color: #6c757d !important;
-            color: #495057;
-            cursor: not-allowed;
-        }
         .button-group {
             display: flex;
             gap: 15px;
@@ -374,16 +368,6 @@
         }
         .btn-outline:hover {
             background: #667eea;
-            color: white;
-            transform: translateY(-2px);
-        }
-        .btn-warning {
-            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-            color: #721c24;
-            border: 2px solid #ff9a9e;
-        }
-        .btn-warning:hover {
-            background: #ff9a9e;
             color: white;
             transform: translateY(-2px);
         }
@@ -451,136 +435,6 @@
             animation: spin 1s linear infinite;
             margin-right: 10px;
         }
-
-        /* Nuevos estilos para cálculo automático */
-        .calculation-section {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-left: 5px solid #2196f3;
-        }
-
-        .price-results {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-
-        .price-result-item {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            border: 2px solid #e1e8ed;
-        }
-
-        .price-result-item h4 {
-            margin: 0 0 8px 0;
-            font-size: 0.9rem;
-            color: #666;
-        }
-
-        .price-result-value {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #2196f3;
-        }
-
-        .price-result-value.mayor {
-            color: #ff9800;
-        }
-
-        .auto-calculation-info {
-            background: #e8f5e8;
-            border: 1px solid #4caf50;
-            border-radius: 8px;
-            padding: 10px 15px;
-            margin-top: 10px;
-            font-size: 0.85rem;
-            color: #2e7d32;
-        }
-
-        .percentage-group {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-
-        .percentage-item {
-            flex: 1;
-            min-width: 150px;
-        }
-
-        .security-notice {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 8px;
-            padding: 12px 15px;
-            margin-top: 10px;
-            font-size: 0.85rem;
-            color: #856404;
-        }
-
-        .edit-toggle {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .toggle-label {
-            font-size: 0.9rem;
-            color: #666;
-            cursor: pointer;
-        }
-
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 24px;
-        }
-
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 24px;
-        }
-
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .toggle-slider {
-            background-color: #2196F3;
-        }
-
-        input:checked + .toggle-slider:before {
-            transform: translateX(26px);
-        }
-
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -657,15 +511,6 @@
                 margin-bottom: 20px;
                 width: 100%;
             }
-            .price-results {
-                grid-template-columns: 1fr;
-            }
-            .percentage-group {
-                flex-direction: column;
-            }
-            .percentage-item {
-                min-width: 100%;
-            }
         }
         /* Scrollbar personalizado */
         .sidebar::-webkit-scrollbar {
@@ -700,6 +545,7 @@
     </button>
     <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+
     <!-- Sidebar Navigation -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -707,67 +553,67 @@
                 <i class="fas fa-motorcycle"></i>
                 DEREJSOFT
             </h2>
-            <p>Usuario: Admin</p>
-            <p>admin@derejsoft.com</p>
+            <p>Usuario: {{ user.username }}</p>
+            <p>{{ user.email }}</p>
         </div>
         <div class="sidebar-menu">
             <a href="#" class="menu-item">
                 <i class='bx bx-home-alt'></i>
                 <span>Inicio</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'ventas' %}" class="menu-item">
                 <i class='bx bx-receipt'></i>
                 <span>Facturación</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'registrodecliente' %}" class="menu-item">
                 <i class='bx bx-user-plus'></i>
                 <span>Registrar Cliente</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'listadecliente' %}" class="menu-item">
                 <i class='bx bx-group'></i>
                 <span>Clientes</span>
             </a>
-            <a href="#" class="menu-item active">
+            <a href="{% url 'entrada' %}" class="menu-item active">
                 <i class='bx bx-package'></i>
                 <span>Entrada Mercancía</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
                 <i class='bx bx-money'></i>
                 <span>Cuenta por Cobrar</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'inventario' %}" class="menu-item">
                 <i class='bx bx-archive'></i>
                 <span>Inventario</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'registrosuplidores' %}" class="menu-item">
                 <i class='bx bx-building'></i>
                 <span>Registrar Suplidores</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
                 <i class='bx bx-buildings'></i>
                 <span>Suplidores</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'devoluciones' %}" class="menu-item">
                 <i class='bx bx-undo'></i>
                 <span>Devoluciones</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'roles' %}" class="menu-item">
                 <i class='bx bx-user-check'></i>
                 <span>Roles</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'anular' %}" class="menu-item">
                 <i class='bx bx-x-circle'></i>
                 <span>Anular Factura</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'reimprimirfactura' %}" class="menu-item">
                 <i class='bx bx-printer'></i>
                 <span>Reimprimir</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'dashboard' %}" class="menu-item">
                 <i class='bx bx-grid-alt'></i>
                 <span>Dashboard</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'index' %}" class="menu-item">
                 <i class='bx bx-log-out'></i>
                 <span>Cerrar Sesión</span>
             </a>
@@ -776,6 +622,7 @@
             <p>Derejsoft v 1.2.2</p>
         </div>
     </nav>
+
     <!-- Main Content -->
     <div class="main-content">
         <div class="container">
@@ -788,15 +635,16 @@
             </div>
             <div class="form-container">
                 <!-- Mensajes de Django -->
+                {% if messages %}
                 <div class="messages">
-                    {% if messages %}
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }}">
-                                {{ message }}
-                            </div>
-                        {% endfor %}
-                    {% endif %}
+                    {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
                 </div>
+                {% endif %}
+
                 <div class="info-card">
                     <h3>
                         <i class='bx bx-info-circle'></i>
@@ -804,12 +652,13 @@
                     </h3>
                     <p>
                         Complete todos los campos requeridos para registrar correctamente la entrada de productos al inventario.
-                        Los cálculos de precios se realizarán automáticamente al ingresar el costo base y los porcentajes.
-                        <strong>Los porcentajes se calculan de forma segura en el servidor.</strong>
+                        Los cálculos de ITBIS y precios se realizarán automáticamente.
                     </p>
                 </div>
+
                 <form id="productEntryForm" method="POST" action="{% url 'entrada' %}" enctype="multipart/form-data">
                     {% csrf_token %}
+
                     <!-- Sección de Facturación -->
                     <div class="form-section">
                         <h3 class="section-title">
@@ -833,7 +682,7 @@
                                 <select id="supplier" name="proveedor" class="form-input form-select" required>
                                     <option value="">Seleccionar proveedor</option>
                                     {% for proveedor in proveedores %}
-                                        <option value="{{ proveedor.id }}">{{ proveedor.nombre_empresa }}</option>
+                                    <option value="{{ proveedor.id }}">{{ proveedor.nombre_empresa }}</option>
                                     {% endfor %}
                                 </select>
                                 <div class="error-message" id="proveedorError"></div>
@@ -845,6 +694,7 @@
                             </div>
                         </div>
                     </div>
+
                     <!-- Sección de Producto -->
                     <div class="form-section">
                         <h3 class="section-title">
@@ -854,8 +704,7 @@
                         <div class="form-grid">
                             <div class="form-group full-width">
                                 <label class="form-label" for="descripcion">Descripción *</label>
-                                <textarea id="descripcion" name="descripcion" class="form-input form-textarea" required
-                                          placeholder="Descripción detallada del producto..."></textarea>
+                                <textarea id="descripcion" name="descripcion" class="form-input form-textarea" required></textarea>
                                 <div class="error-message" id="descripcionError"></div>
                             </div>
                             <div class="form-group">
@@ -868,7 +717,7 @@
                                     <option value="kawasaki">Kawasaki</option>
                                     <option value="ktm">KTM</option>
                                     <option value="bajaj">Bajaj</option>
-                                    <option value="tvs">TVS</option>
+                                    <option value="tvS">TVS</option>
                                     <option value="loncin">Loncin</option>
                                     <option value="kove">Kove</option>
                                     <option value="x1000">X1000</option>
@@ -880,8 +729,7 @@
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="compatibilidad">Compatibilidad</label>
-                                <input type="text" id="compatibilidad" name="compatibilidad" class="form-input" 
-                                       placeholder="Ej: Modelo de moto o vehículo">
+                                <input type="text" id="compatibilidad" name="compatibilidad" class="form-input" placeholder="Ej: Modelo de moto o vehículo">
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="color">Color *</label>
@@ -912,108 +760,38 @@
                             </div>
                         </div>
                     </div>
+
                     <!-- Sección de Costos e ITBIS -->
                     <div class="form-section">
                         <h3 class="section-title">
                             <i class='bx bx-calculator'></i>
                             Información de Costos e Impuestos
                         </h3>
-
-                        <!-- Sección para cálculo automático -->
-                        <div class="calculation-section">
-                            <h4 style="margin-bottom: 15px; color: #333; display: flex; align-items: center; gap: 10px;">
-                                <i class='bx bx-calculator'></i>
-                                Cálculo Automático de Precios
-                            </h4>
-
-                            <div class="auto-calculation-info">
-                                <i class='bx bx-info-circle'></i>
-                                Los precios se calculan automáticamente: Precio = Costo Base × (1 + Porcentaje/100)
-                            </div>
-
-                            <div class="security-notice">
-                                <i class='bx bx-shield-alt'></i>
-                                <strong>Seguridad:</strong> Los porcentajes finales se calculan en el servidor para prevenir manipulación.
-                            </div>
-
-                            <div class="price-results">
-                                <div class="price-result-item">
-                                    <h4>Precio Minorista</h4>
-                                    <div class="price-result-value" id="precioCalculado">RD$ 0.00</div>
-                                </div>
-                                <div class="price-result-item">
-                                    <h4>Precio por Mayor</h4>
-                                    <div class="price-result-value mayor" id="precioMayorCalculado">RD$ 0.00</div>
-                                </div>
-                                <div class="price-result-item">
-                                    <h4>Minorista con ITBIS</h4>
-                                    <div class="price-result-value" id="precioItbisCalculado">RD$ 0.00</div>
-                                </div>
-                                <div class="price-result-item">
-                                    <h4>Mayor con ITBIS</h4>
-                                    <div class="price-result-value mayor" id="precioMayorItbisCalculado">RD$ 0.00</div>
-                                </div>
-                            </div>
-
-                            <!-- Toggle para edición manual -->
-                            <div class="edit-toggle">
-                                <label class="toggle-label" for="editToggle">
-                                    <i class='bx bx-edit'></i>
-                                    Habilitar edición manual de precios
-                                </label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="editToggle" onchange="toggleManualEdit()">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-
                         <div class="form-grid">
                             <div class="form-group">
-                                <label class="form-label" for="costo_base">Costo Base *</label>
+                                <label class="form-label" for="costo">Costo *</label>
                                 <div class="currency-input">
-                                    <input type="number" id="costo_base" name="costo" class="form-input" required min="0" step="0.01" placeholder="0.00">
+                                    <input type="number" id="costo" name="costo" class="form-input" required min="0" step="0.01" placeholder="0.00">
                                 </div>
-                                <div class="error-message" id="costoBaseError"></div>
-                            </div>
-
-                            <div class="form-group full-width">
-                                <label class="form-label">Porcentajes de Ganancia (Para cálculo automático)</label>
-                                <div class="percentage-group">
-                                    <div class="percentage-item">
-                                        <label class="form-label" for="porcentaje_minorista">Porcentaje Minorista (%)</label>
-                                        <div class="percentage-input">
-                                            <input type="number" id="porcentaje_minorista" name="porcentaje_minorista" class="form-input"
-                                                   value="30" min="0" step="0.01" placeholder="30.00">
-                                        </div>
-                                    </div>
-                                    <div class="percentage-item">
-                                        <label class="form-label" for="porcentaje_mayor">Porcentaje por Mayor (%)</label>
-                                        <div class="percentage-input">
-                                            <input type="number" id="porcentaje_mayor" name="porcentaje_mayor" class="form-input"
-                                                   value="20" min="0" step="0.01" placeholder="20.00">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label" for="porcentaje_itbis">% ITBIS</label>
-                                <div class="percentage-input">
-                                    <input type="number" id="porcentaje_itbis" name="porcentaje_itbis" class="form-input" value="18.00" min="0" step="0.01" placeholder="18.00">
-                                </div>
+                                <div class="error-message" id="costoError"></div>
                             </div>
                             <div class="form-group">
-                                <label class="form-label" for="precio">Precio de Venta Minorista *</label>
+                                <label class="form-label" for="precio">Precio de Venta *</label>
                                 <div class="currency-input">
-                                    <input type="number" id="precio" name="precio" class="form-input calculated-field" required min="0" step="0.01" placeholder="0.00" readonly>
+                                    <input type="number" id="precio" name="precio" class="form-input" required min="0" step="0.01" placeholder="0.00">
                                 </div>
                                 <div class="error-message" id="precioError"></div>
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="precio_por_mayor">Precio por Mayor</label>
                                 <div class="currency-input">
-                                    <input type="number" id="precio_por_mayor" name="precio_por_mayor" class="form-input calculated-field" min="0" step="0.01" placeholder="0.00" readonly>
+                                    <input type="number" id="precio_por_mayor" name="precio_por_mayor" class="form-input" min="0" step="0.01" placeholder="0.00">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="porcentaje_itbis">% ITBIS</label>
+                                <div class="percentage-input">
+                                    <input type="number" id="porcentaje_itbis" name="porcentaje_itbis" class="form-input" value="18.00" min="0" step="0.01" placeholder="18.00">
                                 </div>
                             </div>
                             <div class="form-group">
@@ -1030,6 +808,7 @@
                             </div>
                         </div>
                     </div>
+
                     <!-- Sección de Observaciones -->
                     <div class="form-section">
                         <h3 class="section-title">
@@ -1044,12 +823,13 @@
                             </div>
                         </div>
                     </div>
+
                     <div class="button-group">
                         <button type="submit" class="btn btn-primary" id="submitBtn">
                             <i class='bx bx-save'></i>
                             Registrar Producto
                         </button>
-                        <a href="#" class="btn btn-secondary">
+                        <a href="{% url 'inventario' %}" class="btn btn-secondary">
                             <i class='bx bx-list-ul'></i>
                             Ver Inventario
                         </a>
@@ -1063,13 +843,16 @@
         </div>
     </div>
 
-    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <!-- Toastr -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-    <!-- JavaScript -->
     <script>
-        // Configuración de Toastr para mensajes
+        // Variables globales
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.querySelector('.sidebar-overlay');
+        const form = document.getElementById('productEntryForm');
+        const submitBtn = document.getElementById('submitBtn');
+
+        // Configuración de Toastr
         toastr.options = {
             "closeButton": true,
             "debug": false,
@@ -1088,114 +871,76 @@
             "hideMethod": "fadeOut"
         };
 
-        // Estado de edición manual
-        let manualEditEnabled = false;
-
-        // Función para habilitar/deshabilitar edición manual
-        function toggleManualEdit() {
-            manualEditEnabled = !manualEditEnabled;
-            const precioInput = document.getElementById('precio');
-            const precioMayorInput = document.getElementById('precio_por_mayor');
-            
-            if (manualEditEnabled) {
-                precioInput.readOnly = false;
-                precioInput.classList.remove('calculated-field');
-                precioInput.classList.add('readonly-field');
-                
-                precioMayorInput.readOnly = false;
-                precioMayorInput.classList.remove('calculated-field');
-                precioMayorInput.classList.add('readonly-field');
-                
-                toastr.info('Edición manual habilitada. Puedes modificar los precios directamente.');
-            } else {
-                precioInput.readOnly = true;
-                precioInput.classList.remove('readonly-field');
-                precioInput.classList.add('calculated-field');
-                
-                precioMayorInput.readOnly = true;
-                precioMayorInput.classList.remove('readonly-field');
-                precioMayorInput.classList.add('calculated-field');
-                
-                // Recalcular precios automáticamente
-                calcularPreciosAutomaticos();
-                toastr.info('Edición manual deshabilitada. Precios calculados automáticamente.');
-            }
-        }
-
         // Función para limpiar el formulario
         function limpiarFormulario() {
-            document.getElementById('productEntryForm').reset();
+            form.reset();
             document.getElementById('porcentaje_itbis').value = '18.00';
-            document.getElementById('porcentaje_minorista').value = '30';
-            document.getElementById('porcentaje_mayor').value = '20';
             document.getElementById('cantidad').value = '1';
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('entryDate').value = today;
-            manualEditEnabled = false;
-            document.getElementById('editToggle').checked = false;
-            toggleManualEdit();
-            calcularPreciosAutomaticos();
-            toastr.success('Formulario listo para un nuevo producto');
+            calculatePricesWithITBIS();
+            toastr.success('Formulario listo para nuevo producto');
         }
 
-        // Función para calcular precios automáticamente
-        function calcularPreciosAutomaticos() {
-            if (manualEditEnabled) return; // No calcular si la edición manual está habilitada
+        // Funciones para el sidebar
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            sidebarOverlay.classList.toggle('active');
+            if (window.innerWidth <= 768) {
+                document.body.classList.toggle('sidebar-open');
+            }
+        }
 
-            // Leer valores de los campos
-            const costoBase = parseFloat(document.getElementById('costo_base').value) || 0;
-            const porcentajeMinorista = parseFloat(document.getElementById('porcentaje_minorista').value) || 30;
-            const porcentajeMayor = parseFloat(document.getElementById('porcentaje_mayor').value) || 20;
+        function closeSidebar() {
+            sidebar.classList.remove('active');
+            sidebarOverlay.classList.remove('active');
+            document.body.classList.remove('sidebar-open');
+        }
+
+        // Cerrar sidebar al hacer clic en un enlace (móvil)
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    closeSidebar();
+                }
+            });
+        });
+
+        // Cálculo de precios con ITBIS
+        function calculatePricesWithITBIS() {
+            const precio = parseFloat(document.getElementById('precio').value) || 0;
+            const precioPorMayor = parseFloat(document.getElementById('precio_por_mayor').value) || 0;
             const itbisRate = parseFloat(document.getElementById('porcentaje_itbis').value) || 18;
 
-            // Validar que el costo base sea mayor que 0
-            if (costoBase <= 0) {
-                document.getElementById('precio').value = '';
-                document.getElementById('precio_por_mayor').value = '';
-                document.getElementById('precio_con_itbis').value = '';
-                document.getElementById('precio_por_mayor_con_itbis').value = '';
+            const itbisFactor = 1 + (itbisRate / 100);
 
-                document.getElementById('precioCalculado').textContent = 'RD$ 0.00';
-                document.getElementById('precioMayorCalculado').textContent = 'RD$ 0.00';
-                document.getElementById('precioItbisCalculado').textContent = 'RD$ 0.00';
-                document.getElementById('precioMayorItbisCalculado').textContent = 'RD$ 0.00';
-                return;
-            }
+            document.getElementById('precio_con_itbis').value = precio > 0
+                ? (precio * itbisFactor).toFixed(2)
+                : '0.00';
 
-            // Calcular precios sin ITBIS
-            const precioMinorista = costoBase * (1 + (porcentajeMinorista / 100));
-            const precioMayor = costoBase * (1 + (porcentajeMayor / 100));
-
-            // Calcular precios con ITBIS
-            const precioMinoristaItbis = precioMinorista * (1 + (itbisRate / 100));
-            const precioMayorItbis = precioMayor * (1 + (itbisRate / 100));
-
-            // Actualizar campos del formulario
-            document.getElementById('precio').value = precioMinorista.toFixed(2);
-            document.getElementById('precio_por_mayor').value = precioMayor.toFixed(2);
-            document.getElementById('precio_con_itbis').value = precioMinoristaItbis.toFixed(2);
-            document.getElementById('precio_por_mayor_con_itbis').value = precioMayorItbis.toFixed(2);
-
-            // Actualizar display de resultados
-            document.getElementById('precioCalculado').textContent = `RD$ ${precioMinorista.toFixed(2)}`;
-            document.getElementById('precioMayorCalculado').textContent = `RD$ ${precioMayor.toFixed(2)}`;
-            document.getElementById('precioItbisCalculado').textContent = `RD$ ${precioMinoristaItbis.toFixed(2)}`;
-            document.getElementById('precioMayorItbisCalculado').textContent = `RD$ ${precioMayorItbis.toFixed(2)}`;
+            document.getElementById('precio_por_mayor_con_itbis').value = precioPorMayor > 0
+                ? (precioPorMayor * itbisFactor).toFixed(2)
+                : '0.00';
         }
 
-        // Inicializar event listeners para cálculos automáticos
-        document.addEventListener('DOMContentLoaded', function() {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('entryDate').value = today;
+        // Event listeners para cálculos automáticos
+        document.getElementById('precio').addEventListener('input', calculatePricesWithITBIS);
+        document.getElementById('precio_por_mayor').addEventListener('input', calculatePricesWithITBIS);
+        document.getElementById('porcentaje_itbis').addEventListener('input', calculatePricesWithITBIS);
 
-            // Asignar event listeners para cálculos automáticos
-            document.getElementById('costo_base').addEventListener('input', calcularPreciosAutomaticos);
-            document.getElementById('porcentaje_minorista').addEventListener('input', calcularPreciosAutomaticos);
-            document.getElementById('porcentaje_mayor').addEventListener('input', calcularPreciosAutomaticos);
-            document.getElementById('porcentaje_itbis').addEventListener('input', calcularPreciosAutomaticos);
+        // Formatear NCF automáticamente
+        document.getElementById('ncf').addEventListener('input', function(e) {
+            let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (value.length > 11) {
+                value = value.substring(0, 11);
+            }
+            e.target.value = value;
+        });
 
-            // Inicializar cálculo
-            calcularPreciosAutomaticos();
+        // Validación de número de factura
+        document.getElementById('invoiceNumber').addEventListener('input', function(e) {
+            let value = e.target.value.toUpperCase().replace(/[^A-Z0-9\-]/g, '');
+            e.target.value = value;
         });
 
         // Validación del formulario
@@ -1209,14 +954,9 @@
                 {id: 'brand', name: 'marca', errorId: 'marcaError'},
                 {id: 'color', name: 'color', errorId: 'colorError'},
                 {id: 'cantidad', name: 'cantidad', errorId: 'cantidadError'},
-                {id: 'costo_base', name: 'costo_base', errorId: 'costoBaseError'},
-                {id: 'precio', name: 'precio', errorId: 'precioError'},
+                {id: 'costo', name: 'costo', errorId: 'costoError'},
+                {id: 'precio', name: 'precio', errorId: 'precioError'}
             ];
-
-            document.querySelectorAll('.error-message').forEach(el => {
-                el.style.display = 'none';
-                el.textContent = '';
-            });
 
             requiredFields.forEach(field => {
                 const fieldElement = document.getElementById(field.id);
@@ -1237,17 +977,19 @@
                 }
             });
 
-            const costoBaseValue = parseFloat(document.getElementById('costo_base').value) || 0;
-            if (costoBaseValue <= 0) {
-                const errorElement = document.getElementById('costoBaseError');
+            // Validación de costos
+            const costoValue = parseFloat(document.getElementById('costo').value) || 0;
+            const precioValue = parseFloat(document.getElementById('precio').value) || 0;
+
+            if (costoValue <= 0) {
+                const errorElement = document.getElementById('costoError');
                 if (errorElement) {
-                    errorElement.textContent = 'El costo base debe ser mayor a 0';
+                    errorElement.textContent = 'El costo debe ser mayor a 0';
                     errorElement.style.display = 'block';
                 }
                 isValid = false;
             }
 
-            const precioValue = parseFloat(document.getElementById('precio').value) || 0;
             if (precioValue <= 0) {
                 const errorElement = document.getElementById('precioError');
                 if (errorElement) {
@@ -1261,80 +1003,15 @@
         }
 
         // Manejo del envío del formulario
-        document.getElementById('productEntryForm').addEventListener('submit', function(e) {
+        form.addEventListener('submit', function(e) {
             e.preventDefault();
             const isValid = validateForm();
-            
+
             if (isValid) {
-                const submitBtn = document.getElementById('submitBtn');
-                const originalText = submitBtn.innerHTML;
-                
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<div class="loading-spinner"></div> Procesando...';
-
-                // Crear FormData
-                const formData = new FormData(this);
-                
-                // Enviar datos al servidor usando fetch
-                fetch(this.action, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                    },
-                    body: formData
-                })
-                .then(response => {
-                    console.log('Respuesta del servidor:', response);
-                    if (!response.ok) {
-                        throw new Error(`Error HTTP: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Datos recibidos:', data);
-                    if (data.success) {
-                        toastr.success(data.message || 'Producto registrado exitosamente');
-                        if (data.porcentajes_calculados) {
-                            console.log('Porcentajes calculados en backend:', data.porcentajes_calculados);
-                        }
-                        limpiarFormulario();
-                    } else {
-                        toastr.error(data.error || 'Error al registrar el producto');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error completo:', error);
-                    toastr.error(`Error en la conexión: ${error.message}`);
-                })
-                .finally(() => {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalText;
-                });
+                this.submit();
             }
-        });
-
-        // Funciones para el sidebar
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('active');
-            document.querySelector('.sidebar-overlay').classList.toggle('active');
-            if (window.innerWidth <= 768) {
-                document.body.classList.toggle('sidebar-open');
-            }
-        }
-
-        function closeSidebar() {
-            document.getElementById('sidebar').classList.remove('active');
-            document.querySelector('.sidebar-overlay').classList.remove('active');
-            document.body.classList.remove('sidebar-open');
-        }
-
-        // Cerrar sidebar al hacer clic en un enlace (móvil)
-        document.querySelectorAll('.menu-item').forEach(item => {
-            item.addEventListener('click', () => {
-                if (window.innerWidth <= 768) {
-                    closeSidebar();
-                }
-            });
         });
 
         // Cerrar sidebar al redimensionar ventana
@@ -1342,6 +1019,30 @@
             if (window.innerWidth > 768) {
                 closeSidebar();
             }
+        });
+
+        // Inicializar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('entryDate').value = today;
+            calculatePricesWithITBIS();
+        });
+
+        // Prevenir envío del formulario con Enter en campos individuales
+        document.querySelectorAll('.form-input').forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = this.closest('form');
+                    const inputs = Array.from(form.querySelectorAll('.form-input'));
+                    const currentIndex = inputs.indexOf(this);
+                    if (currentIndex < inputs.length - 1) {
+                        inputs[currentIndex + 1].focus();
+                    } else {
+                        submitBtn.focus();
+                    }
+                }
+            });
         });
     </script>
 </body>

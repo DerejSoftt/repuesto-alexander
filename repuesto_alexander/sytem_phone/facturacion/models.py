@@ -69,6 +69,7 @@ class Proveedor(models.Model):
         return self.nombre_empresa
 
 
+
 class EntradaProducto(models.Model):
     MARCAS = (
         ('honda', 'Honda'),
@@ -82,14 +83,17 @@ class EntradaProducto(models.Model):
         ('x1000', 'X1000'),
         ('ktm', 'KTM'),
         ('bajaj', 'Bajaj'),
+        ('super vestia', 'Super Vestia'),
         ('otros', 'Otros'),
     )
+    
     ESTADOS = (
         ('nuevo', 'Nuevo'),
         ('usado', 'Usado'),
         ('reacondicionado', 'Reacondicionado'),
         ('exhibicion', 'Exhibición'),
     )
+    
     COLORES = (
         ('negro', 'Negro'),
         ('blanco', 'Blanco'),
@@ -108,32 +112,58 @@ class EntradaProducto(models.Model):
     codigo_producto = models.CharField(max_length=20, unique=True, editable=False)
 
     # Información de facturación
-    numero_factura = models.CharField(max_length=50)
-    fecha_entrada = models.DateField(default=timezone.now)
-    proveedor = models.ForeignKey('Proveedor', on_delete=models.CASCADE)
-    ncf = models.CharField(max_length=20, blank=True, null=True)
+    numero_factura = models.CharField(max_length=50, verbose_name="Número de Factura")
+    fecha_entrada = models.DateField(default=timezone.now, verbose_name="Fecha de Entrada")
+    proveedor = models.ForeignKey('Proveedor', on_delete=models.CASCADE, verbose_name="Proveedor")
+    ncf = models.CharField(max_length=20, blank=True, null=True, verbose_name="NCF")
 
     # Información del producto
     descripcion = models.TextField(verbose_name="Descripción")
-    marca = models.CharField(max_length=20, choices=MARCAS)
+    marca = models.CharField(max_length=20, choices=MARCAS, verbose_name="Marca")
     compatibilidad = models.CharField(max_length=100, verbose_name="Compatibilidad", blank=True, null=True)
-    color = models.CharField(max_length=20, choices=COLORES)
-    cantidad = models.PositiveIntegerField(default=1)
+    color = models.CharField(max_length=20, choices=COLORES, verbose_name="Color")
+    cantidad = models.PositiveIntegerField(default=1, verbose_name="Cantidad")
     cantidad_minima = models.PositiveIntegerField(default=2, verbose_name="Cantidad Mínima")
     imagen = models.ImageField(upload_to='productos/', blank=True, null=True, verbose_name="Imagen")
 
-    # Información de costos
-    costo = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo")
-    precio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio")
-    precio_por_mayor = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio por Mayor", blank=True, null=True)
+    # Información de costos y precios
+    costo = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Base")
+    precio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Minorista")
+    precio_por_mayor = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        verbose_name="Precio por Mayor", 
+        blank=True, 
+        null=True
+    )
+
+    # Porcentajes calculados en el backend (no editables desde frontend)
+    porcentaje_minorista = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2,
+        verbose_name="Porcentaje Minorista Calculado",
+        blank=True,
+        null=True,
+        help_text="Calculado automáticamente: ((precio - costo) / costo * 100)"
+    )
+    
+    porcentaje_mayor = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2,
+        verbose_name="Porcentaje por Mayor Calculado", 
+        blank=True,
+        null=True,
+        help_text="Calculado automáticamente: ((precio_por_mayor - costo) / costo * 100)"
+    )
 
     # Campos para ITBIS
     porcentaje_itbis = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        default=18.00,
+        default=Decimal('18.00'),
         verbose_name="Porcentaje ITBIS"
     )
+    
     precio_con_itbis = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -141,6 +171,7 @@ class EntradaProducto(models.Model):
         blank=True,
         null=True
     )
+    
     precio_por_mayor_con_itbis = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -151,16 +182,14 @@ class EntradaProducto(models.Model):
 
     # Estado del producto
     activo = models.BooleanField(default=True, verbose_name="Activo")
+    es_producto_base = models.BooleanField(default=False, verbose_name="Es Producto Base")
 
     # Observaciones
-    observaciones = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True, verbose_name="Observaciones")
 
     # Auditoría
-    fecha_registro = models.DateTimeField(auto_now_add=True)
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
-
-    # Flag para productos base/plantillas
-    es_producto_base = models.BooleanField(default=False, verbose_name="Es producto base")
+    fecha_registro = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Registro")
+    fecha_actualizacion = models.DateTimeField(auto_now=True, verbose_name="Fecha de Actualización")
 
     def save(self, *args, **kwargs):
         # Generar código único si es un nuevo registro
@@ -171,16 +200,25 @@ class EntradaProducto(models.Model):
                 random_digits = ''.join(random.choices(string.digits, k=6))
                 self.codigo_producto = f"PROD-{random_digits}"
 
-        # Convertir porcentaje_itbis a float para el cálculo y luego a Decimal
-        itbis_factor = 1 + (float(self.porcentaje_itbis) / 100)
-        itbis_factor_decimal = Decimal(str(itbis_factor))
+        # CALCULAR PORCENTAJES EN EL BACKEND (SEGURIDAD)
+        if self.costo and self.costo > Decimal('0'):
+            # Calcular porcentaje minorista real
+            if self.precio:
+                self.porcentaje_minorista = ((self.precio - self.costo) / self.costo * Decimal('100')).quantize(Decimal('0.01'))
+            
+            # Calcular porcentaje por mayor real
+            if self.precio_por_mayor:
+                self.porcentaje_mayor = ((self.precio_por_mayor - self.costo) / self.costo * Decimal('100')).quantize(Decimal('0.01'))
 
         # Calcular precios con ITBIS
-        if self.precio is not None:
-            self.precio_con_itbis = self.precio * itbis_factor_decimal
-        
-        if self.precio_por_mayor is not None:
-            self.precio_por_mayor_con_itbis = self.precio_por_mayor * itbis_factor_decimal
+        if self.porcentaje_itbis:
+            itbis_factor = Decimal('1') + (self.porcentaje_itbis / Decimal('100'))
+
+            if self.precio:
+                self.precio_con_itbis = (self.precio * itbis_factor).quantize(Decimal('0.01'))
+            
+            if self.precio_por_mayor:
+                self.precio_por_mayor_con_itbis = (self.precio_por_mayor * itbis_factor).quantize(Decimal('0.01'))
 
         # Guardar cantidad anterior para el movimiento de stock
         cantidad_anterior = None
@@ -207,7 +245,7 @@ class EntradaProducto(models.Model):
         """Verifica si hay stock suficiente para la cantidad solicitada"""
         return self.cantidad >= cantidad_solicitada and self.activo
 
-    def restar_stock(self, cantidad, usuario, motivo="Venta", referencia=None):
+    def restar_stock(self, cantidad, usuario=None, motivo="Venta", referencia=None):
         """Resta cantidad del stock y registra el movimiento"""
         if not self.tiene_stock_suficiente(cantidad):
             return False
@@ -225,7 +263,7 @@ class EntradaProducto(models.Model):
         )
         return True
 
-    def sumar_stock(self, cantidad, usuario, motivo="Devolución", referencia=None):
+    def sumar_stock(self, cantidad, usuario=None, motivo="Devolución", referencia=None):
         """Suma cantidad al stock y registra el movimiento"""
         cantidad_anterior = self.cantidad
         self.cantidad += cantidad
@@ -260,6 +298,7 @@ class EntradaProducto(models.Model):
                 referencia=referencia
             )
         except (LookupError, ImportError):
+            # Log alternativo si no existe el modelo MovimientoStock
             print(f"Movimiento de Stock - {self.descripcion}:")
             print(f"  Tipo: {tipo_movimiento}")
             print(f"  Cantidad: {cantidad}")
@@ -292,6 +331,30 @@ class EntradaProducto(models.Model):
         else:
             return "success"
 
+    @property
+    def ganancia_minorista(self):
+        """Calcula la ganancia minorista por unidad"""
+        if self.precio and self.costo:
+            return self.precio - self.costo
+        return Decimal('0.00')
+
+    @property
+    def ganancia_mayor(self):
+        """Calcula la ganancia por mayor por unidad"""
+        if self.precio_por_mayor and self.costo:
+            return self.precio_por_mayor - self.costo
+        return Decimal('0.00')
+
+    @property
+    def ganancia_total_minorista(self):
+        """Calcula la ganancia total minorista"""
+        return self.ganancia_minorista * self.cantidad
+
+    @property
+    def ganancia_total_mayor(self):
+        """Calcula la ganancia total por mayor"""
+        return self.ganancia_mayor * self.cantidad
+
     def __str__(self):
         return f"{self.descripcion} - {self.codigo_producto}"
 
@@ -299,7 +362,12 @@ class EntradaProducto(models.Model):
         verbose_name = "Entrada de Producto"
         verbose_name_plural = "Entradas de Productos"
         ordering = ['-fecha_registro']
-
+        indexes = [
+            models.Index(fields=['codigo_producto']),
+            models.Index(fields=['marca']),
+            models.Index(fields=['activo']),
+            models.Index(fields=['fecha_entrada']),
+        ]
 
 
 # class EntradaProducto(models.Model):

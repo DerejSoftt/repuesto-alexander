@@ -1145,622 +1145,335 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
     // Configuración de Toastr
-    toastr.options = {
-        "closeButton": true,
-        "debug": false,
-        "newestOnTop": false,
-        "progressBar": true,
-        "positionClass": "toast-top-right",
-        "preventDuplicates": false,
-        "onclick": null,
-        "showDuration": "300",
-        "hideDuration": "1000",
-        "timeOut": "5000",
-        "extendedTimeOut": "1000",
-        "showEasing": "swing",
-        "hideEasing": "linear",
-        "showMethod": "fadeIn",
-        "hideMethod": "fadeOut"
-    };
+   // Configuración de Toastr
+ // Configuración de Toastr
+toastr.options = {
+    "closeButton": true,
+    "debug": false,
+    "newestOnTop": false,
+    "progressBar": true,
+    "positionClass": "toast-top-right",
+    "preventDuplicates": false,
+    "onclick": null,
+    "showDuration": "300",
+    "hideDuration": "1000",
+    "timeOut": "5000",
+    "extendedTimeOut": "1000",
+    "showEasing": "swing",
+    "hideEasing": "linear",
+    "showMethod": "fadeIn",
+    "hideMethod": "fadeOut"
+};
 
-    // Variables globales para facturas
-    let currentInvoice = null;
-    const invoiceNumberInput = document.getElementById('invoiceNumber');
-    const invoiceDetailsContainer = document.getElementById('invoiceDetails');
-    const noInvoiceMessage = document.getElementById('noInvoiceMessage');
-    const cancelModal = document.getElementById('cancelModal');
-    const cancellationReason = document.getElementById('cancellationReason');
+// Variables globales para facturas
+let currentInvoice = null;
+const invoiceNumberInput = document.getElementById('invoiceNumber');
+const invoiceDetailsContainer = document.getElementById('invoiceDetails');
+const noInvoiceMessage = document.getElementById('noInvoiceMessage');
+const cancelModal = document.getElementById('cancelModal');
+const cancellationReason = document.getElementById('cancellationReason');
 
-    // Variables globales para comprobantes
-    let currentComprobante = null;
-    const comprobanteNumberInput = document.getElementById('comprobanteNumber');
-    const comprobanteDetailsContainer = document.getElementById('comprobanteDetails');
-    const noComprobanteMessage = document.getElementById('noComprobanteMessage');
-    const cancelComprobanteModal = document.getElementById('cancelComprobanteModal');
-    const comprobanteCancellationReason = document.getElementById('comprobanteCancellationReason');
-
-    // Función para manejar pestañas
-    document.querySelectorAll('.tab-button').forEach(button => {
-        button.addEventListener('click', () => {
-            const tabId = button.getAttribute('data-tab');
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            button.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
-        });
+// Función para manejar pestañas
+document.querySelectorAll('.tab-button').forEach(button => {
+    button.addEventListener('click', () => {
+        const tabId = button.getAttribute('data-tab');
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        button.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
     });
+});
 
-    // Función para buscar factura
-    function searchInvoice() {
-        const invoiceNumber = invoiceNumberInput.value.trim();
-        if (!invoiceNumber) {
-            toastr.error('Por favor, ingrese un número de factura');
-            return;
+// Función para buscar factura
+function searchInvoice() {
+    const invoiceNumber = invoiceNumberInput.value.trim();
+    if (!invoiceNumber) {
+        toastr.error('Por favor, ingrese un número de factura');
+        return;
+    }
+
+    noInvoiceMessage.innerHTML = `
+        <i class='bx bx-loader bx-spin'></i>
+        <p>Buscando factura...</p>
+    `;
+    noInvoiceMessage.style.display = 'block';
+    invoiceDetailsContainer.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('numero_factura', invoiceNumber);
+    formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
+
+    fetch("{% url 'buscar_factura' %}", {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(error => { throw error; });
         }
+        return response.json();
+    })
+    .then(data => {
+        currentInvoice = data;
+        displayInvoiceDetails(data);
+    })
+    .catch(error => {
+        console.error('Error:', error);
         noInvoiceMessage.innerHTML = `
-            <i class='bx bx-loader bx-spin'></i>
-            <p>Buscando factura...</p>
+            <i class='bx bx-error'></i>
+            <p>${error.error || 'Error al buscar la factura'}</p>
         `;
-        noInvoiceMessage.style.display = 'block';
-        invoiceDetailsContainer.style.display = 'none';
+        toastr.error(error.error || 'Error al buscar la factura');
+    });
+}
 
-        const formData = new FormData();
-        formData.append('numero_factura', invoiceNumber);
-        formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
+// Función para mostrar detalles de la factura
+function displayInvoiceDetails(invoice) {
+    const fecha = new Date(invoice.fecha).toLocaleDateString('es-DO');
+    const itemsHTML = invoice.items.map(item => `
+        <tr>
+            <td>${item.producto}</td>
+            <td>${item.cantidad}</td>
+            <td>RD$ ${parseFloat(item.precio).toLocaleString('es-DO')}</td>
+            <td>RD$ ${parseFloat(item.subtotal).toLocaleString('es-DO')}</td>
+        </tr>
+    `).join('');
 
-        fetch('{% url "buscar_factura" %}', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(error => { throw error; });
-            }
-            return response.json();
-        })
-        .then(data => {
-            currentInvoice = data;
-            displayInvoiceDetails(data);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            noInvoiceMessage.innerHTML = `
-                <i class='bx bx-error'></i>
-                <p>${error.error || 'Error al buscar la factura'}</p>
-            `;
-            toastr.error(error.error || 'Error al buscar la factura');
-        });
-    }
-
-    // Función para mostrar detalles de la factura
-    function displayInvoiceDetails(invoice) {
-        const fecha = new Date(invoice.fecha).toLocaleDateString('es-DO');
-        const itemsHTML = invoice.items.map(item => `
-            <tr>
-                <td>${item.producto}</td>
-                <td>${item.cantidad}</td>
-                <td>RD$ ${item.precio.toLocaleString()}</td>
-                <td>RD$ ${item.subtotal.toLocaleString()}</td>
-            </tr>
-        `).join('');
-
-        let creditoHTML = '';
-        if (invoice.tipo_venta === 'Crédito') {
-            creditoHTML = `
-                <h3 style="margin: 20px 0 15px; color: #343a40;">
-                    <i class='bx bx-credit-card'></i> Información de Crédito
-                </h3>
-                <div class="invoice-details-grid">
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Monto Inicial</div>
-                        <div class="invoice-detail-value">RD$ ${invoice.monto_inicial.toLocaleString()}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Monto Financiado</div>
-                        <div class="invoice-detail-value">RD$ ${invoice.monto_financiado.toLocaleString()}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Tasa de Interés</div>
-                        <div class="invoice-detail-value">${invoice.tasa_interes}%</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Plazo</div>
-                        <div class="invoice-detail-value">${invoice.plazo_meses} meses</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Cuota Mensual</div>
-                        <div class="invoice-detail-value">RD$ ${invoice.cuota_mensual.toLocaleString()}</div>
-                    </div>
+    const invoiceHTML = `
+        <div class="invoice-section">
+            <div class="invoice-header">
+                <div class="invoice-number">Factura #${invoice.numero_factura}</div>
+                <div class="invoice-status ${invoice.estado === 'activa' ? 'status-active' : 'status-cancelled'}">
+                    ${invoice.estado.toUpperCase()}
                 </div>
-            `;
-        }
-
-        const invoiceHTML = `
-            <div class="invoice-section">
-                <div class="invoice-header">
-                    <div class="invoice-number">Factura #${invoice.numero_factura}</div>
-                    <div class="invoice-status ${invoice.estado === 'activa' ? 'status-active' : 'status-cancelled'}">
-                        ${invoice.estado.toUpperCase()}
-                    </div>
-                </div>
-                <div class="invoice-details-grid">
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Fecha de Emisión</div>
-                        <div class="invoice-detail-value">${fecha}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Vendedor</div>
-                        <div class="invoice-detail-value">${invoice.vendedor}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Tipo de Venta</div>
-                        <div class="invoice-detail-value">${invoice.tipo_venta}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Forma de Pago</div>
-                        <div class="invoice-detail-value">${invoice.forma_pago}</div>
-                    </div>
-                </div>
-                <h3 style="margin: 20px 0 15px; color: #343a40;">
-                    <i class='bx bx-user'></i> Información del Cliente
-                </h3>
-                <div class="invoice-details-grid">
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Nombre</div>
-                        <div class="invoice-detail-value">${invoice.cliente.nombre}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Cédula/RNC</div>
-                        <div class="invoice-detail-value">${invoice.cliente.cedula}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Teléfono</div>
-                        <div class="invoice-detail-value">${invoice.cliente.telefono}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Dirección</div>
-                        <div class="invoice-detail-value">${invoice.cliente.direccion}</div>
-                    </div>
-                </div>
-                ${creditoHTML}
-                <h3 style="margin: 20px 0 15px; color: #343a40;">
-                    <i class='bx bx-cart'></i> Productos Vendidos
-                </h3>
-                <table class="invoice-items-table">
-                    <thead>
-                        <tr>
-                            <th>Producto</th>
-                            <th>Cantidad</th>
-                            <th>Precio Unitario</th>
-                            <th>Subtotal</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsHTML}
-                    </tbody>
-                </table>
-                <div class="invoice-totals">
-                    <div class="totals-container">
-                        <div class="total-row">
-                            <span>Subtotal:</span>
-                            <span>RD$ ${invoice.subtotal.toLocaleString()}</span>
-                        </div>
-                        <div class="total-row">
-                            <span>ITBIS:</span>
-                            <span>RD$ ${invoice.itbis.toLocaleString()}</span>
-                        </div>
-                        <div class="total-row">
-                            <span>Total:</span>
-                            <span>RD$ ${invoice.total.toLocaleString()}</span>
-                        </div>
-                        ${invoice.tipo_venta === 'Crédito' ? `
-                        <div class="total-row" style="border-top: 2px solid #007bff; margin-top: 10px;">
-                            <span><strong>Monto Inicial Pagado:</strong></span>
-                            <span><strong>RD$ ${invoice.monto_inicial.toLocaleString()}</strong></span>
-                        </div>
-                        ` : ''}
-                    </div>
-                </div>
-                ${invoice.estado === 'activa' ? `
-                <div class="cancellation-buttons">
-                    <button class="btn btn-danger" onclick="openCancelModal()">
-                        <i class='bx bx-x-circle'></i>
-                        Anular Factura
-                    </button>
-                </div>
-                ` : `
-                <div class="cancellation-reason">
-                    <h4><i class='bx bx-info-circle'></i> Esta factura ya ha sido anulada</h4>
-                    <p><strong>Motivo:</strong> ${invoice.motivo_anulacion || 'No especificado'}</p>
-                    <p><strong>Fecha de anulación:</strong> ${invoice.fecha_anulacion ? new Date(invoice.fecha_anulacion).toLocaleString('es-DO') : 'N/A'}</p>
-                </div>
-                `}
             </div>
-        `;
+            <div class="invoice-details-grid">
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Fecha de Emisión</div>
+                    <div class="invoice-detail-value">${fecha}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Vendedor</div>
+                    <div class="invoice-detail-value">${invoice.vendedor}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Tipo de Venta</div>
+                    <div class="invoice-detail-value">${invoice.tipo_venta}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Forma de Pago</div>
+                    <div class="invoice-detail-value">${invoice.forma_pago}</div>
+                </div>
+            </div>
+            <h3 style="margin: 20px 0 15px; color: #343a40;">
+                <i class='bx bx-user'></i> Información del Cliente
+            </h3>
+            <div class="invoice-details-grid">
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Nombre</div>
+                    <div class="invoice-detail-value">${invoice.cliente.nombre}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Cédula/RNC</div>
+                    <div class="invoice-detail-value">${invoice.cliente.cedula}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Teléfono</div>
+                    <div class="invoice-detail-value">${invoice.cliente.telefono}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Dirección</div>
+                    <div class="invoice-detail-value">${invoice.cliente.direccion}</div>
+                </div>
+            </div>
+            <h3 style="margin: 20px 0 15px; color: #343a40;">
+                <i class='bx bx-cart'></i> Productos Vendidos
+            </h3>
+            <table class="invoice-items-table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio Unitario</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHTML}
+                </tbody>
+            </table>
+            <div class="invoice-totals">
+                <div class="totals-container">
+                    <div class="total-row">
+                        <span>Subtotal:</span>
+                        <span>RD$ ${parseFloat(invoice.subtotal).toLocaleString('es-DO')}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>ITBIS:</span>
+                        <span>RD$ ${parseFloat(invoice.itbis).toLocaleString('es-DO')}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Total:</span>
+                        <span>RD$ ${parseFloat(invoice.total).toLocaleString('es-DO')}</span>
+                    </div>
+                    <div class="total-row">
+    <span>Total a Pagar:</span>
+    <span>RD$ ${parseFloat(invoice.total_a_pagar).toLocaleString('es-DO')}</span>
+</div>
 
-        invoiceDetailsContainer.innerHTML = invoiceHTML;
-        invoiceDetailsContainer.style.display = 'block';
-        noInvoiceMessage.style.display = 'none';
+                </div>
+            </div>
+            ${invoice.estado === 'activa' ? `
+            <div class="cancellation-buttons">
+                <button class="btn btn-danger" onclick="openCancelModal()">
+                    <i class='bx bx-x-circle'></i>
+                    Anular Factura
+                </button>
+            </div>
+            ` : `
+            <div class="cancellation-reason">
+                <h4><i class='bx bx-info-circle'></i> Esta factura ya ha sido anulada</h4>
+                <p><strong>Motivo:</strong> ${invoice.motivo_anulacion || 'No especificado'}</p>
+                <p><strong>Fecha de anulación:</strong> ${invoice.fecha_anulacion ? new Date(invoice.fecha_anulacion).toLocaleString('es-DO') : 'N/A'}</p>
+            </div>
+            `}
+        </div>
+    `;
+
+    invoiceDetailsContainer.innerHTML = invoiceHTML;
+    invoiceDetailsContainer.style.display = 'block';
+    noInvoiceMessage.style.display = 'none';
+}
+
+// Función para abrir modal de anulación de factura
+function openCancelModal() {
+    cancelModal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+// Función para cerrar modal de anulación de factura
+function closeCancelModal() {
+    cancelModal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+    cancellationReason.value = '';
+}
+
+// Función para confirmar anulación de factura
+function confirmCancellation() {
+    const reason = cancellationReason.value.trim();
+    if (!reason) {
+        toastr.error('Por favor, ingrese el motivo de la anulación');
+        return;
     }
 
-    // Función para abrir modal de anulación de factura
-    function openCancelModal() {
-        cancelModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
+    Swal.fire({
+        title: '¿Estás seguro?',
+        text: "¡No podrás revertir la anulación de esta factura!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sí, anular factura',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const formData = new FormData();
+            formData.append('factura_id', currentInvoice.id);
+            formData.append('motivo', reason);
+            formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
 
-    // Función para cerrar modal de anulación de factura
-    function closeCancelModal() {
-        cancelModal.classList.remove('active');
-        document.body.style.overflow = 'auto';
-        cancellationReason.value = '';
-    }
-
-    // Función para confirmar anulación de factura
-    function confirmCancellation() {
-        const reason = cancellationReason.value.trim();
-        if (!reason) {
-            toastr.error('Por favor, ingrese el motivo de la anulación');
-            return;
-        }
-
-        Swal.fire({
-            title: '¿Estás seguro?',
-            text: "¡No podrás revertir la anulación de esta factura!",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#dc3545',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, anular factura',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                const formData = new FormData();
-                formData.append('factura_id', currentInvoice.id);
-                formData.append('motivo', reason);
-                formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
-
-                fetch('{% url "anular_factura_action" %}', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {  // Verifica que la clave sea 'success' en minúscula
-                        Swal.fire({
-                            title: '¡Anulado!',
-                            text: data.message || 'La factura ha sido anulada exitosamente.',
-                            icon: 'success',
-                            confirmButtonColor: '#3085d6',
-                            confirmButtonText: 'Aceptar'
-                        }).then(() => {
-                            closeCancelModal();
-                            searchInvoice();
-                        });
-                    } else {
-                        Swal.fire({
-                            title: 'Error',
-                            text: data.message || 'Ocurrió un error al anular la factura.',
-                            icon: 'error',
-                            confirmButtonColor: '#d33',
-                            confirmButtonText: 'Aceptar'
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
+            fetch("{% url 'anular_factura_action' %}", {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: '¡Anulado!',
+                        text: data.message || 'La factura ha sido anulada exitosamente.',
+                        icon: 'success',
+                        confirmButtonColor: '#3085d6',
+                        confirmButtonText: 'Aceptar'
+                    }).then(() => {
+                        closeCancelModal();
+                        searchInvoice();
+                    });
+                } else {
                     Swal.fire({
                         title: 'Error',
-                        text: 'Error al anular la factura: ' + (error.error || 'Error desconocido'),
+                        text: data.message || 'Ocurrió un error al anular la factura.',
                         icon: 'error',
                         confirmButtonColor: '#d33',
                         confirmButtonText: 'Aceptar'
                     });
-                });
-            }
-        });
-    }
-
-    // Función para buscar comprobante
-    function searchComprobante() {
-        const comprobanteNumber = comprobanteNumberInput.value.trim();
-        if (!comprobanteNumber) {
-            toastr.error('Por favor, ingrese un número de comprobante');
-            return;
-        }
-        noComprobanteMessage.innerHTML = `
-            <i class='bx bx-loader bx-spin'></i>
-            <p>Buscando comprobante...</p>
-        `;
-        noComprobanteMessage.style.display = 'block';
-        comprobanteDetailsContainer.style.display = 'none';
-
-        const formData = new FormData();
-        formData.append('numero_comprobante', comprobanteNumber);
-        formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
-
-        fetch('{% url "buscar_comprobante" %}', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(error => { throw error; });
-            }
-            return response.json();
-        })
-        .then(data => {
-            currentComprobante = data;
-            displayComprobanteDetails(data);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            noComprobanteMessage.innerHTML = `
-                <i class='bx bx-error'></i>
-                <p>${error.error || 'Error al buscar el comprobante'}</p>
-            `;
-            toastr.error(error.error || 'Error al buscar el comprobante');
-        });
-    }
-
-    // Función para mostrar detalles del comprobante
-    function displayComprobanteDetails(comprobante) {
-        const fechaEmision = new Date(comprobante.fecha_emision).toLocaleString('es-DO');
-        const fechaPago = new Date(comprobante.fecha_pago).toLocaleString('es-DO');
-
-        const comprobanteHTML = `
-            <div class="invoice-section">
-                <div class="invoice-header">
-                    <div class="invoice-number">Comprobante #${comprobante.numero_comprobante}</div>
-                    <div class="invoice-status ${comprobante.estado === 'activo' ? 'status-active' : 'status-cancelled'}">
-                        ${comprobante.estado.toUpperCase()}
-                    </div>
-                </div>
-                <div class="invoice-details-grid">
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Fecha de Emisión</div>
-                        <div class="invoice-detail-value">${fechaEmision}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Tipo de Comprobante</div>
-                        <div class="invoice-detail-value">${comprobante.tipo_comprobante_display}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Método de Pago</div>
-                        <div class="invoice-detail-value">${comprobante.metodo_pago_display}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Monto del Pago</div>
-                        <div class="invoice-detail-value">RD$ ${parseFloat(comprobante.monto_pago).toLocaleString()}</div>
-                    </div>
-                </div>
-                <h3 style="margin: 20px 0 15px; color: #343a40;">
-                    <i class='bx bx-user'></i> Información del Cliente
-                </h3>
-                <div class="invoice-details-grid">
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Nombre</div>
-                        <div class="invoice-detail-value">${comprobante.cliente_nombre}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Cédula/RNC</div>
-                        <div class="invoice-detail-value">${comprobante.cliente_documento}</div>
-                    </div>
-                    ${comprobante.cliente_telefono ? `
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Teléfono</div>
-                        <div class="invoice-detail-value">${comprobante.cliente_telefono}</div>
-                    </div>
-                    ` : ''}
-                    ${comprobante.cliente_direccion ? `
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Dirección</div>
-                        <div class="invoice-detail-value">${comprobante.cliente_direccion}</div>
-                    </div>
-                    ` : ''}
-                </div>
-                <h3 style="margin: 20px 0 15px; color: #343a40;">
-                    <i class='bx bx-credit-card'></i> Información del Pago
-                </h3>
-                <div class="invoice-details-grid">
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Fecha del Pago</div>
-                        <div class="invoice-detail-value">${fechaPago}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Número de Factura</div>
-                        <div class="invoice-detail-value">${comprobante.numero_factura}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Monto Original</div>
-                        <div class="invoice-detail-value">RD$ ${parseFloat(comprobante.monto_original).toLocaleString()}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Descripción</div>
-                        <div class="invoice-detail-value">${comprobante.descripcion}</div>
-                    </div>
-                </div>
-                <h3 style="margin: 20px 0 15px; color: #343a40;">
-                    <i class='bx bx-line-chart'></i> Estado de la Cuenta
-                </h3>
-                <div class="invoice-details-grid">
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Saldo Antes del Pago</div>
-                        <div class="invoice-detail-value">RD$ ${parseFloat(comprobante.saldo_antes_pago).toLocaleString()}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Monto del Pago</div>
-                        <div class="invoice-detail-value" style="color: #28a745;">RD$ ${parseFloat(comprobante.monto_pago).toLocaleString()}</div>
-                    </div>
-                    <div class="invoice-detail-group">
-                        <div class="invoice-detail-label">Saldo Después del Pago</div>
-                        <div class="invoice-detail-value">RD$ ${parseFloat(comprobante.saldo_despues_pago).toLocaleString()}</div>
-                    </div>
-                </div>
-                ${comprobante.estado === 'activo' ? `
-                <div class="cancellation-buttons">
-                    <button class="btn btn-danger" onclick="openCancelComprobanteModal()">
-                        <i class='bx bx-x-circle'></i>
-                        Anular Comprobante
-                    </button>
-                </div>
-                ` : `
-                <div class="cancellation-reason">
-                    <h4><i class='bx bx-info-circle'></i> Este comprobante ya ha sido anulado</h4>
-                    <p><strong>Motivo:</strong> ${comprobante.motivo_anulacion || 'No especificado'}</p>
-                    <p><strong>Fecha de anulación:</strong> ${comprobante.fecha_anulacion ? new Date(comprobante.fecha_anulacion).toLocaleString('es-DO') : 'N/A'}</p>
-                </div>
-                `}
-            </div>
-        `;
-
-        comprobanteDetailsContainer.innerHTML = comprobanteHTML;
-        comprobanteDetailsContainer.style.display = 'block';
-        noComprobanteMessage.style.display = 'none';
-    }
-
-    // Función para abrir modal de anulación de comprobante
-    function openCancelComprobanteModal() {
-        cancelComprobanteModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-
-    // Función para cerrar modal de anulación de comprobante
-    function closeCancelComprobanteModal() {
-        cancelComprobanteModal.classList.remove('active');
-        document.body.style.overflow = 'auto';
-        comprobanteCancellationReason.value = '';
-    }
-
-    // Función para confirmar anulación de comprobante
-    function confirmComprobanteCancellation() {
-        const reason = comprobanteCancellationReason.value.trim();
-        if (!reason) {
-            toastr.error('Por favor, ingrese el motivo de la anulación');
-            return;
-        }
-
-        Swal.fire({
-            title: '¿Estás seguro?',
-            text: "¡No podrás revertir la anulación de este comprobante!",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#dc3545',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, anular comprobante',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                const formData = new FormData();
-                formData.append('numero_comprobante', currentComprobante.numero_comprobante);
-                formData.append('motivo', reason);
-                formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
-
-                fetch('{% url "anular_comprobante_action" %}', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {  // Verifica que la clave sea 'success' en minúscula
-                        Swal.fire({
-                            title: '¡Anulado!',
-                            text: data.message || 'El comprobante ha sido anulado exitosamente.',
-                            icon: 'success',
-                            confirmButtonColor: '#3085d6',
-                            confirmButtonText: 'Aceptar'
-                        }).then(() => {
-                            closeCancelComprobanteModal();
-                            searchComprobante();
-                        });
-                    } else {
-                        Swal.fire({
-                            title: 'Error',
-                            text: data.message || 'Ocurrió un error al anular el comprobante.',
-                            icon: 'error',
-                            confirmButtonColor: '#d33',
-                            confirmButtonText: 'Aceptar'
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    Swal.fire({
-                        title: 'Error',
-                        text: 'Error al anular el comprobante: ' + (error.error || 'Error desconocido'),
-                        icon: 'error',
-                        confirmButtonColor: '#d33',
-                        confirmButtonText: 'Aceptar'
-                    });
-                });
-            }
-        });
-    }
-
-    // Cerrar modales al hacer clic fuera de ellos
-    cancelModal.addEventListener('click', function(e) {
-        if (e.target === cancelModal) {
-            closeCancelModal();
-        }
-    });
-
-    cancelComprobanteModal.addEventListener('click', function(e) {
-        if (e.target === cancelComprobanteModal) {
-            closeCancelComprobanteModal();
-        }
-    });
-
-    // Permitir búsqueda con Enter
-    invoiceNumberInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            searchInvoice();
-        }
-    });
-
-    comprobanteNumberInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            searchComprobante();
-        }
-    });
-
-    // Manejar el cierre de sesión con SweetAlert2
-        document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
-            e.preventDefault();
-
-            Swal.fire({
-                title: '¿Cerrar Sesión?',
-                text: '¿Está seguro de que desea cerrar la sesión?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#667eea',
-                cancelButtonColor: '#dc3545',
-                confirmButtonText: 'Sí, Cerrar Sesión',
-                cancelButtonText: 'Cancelar',
-                backdrop: true
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = "{% url 'index' %}";
                 }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Error al anular la factura: ' + (error.error || 'Error desconocido'),
+                    icon: 'error',
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Aceptar'
+                });
             });
-        });
+        }
+    });
+}
 
-        
-    // Funciones para el sidebar
-    function toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.querySelector('.sidebar-overlay');
-        sidebar.classList.toggle('active');
-        overlay.classList.toggle('active');
-        document.body.classList.toggle('sidebar-open');
+// Cerrar modales al hacer clic fuera de ellos
+cancelModal.addEventListener('click', function(e) {
+    if (e.target === cancelModal) {
+        closeCancelModal();
     }
+});
 
-    function closeSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.querySelector('.sidebar-overlay');
-        sidebar.classList.remove('active');
-        overlay.classList.remove('active');
-        document.body.classList.remove('sidebar-open');
+// Permitir búsqueda con Enter
+invoiceNumberInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchInvoice();
     }
+});
+
+// Funciones para el sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    sidebar.classList.toggle('active');
+    overlay.classList.toggle('active');
+    document.body.classList.toggle('sidebar-open');
+}
+
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    sidebar.classList.remove('active');
+    overlay.classList.remove('active');
+    document.body.classList.remove('sidebar-open');
+}
+
+// Manejar el cierre de sesión con SweetAlert2
+document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
+    e.preventDefault();
+    Swal.fire({
+        title: '¿Cerrar Sesión?',
+        text: '¿Está seguro de que desea cerrar la sesión?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#667eea',
+        cancelButtonColor: '#dc3545',
+        confirmButtonText: 'Sí, Cerrar Sesión',
+        cancelButtonText: 'Cancelar',
+        backdrop: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = "{% url 'index' %}";
+        }
+    });
+});
+
     </script>
 </body>
 </html>

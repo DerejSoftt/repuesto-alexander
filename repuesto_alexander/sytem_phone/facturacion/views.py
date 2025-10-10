@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404 
 from .models import EntradaProducto, Proveedor,  Cliente, Caja, Venta, DetalleVenta, MovimientoStock, CuentaPorCobrar, PagoCuentaPorCobrar, CierreCaja, ComprobantePago
 from django.contrib import messages
+from django.utils import timezone
 
 from django.http import JsonResponse
 from django.db import models
@@ -1310,34 +1311,29 @@ def procesar_venta(request):
     try:
         data = request.POST
         user = request.user
-
         if not data:
             return JsonResponse({'success': False, 'message': 'No se recibieron datos'})
 
         # Datos de la venta
         payment_type = data.get('payment_type', 'contado')
         payment_method = data.get('payment_method', 'efectivo')
-        subtotal_con_itbis = safe_decimal(data.get('subtotal', 0))  # Este valor YA INCLUYE ITBIS
-        discount_percentage = safe_decimal(data.get('discount_percentage', 0))
-        discount_amount = safe_decimal(data.get('discount_amount', 0))
-        total = safe_decimal(data.get('total', 0))
-        total_a_pagar = safe_decimal(data.get('total_a_pagar', 0))  # Campo nuevo
-        cash_received = safe_decimal(data.get('cash_received', 0))
-        change_amount = safe_decimal(data.get('change_amount', 0))
+        subtotal_con_itbis = Decimal(data.get('subtotal', 0))  # Este valor YA INCLUYE ITBIS
+        discount_percentage = Decimal(data.get('discount_percentage', 0))
+        discount_amount = Decimal(data.get('discount_amount', 0))
+        total = Decimal(data.get('total', 0))
+        total_a_pagar = Decimal(data.get('total_a_pagar', 0))
+        cash_received = Decimal(data.get('cash_received', 0))
+        change_amount = Decimal(data.get('change_amount', 0))
 
         # Validaciones
         if payment_type not in ['contado', 'credito']:
             return JsonResponse({'success': False, 'message': 'Tipo de pago inválido'})
-
         if payment_method not in ['efectivo', 'tarjeta', 'transferencia']:
             return JsonResponse({'success': False, 'message': 'Método de pago inválido'})
-
         if subtotal_con_itbis <= 0:
             return JsonResponse({'success': False, 'message': 'El subtotal debe ser mayor a 0'})
-
         if total <= 0:
             return JsonResponse({'success': False, 'message': 'El total debe ser mayor a 0'})
-
         if discount_percentage < 0 or discount_percentage > 100:
             return JsonResponse({'success': False, 'message': 'El porcentaje de descuento debe estar entre 0 y 100'})
 
@@ -1349,10 +1345,8 @@ def procesar_venta(request):
         # Validar descuento
         discount_amount_calculado = (subtotal_con_itbis * discount_percentage) / Decimal('100.00')
         total_calculado = subtotal_con_itbis - discount_amount_calculado
-
         if abs(discount_amount - discount_amount_calculado) > Decimal('0.01'):
             discount_amount = discount_amount_calculado
-
         if abs(total - total_calculado) > Decimal('0.01'):
             total = total_calculado
 
@@ -1361,11 +1355,9 @@ def procesar_venta(request):
         client_name = data.get('client_name', '').strip()
         client_document = data.get('client_document', '').strip()
         cliente = None
-
         if payment_type == 'credito':
             if not client_id:
                 return JsonResponse({'success': False, 'message': 'Debe seleccionar un cliente para ventas a crédito'})
-
             try:
                 from .models import Cliente, CuentaPorCobrar
                 cliente = Cliente.objects.get(id=client_id, status=True)
@@ -1376,7 +1368,6 @@ def procesar_venta(request):
                 ).exclude(estado='pagada')
                 total_deuda = sum(cuenta.saldo_pendiente for cuenta in cuentas_pendientes)
                 total_con_nueva_venta = total_deuda + total
-
                 if total_con_nueva_venta > cliente.credit_limit:
                     return JsonResponse({
                         'success': False,
@@ -1384,7 +1375,6 @@ def procesar_venta(request):
                     })
             except Cliente.DoesNotExist:
                 return JsonResponse({'success': False, 'message': 'Cliente no válido'})
-
         else:
             if not client_name:
                 return JsonResponse({'success': False, 'message': 'Debe ingresar el nombre del cliente'})
@@ -1393,12 +1383,10 @@ def procesar_venta(request):
         sale_items_json = data.get('sale_items')
         if not sale_items_json:
             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
-
         try:
             sale_items = json.loads(sale_items_json)
         except json.JSONDecodeError:
             return JsonResponse({'success': False, 'message': 'Formato de productos no válido'})
-
         if not sale_items:
             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
 
@@ -1408,7 +1396,6 @@ def procesar_venta(request):
             try:
                 producto = EntradaProducto.objects.get(id=item['id'], activo=True)
                 cantidad_solicitada = int(item['quantity'])
-
                 if producto.cantidad < cantidad_solicitada:
                     nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
                     return JsonResponse({
@@ -1435,14 +1422,14 @@ def procesar_venta(request):
             descuento_porcentaje=discount_percentage,
             descuento_monto=discount_amount,
             total=total,
-            total_a_pagar=total_a_pagar,  # Aquí se guarda el nuevo campo
+            total_a_pagar=total_a_pagar,
             montoinicial=0,
             efectivo_recibido=cash_received,
             cambio=change_amount,
             completada=True,
             fecha_venta=timezone.now(),
         )
-        venta.save()
+        venta.save()  # Esto llamará al método save personalizado y generará el número de factura
 
         # Log de la venta
         print(f"=== VENTA CREADA ===")
@@ -1453,7 +1440,7 @@ def procesar_venta(request):
         print(f"Descuento %: {venta.descuento_porcentaje}%")
         print(f"Descuento monto: RD${venta.descuento_monto}")
         print(f"Total: RD${venta.total}")
-        print(f"Total a pagar: RD${venta.total_a_pagar}")  # Log del nuevo campo
+        print(f"Total a pagar: RD${venta.total_a_pagar}")
 
         # Procesar detalles de venta y descontar stock
         productos_para_cuenta = []
@@ -1461,20 +1448,17 @@ def procesar_venta(request):
             try:
                 producto = EntradaProducto.objects.get(id=item['id'])
                 cantidad = int(item['quantity'])
-                precio_unitario = safe_decimal(item['price'])
-                subtotal_item = safe_decimal(item['subtotal'])
+                precio_unitario = Decimal(item['price'])
+                subtotal_item = Decimal(item['subtotal'])
                 calculated_subtotal = precio_unitario * cantidad
-
                 if abs(calculated_subtotal - subtotal_item) > Decimal('0.01'):
                     nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
                     print(f"Advertencia: Subtotal inconsistente para {nombre_producto}")
                     subtotal_item = calculated_subtotal
-
                 producto.cantidad -= cantidad
                 producto.save(update_fields=['cantidad'])
                 nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
                 print(f"Stock actualizado: {nombre_producto} -{cantidad} unidades")
-
                 detalle = DetalleVenta(
                     venta=venta,
                     producto=producto,
@@ -1484,7 +1468,6 @@ def procesar_venta(request):
                 )
                 detalle.save()
                 productos_para_cuenta.append(f"{nombre_producto} x{cantidad} - RD${precio_unitario:.2f}")
-
             except EntradaProducto.DoesNotExist:
                 transaction.set_rollback(True)
                 return JsonResponse({'success': False, 'message': f'Producto no encontrado: ID {item.get("id", "Desconocido")}'})
@@ -1528,7 +1511,7 @@ Productos:
                 'descuento_porcentaje': float(venta.descuento_porcentaje),
                 'descuento_monto': float(venta.descuento_monto),
                 'total': float(venta.total),
-                'total_a_pagar': float(venta.total_a_pagar),  # Incluido en la respuesta
+                'total_a_pagar': float(venta.total_a_pagar),
                 'efectivo_recibido': float(venta.efectivo_recibido),
                 'cambio': float(venta.cambio),
                 'items_count': len(sale_items)
@@ -1540,7 +1523,6 @@ Productos:
         import traceback
         print(f"Error completo: {traceback.format_exc()}")
         return JsonResponse({'success': False, 'message': f'Error al procesar la venta: {str(e)}'})
-# Vista para mostrar el comprobante de venta
 
 @login_required
 def comprobante_venta(request, venta_id):
@@ -2305,7 +2287,6 @@ def guardar_cliente(request):
         })
 
 
-
 @csrf_exempt
 def obtener_datos_entrada(request, entrada_id):
     """Obtiene datos de una entrada existente para autocompletar el formulario"""
@@ -2335,84 +2316,8 @@ def obtener_datos_entrada(request, entrada_id):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
 
-@require_POST
+# Vista para obtener productos disponibles (plantillas)
 @csrf_exempt
-def agregar_nuevo_producto(request):
-    """Crea una nueva plantilla de producto con datos mínimos para el modal"""
-    if request.method == 'POST':
-        try:
-            nombre = request.POST.get('newProductName', '').strip()
-            marca = request.POST.get('newProductBrand', '').strip()
-
-            if not nombre:
-                return JsonResponse({'success': False, 'error': 'El nombre del producto es requerido'})
-
-            if not marca:
-                return JsonResponse({'success': False, 'error': 'La marca es requerida'})
-
-            existe = EntradaProducto.objects.filter(
-                descripcion__iexact=nombre,
-                marca=marca,
-                es_producto_base=True,
-                activo=True
-            ).exists()
-
-            if existe:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Ya existe una plantilla con este nombre y marca'
-                })
-
-            try:
-                proveedor_default = Proveedor.objects.filter(activo=True).first()
-                if not proveedor_default:
-                    proveedor_default = Proveedor.objects.create(
-                        nombre_empresa="Proveedor General",
-                        contacto="Contacto general",
-                        telefono="000-000-0000",
-                        activo=True
-                    )
-            except Exception:
-                proveedor_default = Proveedor.objects.create(
-                    nombre_empresa="Proveedor General",
-                    contacto="Contacto general",
-                    telefono="000-000-0000",
-                    activo=True
-                )
-
-            nueva_plantilla = EntradaProducto(
-                numero_factura=f"PLANTILLA-{int(time.time())}",
-                fecha_entrada=timezone.now().date(),
-                proveedor=proveedor_default,
-                descripcion=nombre,
-                marca=marca,
-                compatibilidad=nombre,
-                color="negro",
-                cantidad=1,
-                cantidad_minima=2,
-                costo=0.00,
-                precio=0.00,
-                porcentaje_itbis=18.00,
-                observaciones="Plantilla creada mediante modal rápido",
-                activo=True,
-                es_producto_base=True
-            )
-            nueva_plantilla.save()
-
-            return JsonResponse({
-                'success': True,
-                'plantilla_id': nueva_plantilla.id,
-                'nombre_producto': nueva_plantilla.descripcion,
-                'marca': nueva_plantilla.get_marca_display(),
-                'marca_valor': nueva_plantilla.marca,
-                'mensaje': 'Plantilla creada exitosamente.'
-            })
-
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': f'Error al crear la plantilla: {str(e)}'})
-
-    return JsonResponse({'success': False, 'error': 'Método no permitido'})
-
 def obtener_productos_disponibles(request):
     """Obtiene plantillas de productos para el dropdown"""
     try:
@@ -2420,7 +2325,6 @@ def obtener_productos_disponibles(request):
             es_producto_base=True,
             activo=True
         ).order_by('descripcion', 'marca')
-
         plantillas_data = []
         for plantilla in plantillas:
             plantillas_data.append({
@@ -2435,12 +2339,11 @@ def obtener_productos_disponibles(request):
                 'precio': float(plantilla.precio),
                 'precio_por_mayor': float(plantilla.precio_por_mayor) if plantilla.precio_por_mayor else 0,
             })
-
         return JsonResponse({'success': True, 'plantillas': plantillas_data})
-
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
+# Vista para obtener datos de una plantilla
 @csrf_exempt
 def obtener_datos_plantilla(request, plantilla_id):
     """Obtiene datos de una plantilla para autocompletar campos"""
@@ -2466,14 +2369,85 @@ def obtener_datos_plantilla(request, plantilla_id):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
 
+# Vista para agregar una nueva plantilla de producto
+@csrf_exempt
+@require_POST
+def agregar_nuevo_producto(request):
+    """Crea una nueva plantilla de producto con datos mínimos para el modal"""
+    try:
+        nombre = request.POST.get('newProductName', '').strip()
+        marca = request.POST.get('newProductBrand', '').strip()
+        if not nombre:
+            return JsonResponse({'success': False, 'error': 'El nombre del producto es requerido'})
+        if not marca:
+            return JsonResponse({'success': False, 'error': 'La marca es requerida'})
+
+        existe = EntradaProducto.objects.filter(
+            descripcion__iexact=nombre,
+            marca=marca,
+            es_producto_base=True,
+            activo=True
+        ).exists()
+        if existe:
+            return JsonResponse({
+                'success': False,
+                'error': 'Ya existe una plantilla con este nombre y marca'
+            })
+
+        try:
+            proveedor_default = Proveedor.objects.filter(activo=True).first()
+            if not proveedor_default:
+                proveedor_default = Proveedor.objects.create(
+                    nombre_empresa="Proveedor General",
+                    contacto="Contacto general",
+                    telefono="000-000-0000",
+                    activo=True
+                )
+        except Exception:
+            proveedor_default = Proveedor.objects.create(
+                nombre_empresa="Proveedor General",
+                contacto="Contacto general",
+                telefono="000-000-0000",
+                activo=True
+            )
+
+        nueva_plantilla = EntradaProducto(
+            numero_factura=f"PLANTILLA-{int(time.time())}",
+            fecha_entrada=timezone.now().date(),
+            proveedor=proveedor_default,
+            descripcion=nombre,
+            marca=marca,
+            compatibilidad=nombre,
+            color="negro",
+            cantidad=1,
+            cantidad_minima=2,
+            costo=0.00,
+            precio=0.00,
+            porcentaje_itbis=18.00,
+            observaciones="Plantilla creada mediante modal rápido",
+            activo=True,
+            es_producto_base=True
+        )
+        nueva_plantilla.save()
+        return JsonResponse({
+            'success': True,
+            'plantilla_id': nueva_plantilla.id,
+            'nombre_producto': nueva_plantilla.descripcion,
+            'marca': nueva_plantilla.get_marca_display(),
+            'marca_valor': nueva_plantilla.marca,
+            'mensaje': 'Plantilla creada exitosamente.'
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al crear la plantilla: {str(e)}'})
+
+
 @csrf_exempt
 def entrada(request):
     """Vista principal para registro de entradas de productos"""
     if request.method == 'POST':
         try:
-            # Depuración: Imprimir archivos recibidos
-            print("Archivos recibidos en request.FILES:", request.FILES)
-
+            print("Datos POST recibidos:", request.POST)  # Debug
+            
             # Obtener datos del formulario
             numero_factura = request.POST.get('numero_factura', '').strip()
             fecha_entrada = request.POST.get('fecha_entrada', '')
@@ -2483,13 +2457,7 @@ def entrada(request):
             marca = request.POST.get('marca', '').strip()
             compatibilidad = request.POST.get('compatibilidad', '').strip()
             color = request.POST.get('color', '')
-            imagen = request.FILES.get('imagen')  # Obtener imagen de request.FILES
-
-            # Depuración: Imprimir detalles de la imagen
-            if imagen:
-                print(f"Imagen recibida: {imagen.name} (Tamaño: {imagen.size} bytes)")
-            else:
-                print("No se recibió ninguna imagen.")
+            imagen = request.FILES.get('imagen')
 
             # Manejar valores numéricos
             try:
@@ -2498,26 +2466,26 @@ def entrada(request):
                 cantidad = 1
 
             try:
-                costo = float(request.POST.get('costo', 0))
+                costo = Decimal(request.POST.get('costo', 0))
             except (ValueError, TypeError):
-                costo = 0.0
+                costo = Decimal('0.00')
 
             try:
-                precio = float(request.POST.get('precio', 0))
+                precio = Decimal(request.POST.get('precio', 0))
             except (ValueError, TypeError):
-                precio = 0.0
+                precio = Decimal('0.00')
 
             try:
-                precio_por_mayor = float(request.POST.get('precio_por_mayor', 0))
+                precio_por_mayor = Decimal(request.POST.get('precio_por_mayor', 0))
             except (ValueError, TypeError):
                 precio_por_mayor = None
 
             try:
-                porcentaje_itbis = float(request.POST.get('porcentaje_itbis', 18.00))
+                porcentaje_itbis = Decimal(request.POST.get('porcentaje_itbis', 18.00))
             except (ValueError, TypeError):
-                porcentaje_itbis = 18.00
+                porcentaje_itbis = Decimal('18.00')
 
-            # Validaciones básicas
+            # Validar campos requeridos
             required_fields = [
                 ('numero_factura', numero_factura, 'Número de factura'),
                 ('fecha_entrada', fecha_entrada, 'Fecha de entrada'),
@@ -2530,27 +2498,45 @@ def entrada(request):
 
             for field_name, field_value, field_display in required_fields:
                 if not field_value:
-                    messages.error(request, f'{field_display} es requerido')
-                    return redirect('entrada')
+                    error_msg = f'{field_display} es requerido'
+                    messages.error(request, error_msg)
+                    return JsonResponse({'success': False, 'error': error_msg})
 
             if cantidad <= 0:
-                messages.error(request, 'La cantidad debe ser mayor a 0')
-                return redirect('entrada')
+                error_msg = 'La cantidad debe ser mayor a 0'
+                messages.error(request, error_msg)
+                return JsonResponse({'success': False, 'error': error_msg})
 
-            if costo <= 0:
-                messages.error(request, 'El costo debe ser mayor a 0')
-                return redirect('entrada')
+            if costo <= Decimal('0'):
+                error_msg = 'El costo debe ser mayor a 0'
+                messages.error(request, error_msg)
+                return JsonResponse({'success': False, 'error': error_msg})
 
-            if precio <= 0:
-                messages.error(request, 'El precio debe ser mayor a 0')
-                return redirect('entrada')
+            if precio <= Decimal('0'):
+                error_msg = 'El precio debe ser mayor a 0'
+                messages.error(request, error_msg)
+                return JsonResponse({'success': False, 'error': error_msg})
+
+            # CALCULAR PORCENTAJES EN EL BACKEND (NO CONFIAR EN EL FRONTEND)
+            # Calcular porcentaje minorista real
+            if costo > 0:
+                porcentaje_minorista_real = ((precio - costo) / costo * 100).quantize(Decimal('0.01'))
+            else:
+                porcentaje_minorista_real = Decimal('0.00')
+
+            # Calcular porcentaje por mayor real
+            if precio_por_mayor and costo > 0:
+                porcentaje_mayor_real = ((precio_por_mayor - costo) / costo * 100).quantize(Decimal('0.01'))
+            else:
+                porcentaje_mayor_real = None
 
             # Obtener el proveedor
             try:
                 proveedor = Proveedor.objects.get(id=proveedor_id, activo=True)
             except Proveedor.DoesNotExist:
-                messages.error(request, 'Proveedor no válido')
-                return redirect('entrada')
+                error_msg = 'Proveedor no válido'
+                messages.error(request, error_msg)
+                return JsonResponse({'success': False, 'error': error_msg})
 
             # Crear la entrada de producto
             entrada_producto = EntradaProducto(
@@ -2568,23 +2554,32 @@ def entrada(request):
                 precio=precio,
                 precio_por_mayor=precio_por_mayor,
                 porcentaje_itbis=porcentaje_itbis,
-                imagen=imagen,  # Asignar la imagen al modelo
+                imagen=imagen,
+                # Guardar los porcentajes calculados en el backend
+                porcentaje_minorista=porcentaje_minorista_real,
+                porcentaje_mayor=porcentaje_mayor_real,
             )
-
             entrada_producto.save()
-
-            messages.success(request, '✅ Producto registrado exitosamente en el inventario')
-            return redirect('entrada')
-
+            
+            messages.success(request, 'Producto registrado exitosamente en el inventario')
+            return JsonResponse({
+                'success': True, 
+                'message': 'Producto registrado exitosamente',
+                'porcentajes_calculados': {
+                    'minorista': float(porcentaje_minorista_real),
+                    'mayor': float(porcentaje_mayor_real) if porcentaje_mayor_real else None
+                }
+            })
+            
         except Exception as e:
-            messages.error(request, f'Error al registrar el producto: {str(e)}')
-            print(f"Error al guardar: {str(e)}")  # Depuración
-            return redirect('entrada')
+            error_msg = f'Error al registrar el producto: {str(e)}'
+            print(f"Error completo: {e}")
+            messages.error(request, error_msg)
+            return JsonResponse({'success': False, 'error': error_msg})
 
     # GET request - mostrar el formulario
     proveedores = Proveedor.objects.filter(activo=True)
     fecha_actual = timezone.now().date().isoformat()
-
     return render(request, 'facturacion/entrada.html', {
         'proveedores': proveedores,
         'fecha_actual': fecha_actual
@@ -4275,25 +4270,23 @@ def anular(request):
     return render(request, "facturacion/anular.html")
 
 
-
-
 def buscar_factura(request):
     if request.method == 'POST':
         try:
             numero_factura = request.POST.get('numero_factura', '').strip()
-            
+
             if not numero_factura:
                 return JsonResponse({'error': 'Número de factura requerido'}, status=400)
-            
+
             # Buscar la factura
             try:
                 venta = Venta.objects.get(numero_factura=numero_factura)
             except Venta.DoesNotExist:
                 return JsonResponse({'error': 'Factura no encontrada'}, status=404)
-            
+
             # Obtener detalles de la venta
             detalles = DetalleVenta.objects.filter(venta=venta)
-            
+
             # Información básica del cliente
             cliente_info = {
                 'nombre': venta.cliente_nombre,
@@ -4301,10 +4294,10 @@ def buscar_factura(request):
                 'telefono': 'N/A',
                 'direccion': 'N/A',
             }
-            
+
             # Determinar tipo de venta
             tipo_venta = 'Contado' if venta.tipo_venta == 'contado' else 'Crédito'
-            
+
             # Formatear datos para la respuesta
             factura_data = {
                 'id': venta.id,
@@ -4316,31 +4309,26 @@ def buscar_factura(request):
                 'vendedor': f"{venta.vendedor.first_name} {venta.vendedor.last_name}",
                 'items': [],
                 'subtotal': float(venta.subtotal),
-                'itbis': float(venta.total - venta.subtotal),
+                'itbis': float(venta.itbis_monto),  # Usamos itbis_monto en lugar de calcularlo
                 'total': float(venta.total),
+                'total_a_pagar': float(venta.total_a_pagar),  # Incluimos total_a_pagar
                 'forma_pago': venta.get_metodo_pago_display(),
-                'monto_inicial': float(venta.montoinicial) if venta.montoinicial else 0,
-                'es_financiada': venta.es_financiada,
-                'monto_financiado': float(venta.monto_financiado) if venta.monto_financiado else 0,
-                'tasa_interes': float(venta.tasa_interes) if venta.tasa_interes else 0,
-                'plazo_meses': venta.plazo_meses if venta.plazo_meses else 0,
-                'cuota_mensual': float(venta.cuota_mensual) if venta.cuota_mensual else 0,
             }
-            
+
             # Agregar items
             for detalle in detalles:
                 factura_data['items'].append({
-                    'producto': detalle.producto.nombre_producto,
+                    'producto': detalle.producto.descripcion,
                     'cantidad': detalle.cantidad,
                     'precio': float(detalle.precio_unitario),
                     'subtotal': float(detalle.subtotal)
                 })
-            
+
             return JsonResponse(factura_data)
-            
+
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
-    
+
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
 
@@ -4350,38 +4338,36 @@ def anular_factura(request):
         try:
             factura_id = request.POST.get('factura_id')
             motivo = request.POST.get('motivo', '').strip()
-            
+
             if not motivo:
                 return JsonResponse({'error': 'Motivo de anulación requerido'}, status=400)
-            
+
             # Buscar la factura
             try:
                 venta = Venta.objects.get(id=factura_id, anulada=False)
             except Venta.DoesNotExist:
                 return JsonResponse({'error': 'Factura no encontrada o ya anulada'}, status=404)
-            
+
             # Anular la factura
             venta.anulada = True
             venta.motivo_anulacion = motivo
             venta.fecha_anulacion = timezone.now()
             venta.usuario_anulacion = request.user
             venta.save()
-            
+
             # Restaurar el inventario
             detalles = DetalleVenta.objects.filter(venta=venta)
             for detalle in detalles:
                 producto = detalle.producto
                 producto.cantidad += detalle.cantidad
                 producto.save()
-            
+
             return JsonResponse({'success': True, 'message': 'Factura anulada correctamente'})
-            
+
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
-    
+
     return JsonResponse({'error': 'Método no permitido'}, status=405)
-
-
 
 
 def reimprimir_factura(request):
