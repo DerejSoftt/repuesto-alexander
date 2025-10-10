@@ -226,9 +226,9 @@
                 {% if venta.cliente.apodo %}
                 <div><strong>Apodo:</strong> {{ venta.cliente.apodo }}</div>
                 {% endif %}
-                <div><strong>NCF:</strong> {{ venta.ncf|default:"B0140000000" }}</div>
+                <div><strong>NCF:</strong> {{ venta.ncf|default:"" }}</div>
                 <div><strong>Cliente:</strong> {{ venta.cliente_nombre }}</div>
-                <div><strong>RNC/Céd:</strong> {{ venta.cliente_documento }}</div>
+                <div><strong>RNC/Céd:</strong> {{ venta.cliente_documento|default:"B0140000000"  }}</div>
                 <div><strong>Tipo:</strong> {{ venta.get_tipo_venta_display }}</div>
                 {% if venta.cliente.telefono %}
                 <div><strong>TEL:</strong> {{ venta.cliente.telefono }}</div>
@@ -274,7 +274,7 @@
         <span>{{ total_articulos }}</span>
     </div>
     <div>
-        <strong>Total $:</strong>
+        <strong>Subtotal $:</strong>
         <span>${{ venta.total|floatformat:2|intcomma }}</span>
     </div>
     <!-- <div>
