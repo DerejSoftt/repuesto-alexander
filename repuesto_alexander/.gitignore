@@ -1,0 +1,9 @@
+env/
+comandos.txt
+
+null/
+*.sql
+*.sqlite3   
+
+__pycache__/
+*.txt
