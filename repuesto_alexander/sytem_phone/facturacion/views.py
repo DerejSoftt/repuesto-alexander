@@ -53,6 +53,30 @@ from functools import wraps
 
 
 
+def check_module_access(module_name):
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            # Superusuarios tienen acceso total
+            if request.user.is_superuser:
+                return view_func(request, *args, **kwargs)
+            
+            # Verificar si el usuario tiene acceso al módulo
+            user_groups = request.user.groups.values_list('name', flat=True)
+            
+            # Módulos permitidos por defecto para todos los usuarios
+            allowed_modules = ['ventas', 'inventario']
+            
+            if module_name in allowed_modules:
+                return view_func(request, *args, **kwargs)
+            
+            # Si no tiene acceso, redirigir
+            messages.error(request, 'No tienes permiso para acceder a este módulo.')
+            return redirect('ventas')
+        
+        return wrapper
+    return decorator
+
 
 
 # Create your views her
@@ -687,8 +711,10 @@ def superuser_required(view_func):
 
 
 # Vista para renderizar la página de inventario
+@login_required
+@check_module_access('inventario')
 def inventario(request):
-    return render(request, "facturacion/inventario.html")
+    return render(request, "facturacion/inventario.html", {'user': request.user})
 
 # Vista para obtener los datos del inventario (JSON)
 def inventario_datos(request):
@@ -1039,6 +1065,7 @@ def iniciocaja(request):
 
 
 @login_required
+@check_module_access('ventas')
 def ventas(request):
     # Verificar que el usuario tenga una caja abierta
     try:
@@ -2916,7 +2943,7 @@ def generar_comprobante_pdf(request, comprobante_id):
             return y - line_height
 
         # Encabezado del comprobante
-        y_position = draw_centered_text("DDMAX - MOTO IMPORT", y_position, 8, True)  # Tamaño reducido
+        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 8, True)  # Tamaño reducido
         y_position = draw_centered_text("COMPROBANTE DE PAGO", y_position, 10, True)
         y_position -= line_height / 2  # Espacio adicional
 
@@ -2957,10 +2984,10 @@ def generar_comprobante_pdf(request, comprobante_id):
         # Información de totales (usando `total_a_pagar` para saldo pendiente, CON ITBIS para referencia)
         y_position = draw_centered_text("RESUMEN DE CUENTA", y_position, 10, True)
         y_position -= small_line_height
-        y_position = draw_left_text(f"Monto Original (sin ITBIS): RD$ {monto_total_original:,.2f}", y_position, 9)
-        y_position = draw_left_text(f"Monto Total (con ITBIS): RD$ {monto_total_con_itbis:,.2f}", y_position, 9)
+        y_position = draw_left_text(f"Monto Original: RD$ {monto_total_original:,.2f}", y_position, 9)
+        #y_position = draw_left_text(f"Monto Total (con ITBIS): RD$ {monto_total_con_itbis:,.2f}", y_position, 9)
         y_position = draw_left_text(f"Pagado Acumulado: RD$ {comprobante.cuenta.monto_pagado:,.2f}", y_position, 9)
-        y_position = draw_left_text(f"Saldo Pendiente (sin ITBIS): RD$ {saldo_pendiente:,.2f}", y_position, 9, True)
+        y_position = draw_left_text(f"Saldo Pendiente: RD$ {saldo_pendiente:,.2f}", y_position, 9, True)
         y_position -= line_height
 
         # Línea separadora final
@@ -2989,7 +3016,7 @@ def generar_comprobante_pdf(request, comprobante_id):
         y_position -= line_height
 
         # Información de la empresa
-        y_position = draw_centered_text("DDMAX - MOTO IMPORT", y_position, 8, True)
+        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 8, True)
         y_position -= line_height * 1.5
 
         # Mensaje de agradecimiento
@@ -2997,8 +3024,8 @@ def generar_comprobante_pdf(request, comprobante_id):
         y_position -= small_line_height
 
         # Información de contacto de la empresa (más pequeña)
-        y_position = draw_centered_text("DDMAX - MOTO IMPORT", y_position, 7)
-        y_position = draw_centered_text("Tel: (809) 656-3374", y_position, 7)
+        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 7)
+        y_position = draw_centered_text("Tel: (849) 353-5344", y_position, 7)
 
         # Agregar código de barras o QR si es necesario (opcional)
         y_position -= line_height
@@ -4545,7 +4572,7 @@ def buscar_comprobante(request):
                 'metodo_pago': pago.metodo_pago,
                 'metodo_pago_display': pago.get_metodo_pago_display(),
                 'numero_factura': cuenta.venta.numero_factura if cuenta.venta else "N/A",
-                'monto_original': float(cuenta.monto_total_con_interes) if cuenta.monto_total_con_interes else 0,
+                'monto_original': float(cuenta.monto_total),  # Usar monto_total en lugar de monto_total_con_interes
                 'saldo_antes_pago': float(saldo_antes_pago),
                 'saldo_despues_pago': float(saldo_despues_pago),
                 'descripcion': pago.observaciones or f"Pago de cuota - {comprobante.numero_comprobante}",
@@ -4563,8 +4590,6 @@ def buscar_comprobante(request):
             return JsonResponse({'error': f'Error interno del servidor: {str(e)}'}, status=500)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
-
-
 
 def anular_comprobante_action(request):
     if request.method != 'POST':
@@ -4596,13 +4621,11 @@ def anular_comprobante_action(request):
         with transaction.atomic():
             # Revertir el pago en la cuenta por cobrar
             cuenta.monto_pagado -= pago.monto
-
-            # Calcular el nuevo saldo pendiente
-            monto_total_cuenta = cuenta.monto_total
-            nuevo_saldo_pendiente = monto_total_cuenta - cuenta.monto_pagado
+            # Aumentar el saldo pendiente
+            cuenta.save()
 
             # Actualizar el estado de la cuenta según el nuevo saldo pendiente
-            if nuevo_saldo_pendiente <= 0:
+            if cuenta.saldo_pendiente <= 0:
                 cuenta.estado = 'pagada'
             elif cuenta.monto_pagado > 0:
                 cuenta.estado = 'parcial'
@@ -4627,17 +4650,18 @@ def anular_comprobante_action(request):
         return JsonResponse({
             'success': True,
             'message': 'Comprobante anulado exitosamente',
-            'numero_comprobante': comprobante.numero_comprobante
+            'numero_comprobante': comprobante.numero_comprobante,
+            'nuevo_saldo_pendiente': float(cuenta.saldo_pendiente)
         })
 
     except ComprobantePago.DoesNotExist:
         return JsonResponse({'error': 'Comprobante no encontrado'}, status=404)
+
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error en anular_comprobante_action: {str(e)}")
         return JsonResponse({'error': f'Error al anular el comprobante: {str(e)}'}, status=500)
-
 
 
 

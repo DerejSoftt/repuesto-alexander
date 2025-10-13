@@ -1,9 +1,11 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - D'uro Cell</title>
+    <title>Dashboard Super Bestia</title>
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -724,7 +726,7 @@
     <div class="sidebar-header">
         <h2>
             <i class="fas fa-motorcycle"></i>
-            DEREJSOFT
+            Super Bestia
         </h2>
         <p>Usuario: {{ user.username }}</p>
         <p>{{ user.email }}</p>
@@ -737,6 +739,10 @@
         <a href="{% url 'ventas' %}" class="menu-item">
             <i class='bx bx-receipt'></i>
             <span>Facturación</span>
+        </a>
+         <a href="{% url 'cotizacion' %}" class="menu-item">
+                <i class='bx bx-calculator'></i>
+                <span>Cotizacion</span>
         </a>
         <a href="{% url 'registrodecliente' %}" class="menu-item">
             <i class='bx bx-user-plus'></i>
@@ -802,7 +808,7 @@
     <div class="main-content" id="mainContent">
         <!-- Topbar -->
         <div class="topbar">
-            <div class="topbar-title">Dashboard - Derejsoft</div>
+            <div class="topbar-title">Dashboard Super Bestia</div>
             <div class="topbar-divider"></div>
             <nav class="topbar-nav">
                 <a href="#" class="topbar-nav-item">

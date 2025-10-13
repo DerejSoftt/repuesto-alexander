@@ -1,9 +1,11 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cotización - Derejsoft</title>
+    <title>Cotización</title>
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -705,58 +707,97 @@
         <div class="sidebar-header">
             <h2>
                 <i class="fas fa-motorcycle"></i>
-                DEREJSOFT
+                Super Bestia
             </h2>
-            <p>Usuario: jose</p>
+            <p>Usuario: {{ user.username }}</p>
+            <p>{{ user.email }}</p>
         </div>
-        <div class="sidebar-menu">
+          <div class="sidebar-menu">
             <a href="#" class="menu-item">
                 <i class='bx bx-home-alt'></i>
                 <span>Inicio</span>
             </a>
-            <a href="#" class="menu-item active">
+            <a href="{% url 'ventas' %}" class="menu-item">
                 <i class='bx bx-receipt'></i>
                 <span>Facturación</span>
             </a>
-            <a href="#" class="menu-item">
+             <a href="{% url 'cotizacion' %}" class="menu-item active">
+                <i class='bx bx-calculator'></i>
+                <span>Cotizacion</span>
+            </a>
+            <a href="{% url 'registrodecliente' %}" class="menu-item">
                 <i class='bx bx-user-plus'></i>
                 <span>Registrar Cliente</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'listadecliente' %}" class="menu-item">
                 <i class='bx bx-group'></i>
                 <span>Clientes</span>
             </a>
-            <a href="#" class="menu-item">
+            {% if has_ventas_access or user.is_superuser %}
+            <a href="{% url 'entrada' %}" class="menu-item">
                 <i class='bx bx-package'></i>
                 <span>Entrada Mercancía</span>
             </a>
-            <a href="#" class="menu-item">
+              {% endif %}
+            <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
                 <i class='bx bx-money'></i>
                 <span>Cuenta por Cobrar</span>
             </a>
-            <a href="#" class="menu-item">
+            <a href="{% url 'inventario' %}" class="menu-item">
                 <i class='bx bx-archive'></i>
                 <span>Inventario</span>
             </a>
-            <a href="#" class="menu-item">
+            {% if has_registrosuplidores_access or user.is_superuser %}
+            <a href="{% url 'registrosuplidores' %}" class="menu-item">
                 <i class='bx bx-building'></i>
                 <span>Registrar Suplidores</span>
             </a>
-            <a href="#" class="menu-item">
+                {% endif %}
+
+            {% if has_gestiondesuplidores_access or user.is_superuser %}
+            <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
                 <i class='bx bx-buildings'></i>
                 <span>Suplidores</span>
             </a>
-            <a href="#" class="menu-item">
+              {% endif %}
+              
+              
+              {% if has_devoluciones_access or user.is_superuser %}
+            <a href="{% url 'devoluciones' %}" class="menu-item">
                 <i class='bx bx-undo'></i>
                 <span>Devoluciones</span>
             </a>
-            <a href="#" class="menu-item">
+            {% endif %}
+
+            {% if has_roles_access or user.is_superuser %}
+            <a href="{% url 'roles' %}" class="menu-item">
                 <i class='bx bx-user-check'></i>
                 <span>Roles</span>
             </a>
-            <a href="#" class="menu-item">
+            {% endif %}
+           
+            {% if has_anular_access or user.is_superuser %}
+            <a href="{% url 'anular' %}" class="menu-item">
                 <i class='bx bx-x-circle'></i>
                 <span>Anular Factura</span>
+            </a>
+              {% endif %}
+
+            <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+                <i class='bx bx-printer'></i>
+                <span>Reimprimir</span>
+            </a>
+
+            {% if has_dashboard_access or user.is_superuser %}
+            <a href="{% url 'dashboard' %}" class="menu-item">
+                <i class='bx bx-grid-alt'></i>
+                <span>Dashboard</span>
+            </a>
+                {% endif %}
+                
+            <a href="{% url 'index' %}" class="menu-item">
+                <i class='bx bx-log-out'></i>
+                <span>Cerrar Sesión</span>
             </a>
         </div>
         <div class="sidebar-footer">
@@ -768,7 +809,7 @@
         <div class="container">
             <!-- Print Header (only visible when printing) -->
             <div class="print-header">
-                <h1><i class="fas fa-motorcycle"></i> DEREJSOFT</h1>
+                <h1><i class="fas fa-motorcycle"></i> Super Bestia</h1>
                 <p><strong>Sistema de Gestión de Inventario</strong></p>
                 <p>Tel: (809) 555-1234 | Email: info@derejsoft.com</p>
                 <p>RNC: 123-45678-9</p>
@@ -778,7 +819,7 @@
                     <i class='bx bx-file-blank'></i>
                     Nueva Cotización
                 </h1>
-                <p>Sistema de Cotización y Facturación - Derejsoft</p>
+                <p>Sistema de Cotización y Facturación </p>
             </div>
             <div class="content-container">
                 <!-- Client Information -->

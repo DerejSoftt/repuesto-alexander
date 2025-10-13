@@ -1,9 +1,11 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anular Factura/Comprobante - D'uro Cell</title>
+    <title>Anular Factura/Comprobante</title>
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -911,7 +913,7 @@
     <div class="sidebar-header">
         <h2>
             <i class="fas fa-motorcycle"></i>
-            DEREJSOFT
+            Super Bestia
         </h2>
         <p>Usuario: {{ user.username }}</p>
         <p>{{ user.email }}</p>
@@ -925,6 +927,10 @@
             <i class='bx bx-receipt'></i>
             <span>Facturación</span>
         </a>
+         <a href="{% url 'cotizacion' %}" class="menu-item">
+                <i class='bx bx-calculator'></i>
+                <span>Cotizacion</span>
+            </a>
         <a href="{% url 'registrodecliente' %}" class="menu-item">
             <i class='bx bx-user-plus'></i>
             <span>Registrar Cliente</span>
@@ -991,7 +997,7 @@
                     <i class='bx bx-x-circle'></i>
                     Anulación de Facturas/Comprobantes
                 </h1>
-                <p>Gestión de anulaciones - Derejsoft</p>
+                <p>Gestión De Anulaciones Repuesto Super Bestia</p>
             </div>
             <div class="tabs-container">
                 <div class="tabs">
@@ -1147,6 +1153,7 @@
     // Configuración de Toastr
    // Configuración de Toastr
  // Configuración de Toastr
+// Configuración de Toastr
 toastr.options = {
     "closeButton": true,
     "debug": false,
@@ -1172,6 +1179,13 @@ const invoiceDetailsContainer = document.getElementById('invoiceDetails');
 const noInvoiceMessage = document.getElementById('noInvoiceMessage');
 const cancelModal = document.getElementById('cancelModal');
 const cancellationReason = document.getElementById('cancellationReason');
+
+// Variables globales para comprobantes
+let currentComprobante = null;
+const comprobanteNumberInput = document.getElementById('comprobanteNumber');
+const comprobanteDetailsContainer = document.getElementById('comprobanteDetails');
+const noComprobanteMessage = document.getElementById('noComprobanteMessage');
+const cancelComprobanteModal = document.getElementById('cancelComprobanteModal');
 
 // Función para manejar pestañas
 document.querySelectorAll('.tab-button').forEach(button => {
@@ -1317,10 +1331,9 @@ function displayInvoiceDetails(invoice) {
                         <span>RD$ ${parseFloat(invoice.total).toLocaleString('es-DO')}</span>
                     </div>
                     <div class="total-row">
-    <span>Total a Pagar:</span>
-    <span>RD$ ${parseFloat(invoice.total_a_pagar).toLocaleString('es-DO')}</span>
-</div>
-
+                        <span>Total a Pagar:</span>
+                        <span>RD$ ${parseFloat(invoice.total_a_pagar).toLocaleString('es-DO')}</span>
+                    </div>
                 </div>
             </div>
             ${invoice.estado === 'activa' ? `
@@ -1345,6 +1358,150 @@ function displayInvoiceDetails(invoice) {
     noInvoiceMessage.style.display = 'none';
 }
 
+// Función para buscar comprobante
+function searchComprobante() {
+    const comprobanteNumber = comprobanteNumberInput.value.trim();
+    if (!comprobanteNumber) {
+        toastr.error('Por favor, ingrese un número de comprobante');
+        return;
+    }
+
+    noComprobanteMessage.innerHTML = `
+        <i class='bx bx-loader bx-spin'></i>
+        <p>Buscando comprobante...</p>
+    `;
+    noComprobanteMessage.style.display = 'block';
+    comprobanteDetailsContainer.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('numero_comprobante', comprobanteNumber);
+    formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
+
+    fetch("{% url 'buscar_comprobante' %}", {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(error => { throw error; });
+        }
+        return response.json();
+    })
+    .then(data => {
+        currentComprobante = data;
+        displayComprobanteDetails(data);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        noComprobanteMessage.innerHTML = `
+            <i class='bx bx-error'></i>
+            <p>${error.error || 'Error al buscar el comprobante'}</p>
+        `;
+        toastr.error(error.error || 'Error al buscar el comprobante');
+    });
+}
+
+// Función para mostrar detalles del comprobante
+function displayComprobanteDetails(comprobante) {
+    const fechaEmision = new Date(comprobante.fecha_emision).toLocaleDateString('es-DO');
+    const fechaPago = new Date(comprobante.fecha_pago).toLocaleDateString('es-DO');
+
+    const comprobanteHTML = `
+        <div class="invoice-section">
+            <div class="invoice-header">
+                <div class="invoice-number">Comprobante #${comprobante.numero_comprobante}</div>
+                <div class="invoice-status status-active">
+                    ACTIVO
+                </div>
+            </div>
+            <div class="invoice-details-grid">
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Fecha de Emisión</div>
+                    <div class="invoice-detail-value">${fechaEmision}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Tipo de Comprobante</div>
+                    <div class="invoice-detail-value">${comprobante.tipo_comprobante_display}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Método de Pago</div>
+                    <div class="invoice-detail-value">${comprobante.metodo_pago_display}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Fecha de Pago</div>
+                    <div class="invoice-detail-value">${fechaPago}</div>
+                </div>
+            </div>
+            <h3 style="margin: 20px 0 15px; color: #343a40;">
+                <i class='bx bx-user'></i> Información del Cliente
+            </h3>
+            <div class="invoice-details-grid">
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Nombre</div>
+                    <div class="invoice-detail-value">${comprobante.cliente_nombre}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Cédula/RNC</div>
+                    <div class="invoice-detail-value">${comprobante.cliente_documento}</div>
+                </div>
+                ${comprobante.cliente_telefono ? `
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Teléfono</div>
+                    <div class="invoice-detail-value">${comprobante.cliente_telefono}</div>
+                </div>
+                ` : ''}
+                ${comprobante.cliente_direccion ? `
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Dirección</div>
+                    <div class="invoice-detail-value">${comprobante.cliente_direccion}</div>
+                </div>
+                ` : ''}
+            </div>
+            <h3 style="margin: 20px 0 15px; color: #343a40;">
+                <i class='bx bx-money'></i> Información del Pago
+            </h3>
+            <div class="invoice-details-grid">
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Número de Factura</div>
+                    <div class="invoice-detail-value">${comprobante.numero_factura}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Monto Original</div>
+                    <div class="invoice-detail-value">RD$ ${parseFloat(comprobante.monto_original).toLocaleString('es-DO')}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Monto del Pago</div>
+                    <div class="invoice-detail-value">RD$ ${parseFloat(comprobante.monto_pago).toLocaleString('es-DO')}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Saldo Antes del Pago</div>
+                    <div class="invoice-detail-value">RD$ ${parseFloat(comprobante.saldo_antes_pago).toLocaleString('es-DO')}</div>
+                </div>
+                <div class="invoice-detail-group">
+                    <div class="invoice-detail-label">Saldo Después del Pago</div>
+                    <div class="invoice-detail-value">RD$ ${parseFloat(comprobante.saldo_despues_pago).toLocaleString('es-DO')}</div>
+                </div>
+            </div>
+            ${comprobante.descripcion ? `
+            <div class="invoice-detail-group full-width">
+                <div class="invoice-detail-label">Descripción/Observaciones</div>
+                <div class="invoice-detail-value">${comprobante.descripcion}</div>
+            </div>
+            ` : ''}
+            <div class="cancellation-buttons">
+                <button class="btn btn-danger" onclick="openCancelComprobanteModal()">
+                    <i class='bx bx-x-circle'></i>
+                    Anular Comprobante
+                </button>
+            </div>
+        </div>
+    `;
+
+    comprobanteDetailsContainer.innerHTML = comprobanteHTML;
+    comprobanteDetailsContainer.style.display = 'block';
+    noComprobanteMessage.style.display = 'none';
+}
+
 // Función para abrir modal de anulación de factura
 function openCancelModal() {
     cancelModal.classList.add('active');
@@ -1356,6 +1513,19 @@ function closeCancelModal() {
     cancelModal.classList.remove('active');
     document.body.style.overflow = 'auto';
     cancellationReason.value = '';
+}
+
+// Función para abrir modal de anulación de comprobante
+function openCancelComprobanteModal() {
+    cancelComprobanteModal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+// Función para cerrar modal de anulación de comprobante
+function closeCancelComprobanteModal() {
+    cancelComprobanteModal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+    document.getElementById('comprobanteCancellationReason').value = '';
 }
 
 // Función para confirmar anulación de factura
@@ -1378,7 +1548,7 @@ function confirmCancellation() {
     }).then((result) => {
         if (result.isConfirmed) {
             const formData = new FormData();
-            formData.append('factura_id', currentInvoice.id);
+            formData.append('numero_factura', document.getElementById('invoiceNumber').value);
             formData.append('motivo', reason);
             formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
 
@@ -1391,7 +1561,7 @@ function confirmCancellation() {
                 if (data.success) {
                     Swal.fire({
                         title: '¡Anulado!',
-                        text: data.message || 'La factura ha sido anulada exitosamente.',
+                        text: data.message,
                         icon: 'success',
                         confirmButtonColor: '#3085d6',
                         confirmButtonText: 'Aceptar'
@@ -1423,10 +1593,81 @@ function confirmCancellation() {
     });
 }
 
-// Cerrar modales al hacer clic fuera de ellos
+// Función para confirmar anulación de comprobante
+function confirmComprobanteCancellation() {
+    const reason = document.getElementById('comprobanteCancellationReason').value.trim();
+    if (!reason) {
+        toastr.error('Por favor, ingrese el motivo de la anulación');
+        return;
+    }
+
+    Swal.fire({
+        title: '¿Estás seguro?',
+        text: "¡No podrás revertir la anulación de este comprobante!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sí, anular comprobante',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const formData = new FormData();
+            formData.append('numero_comprobante', document.getElementById('comprobanteNumber').value);
+            formData.append('motivo', reason);
+            formData.append('csrfmiddlewaretoken', document.getElementById('csrfToken').value);
+
+            fetch("{% url 'anular_comprobante_action' %}", {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: '¡Anulado!',
+                        text: data.message + '\nNuevo saldo pendiente: RD$ ' + data.nuevo_saldo_pendiente.toLocaleString('es-DO'),
+                        icon: 'success',
+                        confirmButtonColor: '#3085d6',
+                        confirmButtonText: 'Aceptar'
+                    }).then(() => {
+                        closeCancelComprobanteModal();
+                        searchComprobante();
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Error',
+                        text: data.message || 'Ocurrió un error al anular el comprobante.',
+                        icon: 'error',
+                        confirmButtonColor: '#d33',
+                        confirmButtonText: 'Aceptar'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Error al anular el comprobante: ' + (error.error || 'Error desconocido'),
+                    icon: 'error',
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Aceptar'
+                });
+            });
+        }
+    });
+}
+
+// Event Listeners para cerrar modales al hacer clic fuera
 cancelModal.addEventListener('click', function(e) {
     if (e.target === cancelModal) {
         closeCancelModal();
+    }
+});
+
+cancelComprobanteModal.addEventListener('click', function(e) {
+    if (e.target === cancelComprobanteModal) {
+        closeCancelComprobanteModal();
     }
 });
 
@@ -1434,6 +1675,12 @@ cancelModal.addEventListener('click', function(e) {
 invoiceNumberInput.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         searchInvoice();
+    }
+});
+
+comprobanteNumberInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchComprobante();
     }
 });
 
@@ -1473,7 +1720,6 @@ document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", 
         }
     });
 });
-
     </script>
 </body>
 </html>

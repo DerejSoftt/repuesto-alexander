@@ -1,6 +1,0 @@
-*.sql
-.vscode/
-env/
-__pycache__/
-null/
-.env/
