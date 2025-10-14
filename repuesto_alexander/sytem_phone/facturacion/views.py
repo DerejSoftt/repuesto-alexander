@@ -4297,7 +4297,9 @@ def anular(request):
     return render(request, "facturacion/anular.html")
 
 
+
 def buscar_factura(request):
+    """Busca una factura por su número para mostrar detalles antes de anular"""
     if request.method == 'POST':
         try:
             numero_factura = request.POST.get('numero_factura', '').strip()
@@ -4336,10 +4338,12 @@ def buscar_factura(request):
                 'vendedor': f"{venta.vendedor.first_name} {venta.vendedor.last_name}",
                 'items': [],
                 'subtotal': float(venta.subtotal),
-                'itbis': float(venta.itbis_monto),  # Usamos itbis_monto en lugar de calcularlo
+                'itbis': float(venta.itbis_monto),
                 'total': float(venta.total),
-                'total_a_pagar': float(venta.total_a_pagar),  # Incluimos total_a_pagar
+                'total_a_pagar': float(venta.total_a_pagar),
                 'forma_pago': venta.get_metodo_pago_display(),
+                'motivo_anulacion': venta.motivo_anulacion if venta.anulada else None,
+                'fecha_anulacion': venta.fecha_anulacion.isoformat() if venta.anulada and venta.fecha_anulacion else None,
             }
 
             # Agregar items
@@ -4354,47 +4358,77 @@ def buscar_factura(request):
             return JsonResponse(factura_data)
 
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en buscar_factura: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
 
-
 def anular_factura(request):
+    """Anula una factura usando el número de factura (no el ID)"""
     if request.method == 'POST':
         try:
-            factura_id = request.POST.get('factura_id')
+            # CAMBIO IMPORTANTE: Ahora usamos numero_factura en vez de factura_id
+            numero_factura = request.POST.get('numero_factura', '').strip()
             motivo = request.POST.get('motivo', '').strip()
+
+            if not numero_factura:
+                return JsonResponse({'error': 'Número de factura requerido'}, status=400)
 
             if not motivo:
                 return JsonResponse({'error': 'Motivo de anulación requerido'}, status=400)
 
-            # Buscar la factura
-            try:
-                venta = Venta.objects.get(id=factura_id, anulada=False)
-            except Venta.DoesNotExist:
-                return JsonResponse({'error': 'Factura no encontrada o ya anulada'}, status=404)
+            # Usar transacción atómica para asegurar consistencia
+            with transaction.atomic():
+                # Buscar la factura por número (con lock para evitar concurrencia)
+                try:
+                    venta = Venta.objects.select_for_update().get(
+                        numero_factura=numero_factura,
+                        anulada=False
+                    )
+                except Venta.DoesNotExist:
+                    return JsonResponse({
+                        'error': 'Factura no encontrada o ya está anulada'
+                    }, status=404)
 
-            # Anular la factura
-            venta.anulada = True
-            venta.motivo_anulacion = motivo
-            venta.fecha_anulacion = timezone.now()
-            venta.usuario_anulacion = request.user
-            venta.save()
+                # Anular la factura
+                venta.anulada = True
+                venta.motivo_anulacion = motivo
+                venta.fecha_anulacion = timezone.now()
+                venta.usuario_anulacion = request.user
+                venta.save()
 
-            # Restaurar el inventario
-            detalles = DetalleVenta.objects.filter(venta=venta)
-            for detalle in detalles:
-                producto = detalle.producto
-                producto.cantidad += detalle.cantidad
-                producto.save()
+                # Restaurar el inventario
+                detalles = DetalleVenta.objects.filter(venta=venta)
+                productos_restaurados = []
+                
+                for detalle in detalles:
+                    if detalle.producto:
+                        detalle.producto.cantidad += detalle.cantidad
+                        detalle.producto.save()
+                        productos_restaurados.append({
+                            'producto': detalle.producto.descripcion,
+                            'cantidad': detalle.cantidad
+                        })
 
-            return JsonResponse({'success': True, 'message': 'Factura anulada correctamente'})
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Factura #{numero_factura} anulada correctamente',
+                    'productos_restaurados': productos_restaurados
+                })
 
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en anular_factura_action: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
+
 
 
 def reimprimir_factura(request):

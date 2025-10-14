@@ -873,7 +873,9 @@
                                 <th>Compatibilidad</th>
                                 <th>Color</th>
                                 <th>Cantidad</th>
+                                {% if user.is_superuser %}
                                 <th>Costo</th>
+                                {% endif %}
                                 <th>Precio c/ITBIS</th>
                                 <th>Precio Mayor c/ITBIS</th>
                                 <th>Acciones</th>
@@ -881,7 +883,7 @@
                         </thead>
                         <tbody id="inventoryTableBody">
                             <tr>
-                                <td colspan="11" class="loading" id="loadingData">
+                                <td colspan="{% if user.is_superuser %}11{% else %}10{% endif %}" class="loading" id="loadingData">
                                     <i class='bx bx-loader'></i>
                                     <p>Cargando datos del inventario...</p>
                                 </td>
@@ -1154,7 +1156,9 @@
                         <td>${product.compatibilidad || 'N/A'}</td>
                         <td>${product.color || 'N/A'}</td>
                         <td><strong>${product.cantidad}</strong></td>
+                        ${isSuperuser ? `
                         <td class="currency">RD$ ${parseFloat(product.costo).toLocaleString()}</td>
+                        ` : ''}
                         <td class="currency">RD$ ${product.precio_con_itbis ? parseFloat(product.precio_con_itbis).toLocaleString() : 'N/A'}</td>
                         <td class="currency">RD$ ${product.precio_por_mayor_con_itbis ? parseFloat(product.precio_por_mayor_con_itbis).toLocaleString() : 'N/A'}</td>
                         <td>
@@ -1293,109 +1297,108 @@
             }
         });
         // Manejar envío del formulario de edición
-       // Manejar envío del formulario de edición
-editForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(editForm);
-    const productId = parseInt(formData.get('productId'));
-    const imagenInput = document.getElementById('editImagen');
-    
-    // Determinar si hay una nueva imagen
-    const tieneNuevaImagen = imagenInput.files.length > 0;
+        editForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(editForm);
+            const productId = parseInt(formData.get('productId'));
+            const imagenInput = document.getElementById('editImagen');
+            
+            // Determinar si hay una nueva imagen
+            const tieneNuevaImagen = imagenInput.files.length > 0;
 
-    if (tieneNuevaImagen) {
-        // Usar FormData para enviar archivos (incluye imagen)
-        enviarConFormData(formData, productId);
-    } else {
-        // Usar JSON para datos normales (sin imagen)
-        enviarConJSON(formData, productId);
-    }
-});
-
-// Función para enviar con FormData (incluye imagen)
-function enviarConFormData(formData, productId) {
-    fetch(`/inventario/editar/${productId}/`, {
-        method: 'PUT',
-        headers: {
-            'X-CSRFToken': csrfToken,
-            // NO establecer Content-Type para FormData, el navegador lo hará automáticamente
-        },
-        body: formData
-    })
-    .then(response => handleEditResponse(response, productId))
-    .catch(error => handleEditError(error));
-}
-
-// Función para enviar con JSON (sin imagen)
-function enviarConJSON(formData, productId) {
-    // Crear objeto con los datos del formulario
-    const data = {
-        descripcion: formData.get('descripcion'),
-        marca: formData.get('marca'),
-        compatibilidad: formData.get('compatibilidad'),
-        color: formData.get('color'),
-        costo: parseFloat(formData.get('costo')),
-        precio: parseFloat(formData.get('precio')),
-        precio_por_mayor: formData.get('precio_por_mayor') ? parseFloat(formData.get('precio_por_mayor')) : null,
-        observaciones: formData.get('observaciones')
-    };
-
-    fetch(`/inventario/editar/${productId}/`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken,
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => handleEditResponse(response, productId))
-    .catch(error => handleEditError(error));
-}
-
-// Función para manejar la respuesta de edición
-function handleEditResponse(response, productId) {
-    if (response.status === 403) {
-        return response.json().then(data => {
-            throw new Error(data.error || 'Permisos insuficientes. Solo superusuarios pueden editar productos.');
+            if (tieneNuevaImagen) {
+                // Usar FormData para enviar archivos (incluye imagen)
+                enviarConFormData(formData, productId);
+            } else {
+                // Usar JSON para datos normales (sin imagen)
+                enviarConJSON(formData, productId);
+            }
         });
-    }
-    if (!response.ok) {
-        return response.json().then(data => {
-            throw new Error(data.error || 'Error al actualizar el producto');
-        });
-    }
-    return response.json().then(updatedProduct => {
-        // Actualizar el producto en la lista local
-        const index = products.findIndex(p => p.id === productId);
-        if (index !== -1) {
-            products[index] = updatedProduct;
+
+        // Función para enviar con FormData (incluye imagen)
+        function enviarConFormData(formData, productId) {
+            fetch(`/inventario/editar/${productId}/`, {
+                method: 'PUT',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    // NO establecer Content-Type para FormData, el navegador lo hará automáticamente
+                },
+                body: formData
+            })
+            .then(response => handleEditResponse(response, productId))
+            .catch(error => handleEditError(error));
         }
-        
-        // Actualizar la tabla
-        filteredProducts = [...products];
-        filterProducts();
-        loadFilters();
-        
-        // Cerrar modal y mostrar éxito
-        closeEditModal();
-        Swal.fire(
-            '¡Actualizado!',
-            'El producto ha sido actualizado exitosamente.',
-            'success'
-        );
-    });
-}
 
-// Función para manejar errores de edición
-function handleEditError(error) {
-    console.error('Error:', error);
-    Swal.fire(
-        'Error',
-        'Error: ' + error.message,
-        'error'
-    );
-}
+        // Función para enviar con JSON (sin imagen)
+        function enviarConJSON(formData, productId) {
+            // Crear objeto con los datos del formulario
+            const data = {
+                descripcion: formData.get('descripcion'),
+                marca: formData.get('marca'),
+                compatibilidad: formData.get('compatibilidad'),
+                color: formData.get('color'),
+                costo: parseFloat(formData.get('costo')),
+                precio: parseFloat(formData.get('precio')),
+                precio_por_mayor: formData.get('precio_por_mayor') ? parseFloat(formData.get('precio_por_mayor')) : null,
+                observaciones: formData.get('observaciones')
+            };
+
+            fetch(`/inventario/editar/${productId}/`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => handleEditResponse(response, productId))
+            .catch(error => handleEditError(error));
+        }
+
+        // Función para manejar la respuesta de edición
+        function handleEditResponse(response, productId) {
+            if (response.status === 403) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Permisos insuficientes. Solo superusuarios pueden editar productos.');
+                });
+            }
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Error al actualizar el producto');
+                });
+            }
+            return response.json().then(updatedProduct => {
+                // Actualizar el producto en la lista local
+                const index = products.findIndex(p => p.id === productId);
+                if (index !== -1) {
+                    products[index] = updatedProduct;
+                }
+                
+                // Actualizar la tabla
+                filteredProducts = [...products];
+                filterProducts();
+                loadFilters();
+                
+                // Cerrar modal y mostrar éxito
+                closeEditModal();
+                Swal.fire(
+                    '¡Actualizado!',
+                    'El producto ha sido actualizado exitosamente.',
+                    'success'
+                );
+            });
+        }
+
+        // Función para manejar errores de edición
+        function handleEditError(error) {
+            console.error('Error:', error);
+            Swal.fire(
+                'Error',
+                'Error: ' + error.message,
+                'error'
+            );
+        }
         // Cerrar sidebar al redimensionar ventana
         window.addEventListener('resize', function() {
             if (window.innerWidth > 768) {
@@ -1417,6 +1420,11 @@ function handleEditError(error) {
                 filteredProducts = [...products];
                 isSuperuser = data.user ? data.user.is_superuser : false;
                 loadingData.style.display = 'none';
+                
+                // Actualizar colspan basado en si es superusuario
+                const colspan = isSuperuser ? 11 : 10;
+                loadingData.setAttribute('colspan', colspan);
+                
                 loadFilters();
                 renderTable();
             })
