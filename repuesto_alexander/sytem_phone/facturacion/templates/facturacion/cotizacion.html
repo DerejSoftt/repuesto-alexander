@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cotización</title>
-    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}" type="image/x-icon">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -335,7 +335,7 @@
             text-align: center;
             color: #666;
         }
-        /* Price Type Selection Modal */
+        /* Price Type Selection Modal - Diseño mejorado */
         .modal {
             display: none;
             position: fixed;
@@ -344,8 +344,9 @@
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            transition: all 0.3s ease;
         }
         .modal.active {
             display: flex;
@@ -355,53 +356,65 @@
         }
         .modal-content {
             background: white;
-            border-radius: 20px;
+            border-radius: 16px;
             width: 95%;
             max-width: 500px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-            animation: slideIn 0.3s ease;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            transition: all 0.3s ease;
         }
         .modal-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 25px 30px;
-            border-radius: 20px 20px 0 0;
+            padding: 20px;
+            text-align: center;
+            border-radius: 16px 16px 0 0;
         }
         .modal-header h2 {
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 10px;
+            margin: 0;
         }
         .modal-body {
-            padding: 30px;
+            padding: 25px;
+            background: #f8f9fa;
         }
         .price-option {
-            padding: 20px;
-            border: 2px solid #e1e8ed;
-            border-radius: 12px;
-            margin-bottom: 15px;
+            padding: 18px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            margin-bottom: 12px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
+            background: white;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .price-option:hover {
             border-color: #667eea;
-            background: #f8f9fa;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
             transform: translateY(-2px);
+        }
+        .price-option.selected {
+            border-color: #667eea;
+            background: #f0f3ff;
         }
         .price-option-info h3 {
             color: #333;
-            margin-bottom: 5px;
+            margin: 0 0 5px 0;
+            font-size: 1.1rem;
         }
         .price-option-info p {
             color: #666;
             font-size: 0.9rem;
+            margin: 0;
         }
         .price-option-value {
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             font-weight: 700;
             color: #28a745;
         }
@@ -410,47 +423,53 @@
         }
         .quantity-input-group label {
             display: block;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-weight: 600;
             color: #333;
         }
         .quantity-input-group input {
             width: 100%;
             padding: 12px;
-            border: 2px solid #e1e8ed;
+            border: 2px solid #e9ecef;
             border-radius: 8px;
             font-size: 1rem;
+            transition: border 0.2s ease;
+        }
+        .quantity-input-group input:focus {
+            outline: none;
+            border-color: #667eea;
         }
         .modal-footer {
-            padding: 20px 30px;
-            border-top: 1px solid #e1e8ed;
+            padding: 20px;
+            border-top: 1px solid #e9ecef;
+            background: white;
             display: flex;
-            gap: 15px;
+            gap: 12px;
             justify-content: flex-end;
+            border-radius: 0 0 16px 16px;
         }
         .btn {
-            padding: 15px 25px;
+            padding: 12px 20px;
             border: none;
-            border-radius: 12px;
-            font-size: 1rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             display: flex;
             align-items: center;
             gap: 8px;
-            text-decoration: none;
         }
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
         }
         .btn-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 25px rgba(102, 126, 234, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
         }
         .btn-outline {
             background: transparent;
@@ -460,7 +479,6 @@
         .btn-outline:hover {
             background: #667eea;
             color: white;
-            transform: translateY(-2px);
         }
         .btn-success {
             background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
@@ -712,7 +730,7 @@
             <p>Usuario: {{ user.username }}</p>
             <p>{{ user.email }}</p>
         </div>
-          <div class="sidebar-menu">
+        <div class="sidebar-menu">
             <a href="#" class="menu-item">
                 <i class='bx bx-home-alt'></i>
                 <span>Inicio</span>
@@ -721,7 +739,7 @@
                 <i class='bx bx-receipt'></i>
                 <span>Facturación</span>
             </a>
-             <a href="{% url 'cotizacion' %}" class="menu-item active">
+            <a href="{% url 'cotizacion' %}" class="menu-item active">
                 <i class='bx bx-calculator'></i>
                 <span>Cotizacion</span>
             </a>
@@ -738,7 +756,7 @@
                 <i class='bx bx-package'></i>
                 <span>Entrada Mercancía</span>
             </a>
-              {% endif %}
+            {% endif %}
             <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
                 <i class='bx bx-money'></i>
                 <span>Cuenta por Cobrar</span>
@@ -752,49 +770,41 @@
                 <i class='bx bx-building'></i>
                 <span>Registrar Suplidores</span>
             </a>
-                {% endif %}
-
+            {% endif %}
             {% if has_gestiondesuplidores_access or user.is_superuser %}
             <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
                 <i class='bx bx-buildings'></i>
                 <span>Suplidores</span>
             </a>
-              {% endif %}
-              
-              
-              {% if has_devoluciones_access or user.is_superuser %}
+            {% endif %}
+            {% if has_devoluciones_access or user.is_superuser %}
             <a href="{% url 'devoluciones' %}" class="menu-item">
                 <i class='bx bx-undo'></i>
                 <span>Devoluciones</span>
             </a>
             {% endif %}
-
             {% if has_roles_access or user.is_superuser %}
             <a href="{% url 'roles' %}" class="menu-item">
                 <i class='bx bx-user-check'></i>
                 <span>Roles</span>
             </a>
             {% endif %}
-           
             {% if has_anular_access or user.is_superuser %}
             <a href="{% url 'anular' %}" class="menu-item">
                 <i class='bx bx-x-circle'></i>
                 <span>Anular Factura</span>
             </a>
-              {% endif %}
-
+            {% endif %}
             <a href="{% url 'reimprimirfactura' %}" class="menu-item">
                 <i class='bx bx-printer'></i>
                 <span>Reimprimir</span>
             </a>
-
             {% if has_dashboard_access or user.is_superuser %}
             <a href="{% url 'dashboard' %}" class="menu-item">
                 <i class='bx bx-grid-alt'></i>
                 <span>Dashboard</span>
             </a>
-                {% endif %}
-                
+            {% endif %}
             <a href="{% url 'index' %}" class="menu-item">
                 <i class='bx bx-log-out'></i>
                 <span>Cerrar Sesión</span>
@@ -894,7 +904,7 @@
                 <div class="totals-section">
                     <h3 class="section-title">
                         <i class='bx bx-calculator'></i>
-                      Resumen de Totales
+                        Resumen de Totales
                     </h3>
                     <div class="totals-grid">
                         <div class="total-row">
@@ -917,20 +927,14 @@
                         <i class='bx bx-trash'></i>
                         Limpiar
                     </button>
-                    <button class="btn btn-primary" onclick="printQuote()">
-                        <i class='bx bx-printer'></i>
-                        Imprimir Cotización
-                    </button>
-                    <!-- Botón para generar factura HTML -->
                     <button class="btn btn-success" onclick="generarFacturaAlternativa()">
-    <i class='bx bx-file'></i>
-    Generar Factura
-</button>
+                        <i class='bx bx-file'></i>
+                        Generar Factura
+                    </button>
                 </div>
             </div>
         </div>
     </div>
-
     <!-- Price Selection Modal -->
     <div class="modal" id="priceModal">
         <div class="modal-content">
@@ -959,7 +963,6 @@
             </div>
         </div>
     </div>
-
     <!-- Modal para visualizar la imagen en grande -->
     <div class="modal" id="imageModal">
         <div class="modal-content" style="max-width: 80%; max-height: 80vh; overflow: hidden;">
@@ -967,415 +970,393 @@
             <img id="modalImage" style="max-width: 100%; max-height: 70vh; display: block; margin: 0 auto;">
         </div>
     </div>
-
     <script>
-       // Variable global para almacenar los productos
-let inventoryProducts = [];
-let selectedProducts = [];
-let currentProduct = null;
-let selectedPriceType = null;
+        // Variable global para almacenar los productos
+        let inventoryProducts = [];
+        let selectedProducts = [];
+        let currentProduct = null;
+        let selectedPriceType = null;
 
-// Función para cargar los productos desde Django
-async function cargarProductos() {
-    try {
-        const response = await fetch('/obtener-productoscotizacion/');
-        inventoryProducts = await response.json();
-        console.log("Productos cargados:", inventoryProducts);
-    } catch (error) {
-        console.error("Error al cargar productos:", error);
-        alert("Error al cargar los productos. Consulta la consola para más detalles.");
-    }
-}
-
-// Inicialización
-document.addEventListener('DOMContentLoaded', function() {
-    cargarProductos();
-    document.getElementById('quoteDate').valueAsDate = new Date();
-    const searchInput = document.getElementById('productSearch');
-    searchInput.addEventListener('input', handleSearch);
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.product-search-container')) {
-            document.getElementById('searchResults').classList.remove('active');
+        // Función para cargar los productos desde Django
+        async function cargarProductos() {
+            try {
+                const response = await fetch('/obtener-productoscotizacion/');
+                inventoryProducts = await response.json();
+                console.log("Productos cargados:", inventoryProducts);
+            } catch (error) {
+                console.error("Error al cargar productos:", error);
+                alert("Error al cargar los productos. Consulta la consola para más detalles.");
+            }
         }
-    });
-});
 
-// Funciones del sidebar
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('active');
-    document.querySelector('.sidebar-overlay').classList.toggle('active');
-}
-function closeSidebar() {
-    document.getElementById('sidebar').classList.remove('active');
-    document.querySelector('.sidebar-overlay').classList.remove('active');
-}
-
-// Búsqueda de productos
-function handleSearch(e) {
-    const searchTerm = e.target.value.toLowerCase().trim();
-    const resultsContainer = document.getElementById('searchResults');
-
-    if (searchTerm.length < 2) {
-        resultsContainer.classList.remove('active');
-        return;
-    }
-
-    const filteredProducts = inventoryProducts.filter(product => {
-        return (
-            product.codigo_producto.toLowerCase().includes(searchTerm) ||
-            product.descripcion.toLowerCase().includes(searchTerm) ||
-            product.marca.toLowerCase().includes(searchTerm)
-        );
-    });
-
-    displaySearchResults(filteredProducts);
-}
-
-// Mostrar resultados de búsqueda
-function displaySearchResults(products) {
-    const resultsContainer = document.getElementById('searchResults');
-
-    if (products.length === 0) {
-        resultsContainer.innerHTML = '<div class="no-results">No se encontraron productos</div>';
-        resultsContainer.classList.add('active');
-        return;
-    }
-
-    const resultsHTML = products.map(product => `
-        <div class="search-result-item" onclick="selectProduct(${product.id}, event)">
-            <div class="product-info">
-                ${product.imagen_url ?
-                    `<img src="${product.imagen_url}" alt="${product.descripcion}" style="width: 50px; height: 50px; object-fit: cover; margin-right: 10px; border-radius: 4px;">` :
-                    `<i class='bx bx-image-alt' style="font-size: 2.5rem; opacity: 0.3; margin-right: 10px;"></i>`
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarProductos();
+            document.getElementById('quoteDate').valueAsDate = new Date();
+            const searchInput = document.getElementById('productSearch');
+            searchInput.addEventListener('input', handleSearch);
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.product-search-container')) {
+                    document.getElementById('searchResults').classList.remove('active');
                 }
-                <div style="flex: 1;">
-                    <div class="product-code">${product.codigo_producto}</div>
-                    <div class="product-description">${product.descripcion}</div>
-                    <div class="product-details">
-                        ${getBrandName(product.marca)} | ${product.color || 'N/A'} | Stock: ${product.cantidad}
+            });
+        });
+
+        // Funciones del sidebar
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.querySelector('.sidebar-overlay').classList.toggle('active');
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('active');
+            document.querySelector('.sidebar-overlay').classList.remove('active');
+        }
+
+        // Búsqueda de productos
+        function handleSearch(e) {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            const resultsContainer = document.getElementById('searchResults');
+            if (searchTerm.length < 2) {
+                resultsContainer.classList.remove('active');
+                return;
+            }
+            const filteredProducts = inventoryProducts.filter(product => {
+                return (
+                    product.codigo_producto.toLowerCase().includes(searchTerm) ||
+                    product.descripcion.toLowerCase().includes(searchTerm) ||
+                    product.marca.toLowerCase().includes(searchTerm)
+                );
+            });
+            displaySearchResults(filteredProducts);
+        }
+
+        // Mostrar resultados de búsqueda
+        function displaySearchResults(products) {
+            const resultsContainer = document.getElementById('searchResults');
+            if (products.length === 0) {
+                resultsContainer.innerHTML = '<div class="no-results">No se encontraron productos</div>';
+                resultsContainer.classList.add('active');
+                return;
+            }
+            const resultsHTML = products.map(product => `
+                <div class="search-result-item" onclick="selectProduct(${product.id}, event)">
+                    <div class="product-info">
+                        ${product.imagen_url ?
+                            `<img src="${product.imagen_url}" alt="${product.descripcion}" style="width: 50px; height: 50px; object-fit: cover; margin-right: 10px; border-radius: 4px;">` :
+                            `<i class='bx bx-image-alt' style="font-size: 2.5rem; opacity: 0.3; margin-right: 10px;"></i>`
+                        }
+                        <div style="flex: 1;">
+                            <div class="product-code">${product.codigo_producto}</div>
+                            <div class="product-description">${product.descripcion}</div>
+                            <div class="product-details">
+                                ${getBrandName(product.marca)} | ${product.color || 'N/A'} | Stock: ${product.cantidad}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="product-prices">
+                        <div>
+                            <div class="price-label">Unitario</div>
+                            <div class="price-value">RD$ ${product.precio.toLocaleString()}</div>
+                        </div>
+                        ${product.precio_por_mayor ? `
+                        <div style="margin-top: 5px;">
+                            <div class="price-label">Por Mayor</div>
+                            <div class="price-value">RD$ ${product.precio_por_mayor.toLocaleString()}</div>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
-            </div>
-            <div class="product-prices">
-                <div>
-                    <div class="price-label">Unitario</div>
-                    <div class="price-value">RD$ ${product.precio.toLocaleString()}</div>
+            `).join('');
+            resultsContainer.innerHTML = resultsHTML;
+            resultsContainer.classList.add('active');
+            // Agrega evento para abrir la imagen en grande
+            document.querySelectorAll('.search-result-item img').forEach(img => {
+                img.onclick = function(e) {
+                    e.stopPropagation();
+                    openImageModal(this.src);
+                };
+            });
+        }
+
+        // Obtener nombre de la marca
+        function getBrandName(brand) {
+            const brands = {
+                'honda': 'Honda',
+                'yamaha': 'Yamaha',
+                'suzuki': 'Suzuki',
+                'kawasaki': 'Kawasaki',
+                'tvs': 'TVS',
+                'hero': 'Hero',
+                'loncin': 'Loncin',
+                'kove': 'Kove',
+                'x1000': 'X1000',
+                'ktm': 'KTM',
+                'bajaj': 'Bajaj',
+                'otros': 'Otros'
+            };
+            return brands[brand] || brand;
+        }
+
+        // Seleccionar producto
+        function selectProduct(productId, event) {
+            // Verifica si el clic fue en la imagen
+            if (event && event.target.tagName === 'IMG') {
+                return;
+            }
+            currentProduct = inventoryProducts.find(p => p.id === productId);
+            if (!currentProduct) return;
+            document.getElementById('searchResults').classList.remove('active');
+            document.getElementById('productSearch').value = '';
+            showPriceModal();
+        }
+
+        // Mostrar modal de selección de precio
+        function showPriceModal() {
+            const modal = document.getElementById('priceModal');
+            const optionsContainer = document.getElementById('priceOptionsContainer');
+            let optionsHTML = `
+                <div class="price-option" onclick="selectPriceType('unitario', event)">
+                    <div class="price-option-info">
+                        <h3>Precio Unitario</h3>
+                        <p>Precio de venta al detalle</p>
+                    </div>
+                    <div class="price-option-value">RD$ ${currentProduct.precio.toLocaleString()}</div>
                 </div>
-                ${product.precio_por_mayor ? `
-                <div style="margin-top: 5px;">
-                    <div class="price-label">Por Mayor</div>
-                    <div class="price-value">RD$ ${product.precio_por_mayor.toLocaleString()}</div>
-                </div>
-                ` : ''}
-            </div>
-        </div>
-    `).join('');
+            `;
+            if (currentProduct.precio_por_mayor) {
+                optionsHTML += `
+                    <div class="price-option" onclick="selectPriceType('mayor', event)">
+                        <div class="price-option-info">
+                            <h3>Precio Por Mayor</h3>
+                            <p>Precio de venta al por mayor</p>
+                        </div>
+                        <div class="price-option-value">RD$ ${currentProduct.precio_por_mayor.toLocaleString()}</div>
+                    </div>
+                `;
+            }
+            optionsContainer.innerHTML = optionsHTML;
+            document.getElementById('productQuantity').value = 1;
+            selectedPriceType = null;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
 
-    resultsContainer.innerHTML = resultsHTML;
-    resultsContainer.classList.add('active');
+        // Seleccionar tipo de precio
+        function selectPriceType(type, event) {
+            selectedPriceType = type;
+            document.querySelectorAll('.price-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+        }
 
-    // Agrega evento para abrir la imagen en grande
-    document.querySelectorAll('.search-result-item img').forEach(img => {
-        img.onclick = function(e) {
-            e.stopPropagation();
-            openImageModal(this.src);
-        };
-    });
-}
+        // Cerrar modal de selección de precio
+        function closePriceModal() {
+            document.getElementById('priceModal').classList.remove('active');
+            document.body.style.overflow = 'auto';
+            currentProduct = null;
+            selectedPriceType = null;
+        }
 
-// Obtener nombre de la marca
-function getBrandName(brand) {
-    const brands = {
-        'honda': 'Honda',
-        'yamaha': 'Yamaha',
-        'suzuki': 'Suzuki',
-        'kawasaki': 'Kawasaki',
-        'tvs': 'TVS',
-        'hero': 'Hero',
-        'loncin': 'Loncin',
-        'kove': 'Kove',
-        'x1000': 'X1000',
-        'ktm': 'KTM',
-        'bajaj': 'Bajaj',
-        'otros': 'Otros'
-    };
-    return brands[brand] || brand;
-}
+        // Agregar producto a la cotización
+        function addProductToQuote() {
+            if (!selectedPriceType) {
+                alert('Por favor selecciona un tipo de precio');
+                return;
+            }
+            const quantity = parseInt(document.getElementById('productQuantity').value);
+            if (quantity < 1) {
+                alert('La cantidad debe ser mayor a 0');
+                return;
+            }
+            const price = selectedPriceType === 'unitario' ? currentProduct.precio : currentProduct.precio_por_mayor;
+            const priceLabel = selectedPriceType === 'unitario' ? 'Unitario' : 'Por Mayor';
+            selectedProducts.push({
+                ...currentProduct,
+                selectedPrice: price,
+                priceType: priceLabel,
+                quantity: quantity,
+                subtotal: price * quantity
+            });
+            renderSelectedProducts();
+            calculateTotals();
+            closePriceModal();
+        }
 
-// Seleccionar producto
-function selectProduct(productId, event) {
-    // Verifica si el clic fue en la imagen
-    if (event && event.target.tagName === 'IMG') {
-        return;
-    }
-    currentProduct = inventoryProducts.find(p => p.id === productId);
-    if (!currentProduct) return;
-    document.getElementById('searchResults').classList.remove('active');
-    document.getElementById('productSearch').value = '';
-    showPriceModal();
-}
+        // Renderizar productos seleccionados
+        function renderSelectedProducts() {
+            const tbody = document.getElementById('selectedProductsTable');
+            if (selectedProducts.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 40px; color: #666;">
+                            <i class='bx bx-package' style="font-size: 3rem; opacity: 0.3;"></i>
+                            <p>No hay productos agregados. Busca y selecciona productos arriba.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            const rowsHTML = selectedProducts.map((product, index) => `
+                <tr>
+                    <td><strong>${product.codigo_producto}</strong></td>
+                    <td>${product.descripcion}</td>
+                    <td>${getBrandName(product.marca)}</td>
+                    <td><span style="background: #667eea; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">${product.priceType}</span></td>
+                    <td class="currency">RD$ ${product.selectedPrice.toLocaleString()}</td>
+                    <td><strong>${product.quantity}</strong></td>
+                    <td class="currency">RD$ ${product.subtotal.toLocaleString()}</td>
+                    <td>
+                        <button class="btn btn-danger" onclick="removeProduct(${index})">
+                            <i class='bx bx-trash'></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            tbody.innerHTML = rowsHTML;
+        }
 
-// Mostrar modal de selección de precio
-function showPriceModal() {
-    const modal = document.getElementById('priceModal');
-    const optionsContainer = document.getElementById('priceOptionsContainer');
+        // Eliminar producto de la cotización
+        function removeProduct(index) {
+            selectedProducts.splice(index, 1);
+            renderSelectedProducts();
+            calculateTotals();
+        }
 
-    let optionsHTML = `
-        <div class="price-option" onclick="selectPriceType('unitario')">
-            <div class="price-option-info">
-                <h3>Precio Unitario</h3>
-                <p>Precio de venta al detalle</p>
-            </div>
-            <div class="price-option-value">RD$ ${currentProduct.precio.toLocaleString()}</div>
-        </div>
-    `;
-    if (currentProduct.precio_por_mayor) {
-        optionsHTML += `
-            <div class="price-option" onclick="selectPriceType('mayor')">
-                <div class="price-option-info">
-                    <h3>Precio Por Mayor</h3>
-                    <p>Precio de venta al por mayor</p>
-                </div>
-                <div class="price-option-value">RD$ ${currentProduct.precio_por_mayor.toLocaleString()}</div>
-            </div>
-        `;
-    }
-    optionsContainer.innerHTML = optionsHTML;
-    document.getElementById('productQuantity').value = 1;
-    selectedPriceType = null;
+        // Calcular totales
+        function calculateTotals() {
+            const subtotal = selectedProducts.reduce((sum, product) => sum + product.subtotal, 0);
+            const itbis = subtotal * 0.18;
+            const total = subtotal + itbis;
+            document.getElementById('subtotalAmount').textContent = `RD$ ${subtotal.toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('itbisAmount').textContent = `RD$ ${itbis.toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('totalAmount').textContent = `RD$ ${total.toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
 
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
+        // Limpiar cotización
+        function clearQuote() {
+            if (selectedProducts.length === 0) return;
+            if (confirm('¿Estás seguro de que deseas limpiar toda la cotización?')) {
+                selectedProducts = [];
+                renderSelectedProducts();
+                calculateTotals();
+                document.getElementById('clientName').value = '';
+                document.getElementById('clientPhone').value = '';
+                document.getElementById('clientEmail').value = '';
+            }
+        }
 
-// Seleccionar tipo de precio
-function selectPriceType(type) {
-    selectedPriceType = type;
-    document.querySelectorAll('.price-option').forEach(option => {
-        option.style.borderColor = '#e1e8ed';
-        option.style.background = 'white';
-    });
-    event.currentTarget.style.borderColor = '#667eea';
-    event.currentTarget.style.background = '#f8f9fa';
-}
+        // Imprimir cotización
+        function printQuote() {
+            if (selectedProducts.length === 0) {
+                alert('No hay productos en la cotización');
+                return;
+            }
+            const clientName = document.getElementById('clientName').value;
+            if (!clientName) {
+                alert('Por favor ingresa el nombre del cliente');
+                document.getElementById('clientName').focus();
+                return;
+            }
+            window.print();
+        }
 
-// Cerrar modal de selección de precio
-function closePriceModal() {
-    document.getElementById('priceModal').classList.remove('active');
-    document.body.style.overflow = 'auto';
-    currentProduct = null;
-    selectedPriceType = null;
-}
+        // Generar Factura HTML
+        function generarFactura() {
+            if (selectedProducts.length === 0) {
+                alert('No hay productos en la cotización');
+                return;
+            }
 
-// Agregar producto a la cotización
-function addProductToQuote() {
-    if (!selectedPriceType) {
-        alert('Por favor selecciona un tipo de precio');
-        return;
-    }
-    const quantity = parseInt(document.getElementById('productQuantity').value);
-    if (quantity < 1) {
-        alert('La cantidad debe ser mayor a 0');
-        return;
-    }
-    const price = selectedPriceType === 'unitario' ? currentProduct.precio : currentProduct.precio_por_mayor;
-    const priceLabel = selectedPriceType === 'unitario' ? 'Unitario' : 'Por Mayor';
-    selectedProducts.push({
-        ...currentProduct,
-        selectedPrice: price,
-        priceType: priceLabel,
-        quantity: quantity,
-        subtotal: price * quantity
-    });
-    renderSelectedProducts();
-    calculateTotals();
-    closePriceModal();
-}
+            const clientName = document.getElementById('clientName').value;
+            if (!clientName) {
+                alert('Por favor ingresa el nombre del cliente');
+                document.getElementById('clientName').focus();
+                return;
+            }
+            // Crear formulario temporal para enviar datos
+            const form = document.createElement('form');
+            form.method = 'GET';
+            form.action = '/generar-factura/';
+            // Agregar parámetros
+            const addParam = (name, value) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = value;
+                form.appendChild(input);
+            };
+            addParam('cliente_nombre', clientName);
+            addParam('cliente_telefono', document.getElementById('clientPhone').value);
+            addParam('cliente_rnc', document.getElementById('clientEmail').value);
+            addParam('fecha', document.getElementById('quoteDate').value);
+            addParam('factura_numero', 'F' + Date.now().toString().slice(-6));
+            addParam('vendedor', 'jose');
+            // Agregar productos seleccionados
+            selectedProducts.forEach((product, index) => {
+                addParam(`producto_${index}_id`, product.id);
+                addParam(`producto_${index}_cantidad`, product.quantity);
+                addParam(`producto_${index}_precio`, product.selectedPrice);
+            });
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        }
 
-// Renderizar productos seleccionados
-function renderSelectedProducts() {
-    const tbody = document.getElementById('selectedProductsTable');
+        // Versión alternativa por si la anterior no funciona
+        function generarFacturaAlternativa() {
+            if (selectedProducts.length === 0) {
+                alert('No hay productos en la cotización');
+                return;
+            }
 
-    if (selectedProducts.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="8" style="text-align: center; padding: 40px; color: #666;">
-                    <i class='bx bx-package' style="font-size: 3rem; opacity: 0.3;"></i>
-                    <p>No hay productos agregados. Busca y selecciona productos arriba.</p>
-                </td>
-            </tr>
-        `;
-        return;
-    }
+            const clientName = document.getElementById('clientName').value;
+            if (!clientName) {
+                alert('Por favor ingresa el nombre del cliente');
+                document.getElementById('clientName').focus();
+                return;
+            }
+            // Construir URL manualmente
+            let url = '/generar-factura/?';
+            url += `cliente_nombre=${encodeURIComponent(clientName)}`;
+            url += `&cliente_telefono=${encodeURIComponent(document.getElementById('clientPhone').value)}`;
+            url += `&cliente_rnc=${encodeURIComponent(document.getElementById('clientEmail').value)}`;
+            url += `&fecha=${encodeURIComponent(document.getElementById('quoteDate').value)}`;
+            url += `&factura_numero=F${Date.now().toString().slice(-6)}`;
+            url += `&vendedor=jose`;
+            // Agregar productos seleccionados
+            selectedProducts.forEach((product, index) => {
+                url += `&producto_${index}_id=${product.id}`;
+                url += `&producto_${index}_cantidad=${product.quantity}`;
+                url += `&producto_${index}_precio=${product.selectedPrice}`;
+            });
+            // Redirigir directamente
+            console.log("Redirigiendo a:", url);
+            window.location.href = url;
+        }
 
-    const rowsHTML = selectedProducts.map((product, index) => `
-        <tr>
-            <td><strong>${product.codigo_producto}</strong></td>
-            <td>${product.descripcion}</td>
-            <td>${getBrandName(product.marca)}</td>
-            <td><span style="background: #667eea; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">${product.priceType}</span></td>
-            <td class="currency">RD$ ${product.selectedPrice.toLocaleString()}</td>
-            <td><strong>${product.quantity}</strong></td>
-            <td class="currency">RD$ ${product.subtotal.toLocaleString()}</td>
-            <td>
-                <button class="btn btn-danger" onclick="removeProduct(${index})">
-                    <i class='bx bx-trash'></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
-    tbody.innerHTML = rowsHTML;
-}
+        // Abrir modal de imagen
+        function openImageModal(imageUrl) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modalImg.src = imageUrl;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
 
-// Eliminar producto de la cotización
-function removeProduct(index) {
-    selectedProducts.splice(index, 1);
-    renderSelectedProducts();
-    calculateTotals();
-}
+        // Cerrar modal de imagen
+        function closeImageModal() {
+            document.getElementById('imageModal').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
 
-// Calcular totales
-function calculateTotals() {
-    const subtotal = selectedProducts.reduce((sum, product) => sum + product.subtotal, 0);
-    const itbis = subtotal * 0.18;
-    const total = subtotal + itbis;
-    document.getElementById('subtotalAmount').textContent = `RD$ ${subtotal.toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    document.getElementById('itbisAmount').textContent = `RD$ ${itbis.toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    document.getElementById('totalAmount').textContent = `RD$ ${total.toLocaleString('es-DO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-}
-
-// Limpiar cotización
-function clearQuote() {
-    if (selectedProducts.length === 0) return;
-
-    if (confirm('¿Estás seguro de que deseas limpiar toda la cotización?')) {
-        selectedProducts = [];
-        renderSelectedProducts();
-        calculateTotals();
-        document.getElementById('clientName').value = '';
-        document.getElementById('clientPhone').value = '';
-        document.getElementById('clientEmail').value = '';
-    }
-}
-
-// Imprimir cotización
-function printQuote() {
-    if (selectedProducts.length === 0) {
-        alert('No hay productos en la cotización');
-        return;
-    }
-    const clientName = document.getElementById('clientName').value;
-    if (!clientName) {
-        alert('Por favor ingresa el nombre del cliente');
-        document.getElementById('clientName').focus();
-        return;
-    }
-    window.print();
-}
-
-// Generar Factura HTML
-function generarFactura() {
-    if (selectedProducts.length === 0) {
-        alert('No hay productos en la cotización');
-        return;
-    }
-    
-    const clientName = document.getElementById('clientName').value;
-    if (!clientName) {
-        alert('Por favor ingresa el nombre del cliente');
-        document.getElementById('clientName').focus();
-        return;
-    }
-
-    // Crear formulario temporal para enviar datos
-    const form = document.createElement('form');
-    form.method = 'GET';
-    form.action = '/generar-factura/';  // URL corregida con guión
-
-    // Agregar parámetros
-    const addParam = (name, value) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = value;
-        form.appendChild(input);
-    };
-
-    addParam('cliente_nombre', clientName);
-    addParam('cliente_telefono', document.getElementById('clientPhone').value);
-    addParam('cliente_rnc', document.getElementById('clientEmail').value);
-    addParam('fecha', document.getElementById('quoteDate').value);
-    addParam('factura_numero', 'F' + Date.now().toString().slice(-6));
-    addParam('vendedor', 'jose');
-
-    // Agregar productos seleccionados
-    selectedProducts.forEach((product, index) => {
-        addParam(`producto_${index}_id`, product.id);
-        addParam(`producto_${index}_cantidad`, product.quantity);
-        addParam(`producto_${index}_precio`, product.selectedPrice);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
-}
-
-// Versión alternativa por si la anterior no funciona
-function generarFacturaAlternativa() {
-    if (selectedProducts.length === 0) {
-        alert('No hay productos en la cotización');
-        return;
-    }
-    
-    const clientName = document.getElementById('clientName').value;
-    if (!clientName) {
-        alert('Por favor ingresa el nombre del cliente');
-        document.getElementById('clientName').focus();
-        return;
-    }
-
-    // Construir URL manualmente
-    let url = '/generar-factura/?';
-    url += `cliente_nombre=${encodeURIComponent(clientName)}`;
-    url += `&cliente_telefono=${encodeURIComponent(document.getElementById('clientPhone').value)}`;
-    url += `&cliente_rnc=${encodeURIComponent(document.getElementById('clientEmail').value)}`;
-    url += `&fecha=${encodeURIComponent(document.getElementById('quoteDate').value)}`;
-    url += `&factura_numero=F${Date.now().toString().slice(-6)}`;
-    url += `&vendedor=jose`;
-
-    // Agregar productos seleccionados
-    selectedProducts.forEach((product, index) => {
-        url += `&producto_${index}_id=${product.id}`;
-        url += `&producto_${index}_cantidad=${product.quantity}`;
-        url += `&producto_${index}_precio=${product.selectedPrice}`;
-    });
-
-    // Redirigir directamente
-    console.log("Redirigiendo a:", url);
-    window.location.href = url;
-}
-
-// Abrir modal de imagen
-function openImageModal(imageUrl) {
-    const modal = document.getElementById('imageModal');
-    const modalImg = document.getElementById('modalImage');
-    modalImg.src = imageUrl;
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-// Cerrar modal de imagen
-function closeImageModal() {
-    document.getElementById('imageModal').classList.remove('active');
-    document.body.style.overflow = 'auto';
-}
-
-// Cerrar modal de selección de precio al hacer clic fuera
-document.getElementById('priceModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closePriceModal();
-    }
-});
+        // Cerrar modal de selección de precio al hacer clic fuera
+        document.getElementById('priceModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closePriceModal();
+            }
+        });
     </script>
 </body>
 </html>

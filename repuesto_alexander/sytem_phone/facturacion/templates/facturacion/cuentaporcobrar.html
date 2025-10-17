@@ -1969,22 +1969,53 @@ function updateLocalAccountData(accountId, paymentAmount, serverResponse) {
 function anularCuenta(id) {
     const account = accounts.find(acc => acc.id === id);
     if (!account) return;
+    
+    // Verificar si ya está anulada
+    if (account.status === 'anulada') {
+        Swal.fire({
+            title: 'Cuenta ya anulada',
+            text: 'Esta cuenta ya se encuentra anulada',
+            icon: 'info',
+            confirmButtonColor: '#667eea'
+        });
+        return;
+    }
+    
+    // Verificar si tiene pagos
+    if (account.paidAmount > 0) {
+        Swal.fire({
+            title: 'Cuenta con pagos',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p>Esta cuenta tiene pagos registrados por <strong>RD$ ${account.paidAmount.toLocaleString('es-DO')}</strong></p>
+                    <p style="color: #dc3545; margin-top: 10px;">No se puede anular una cuenta con pagos parciales.</p>
+                </div>
+            `,
+            icon: 'error',
+            confirmButtonColor: '#dc3545'
+        });
+        return;
+    }
+    
     Swal.fire({
         title: '¿Anular cuenta?',
         html: `
             <div style="text-align: left; margin: 15px 0;">
                 <p><strong>Cliente:</strong> ${account.clientName}</p>
                 <p><strong>Factura:</strong> ${account.invoiceNumber}</p>
-                <p><strong>Monto:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
+                <p><strong>Monto Total:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
+                <p><strong>Estado Actual:</strong> <span class="status-badge ${getStatusClass(account.status)}">${getStatusName(account.status)}</span></p>
             </div>
-            <p style="color: #dc3545; font-weight: bold;">¡Esta acción no se puede deshacer!</p>
+            <p style="color: #dc3545; font-weight: bold; margin-top: 15px;">⚠️ Esta acción marcará la cuenta como anulada y no se podrá deshacer.</p>
+            <p style="color: #666; font-size: 0.9rem;">La cuenta permanecerá en el sistema para auditoría pero no se podrán realizar pagos.</p>
         `,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#dc3545',
         cancelButtonColor: '#6c757d',
         confirmButtonText: 'Sí, anular cuenta',
-        cancelButtonText: 'Cancelar'
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true
     }).then((result) => {
         if (result.isConfirmed) {
             Swal.fire({
@@ -2006,7 +2037,12 @@ function anularCuenta(id) {
                     'X-CSRFToken': getCSRFToken(),
                 }
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error en la respuesta del servidor');
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     Swal.fire({
@@ -2019,7 +2055,7 @@ function anularCuenta(id) {
                     });
                 } else {
                     Swal.fire({
-                        title: 'Error al anular cuenta',
+                        title: 'No se pudo anular',
                         text: data.message,
                         icon: 'error',
                         confirmButtonColor: '#dc3545'
@@ -2038,7 +2074,6 @@ function anularCuenta(id) {
         }
     });
 }
-
 function exportData() {
     console.log('Exportando datos...');
     const validAccounts = accounts.filter(account => account.status !== 'anulada' && !account.eliminada);

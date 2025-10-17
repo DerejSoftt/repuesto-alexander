@@ -3101,39 +3101,85 @@ def lista_comprobantes(request):
     
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
+
+
 def anular_cuenta(request, cuenta_id):
     if request.method == 'POST':
         try:
+            # Verificar permisos
+            if not request.user.is_superuser and not request.user.groups.filter(name='Administrador').exists():
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No tiene permisos para anular cuentas'
+                })
+            
             cuenta = get_object_or_404(CuentaPorCobrar, id=cuenta_id)
             
-            # CAMBIO: Verificar usando total_con_interes
+            # Verificar que la cuenta no esté ya anulada
+            if cuenta.estado == 'anulada':
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Esta cuenta ya está anulada'
+                })
+            
+            # Obtener el monto con interés si existe
             monto_con_interes = cuenta.monto_total
-            if cuenta.venta and cuenta.venta.total_con_interes:
+            if cuenta.venta and hasattr(cuenta.venta, 'total_con_interes') and cuenta.venta.total_con_interes:
                 monto_con_interes = cuenta.venta.total_con_interes
             
-            # Verificar que la cuenta no esté ya pagada completamente
+            # Verificar que la cuenta no esté completamente pagada
             if cuenta.monto_pagado >= monto_con_interes:
                 return JsonResponse({
                     'success': False,
-                    'message': 'No se puede anular una cuenta completamente pagada'
+                    'message': 'No se puede anular una cuenta completamente pagada. Use la opción de eliminar en su lugar.'
+                })
+            
+            # Verificar si hay pagos parciales
+            if cuenta.monto_pagado > 0:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Esta cuenta tiene pagos registrados por RD$ {cuenta.monto_pagado:,.2f}. No se puede anular una cuenta con pagos parciales.'
                 })
             
             # Anular la cuenta
-            cuenta.anular_cuenta()
+            cuenta.estado = 'anulada'
+            cuenta.save()
+            
+            # Registrar en el log o auditoría si existe
+            try:
+                from django.contrib.admin.models import LogEntry, CHANGE
+                from django.contrib.contenttypes.models import ContentType
+                
+                LogEntry.objects.log_action(
+                    user_id=request.user.id,
+                    content_type_id=ContentType.objects.get_for_model(cuenta).pk,
+                    object_id=cuenta.id,
+                    object_repr=f"Cuenta #{cuenta.id} - {cuenta.cliente.nombre if cuenta.cliente else 'Sin cliente'}",
+                    action_flag=CHANGE,
+                    change_message=f"Cuenta anulada por {request.user.username}"
+                )
+            except:
+                pass  # Si no se puede registrar el log, continuar
             
             return JsonResponse({
                 'success': True,
-                'message': 'Cuenta anulada exitosamente'
+                'message': f'Cuenta #{cuenta.id} anulada exitosamente'
             })
             
+        except CuentaPorCobrar.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'Cuenta no encontrada'
+            })
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())  # Para debug en consola
             return JsonResponse({
                 'success': False,
                 'message': f'Error al anular cuenta: {str(e)}'
             })
     
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
-
 
 
 
@@ -4431,6 +4477,7 @@ def anular_factura(request):
 
 
 
+
 def reimprimir_factura(request):
     # Esta vista renderiza la página de reimpresión
     return render(request, 'facturacion/reimprimirfactura.html')
@@ -4455,8 +4502,6 @@ def buscar_facturaR(request):
         
         # Manejar el caso cuando el cliente es None
         if venta.cliente:
-            # Usa los nombres correctos de los campos del modelo Cliente
-            # Revisa tu modelo Cliente para ver los nombres exactos
             cliente_nombre = venta.cliente.name if hasattr(venta.cliente, 'name') else (
                 venta.cliente.nombres if hasattr(venta.cliente, 'nombres') else "Cliente"
             )
@@ -4470,14 +4515,17 @@ def buscar_facturaR(request):
             )
         else:
             cliente_nombre = venta.cliente_nombre or "Consumidor Final"
-            cliente_documento = venta.cliente_documento or "N/A"
+            cliente_documento = venta.cliente_documento or "B0140000000"
             cliente_apodo = None
             cliente_telefono = None
             cliente_direccion = None
         
+        # Calcular totales
+        total_articulos = sum(detalle.cantidad for detalle in detalles)
+        
         # Preparar los datos de la venta para la respuesta JSON
         datos_venta = {
-            'fecha': venta.fecha_venta.strftime('%d/%m/%Y %H:%M'),
+            'fecha': venta.fecha_venta.strftime('%d/%m/%Y'),
             'numero_factura': venta.numero_factura,
             'ncf': venta.ncf if hasattr(venta, 'ncf') and venta.ncf else 'B0140000000',
             'cliente_nombre': cliente_nombre,
@@ -4489,9 +4537,13 @@ def buscar_facturaR(request):
             'tipo_venta_display': venta.get_tipo_venta_display(),
             'metodo_pago': venta.metodo_pago,
             'metodo_pago_display': venta.get_metodo_pago_display(),
+            'total': float(venta.subtotal),
             'subtotal': float(venta.subtotal),
+            'itbis_porcentaje': venta.itbis_porcentaje if hasattr(venta, 'itbis_porcentaje') else 18,
+            'itbis_monto': float(venta.itbis_monto) if hasattr(venta, 'itbis_monto') else 0,
             'descuento_monto': float(venta.descuento_monto),
             'total_a_pagar': float(venta.total_a_pagar),
+            'total_articulos': total_articulos,
             'fecha_vencimiento': venta.fecha_vencimiento.strftime('%d/%m/%Y') if hasattr(venta, 'fecha_vencimiento') and venta.fecha_vencimiento else None,
             'es_financiada': venta.es_financiada if hasattr(venta, 'es_financiada') else False,
             'cuota_mensual': float(venta.cuota_mensual) if hasattr(venta, 'cuota_mensual') and venta.cuota_mensual else 0,
@@ -4520,8 +4572,8 @@ def buscar_facturaR(request):
     except Venta.DoesNotExist:
         return JsonResponse({'error': 'Factura no encontrada'}, status=404)
     except Exception as e:
-        # Log the error for debugging
         import logging
+        import traceback
         logger = logging.getLogger(__name__)
         logger.error(f"Error en buscar_facturaR: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
