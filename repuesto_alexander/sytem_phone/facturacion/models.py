@@ -83,7 +83,7 @@ class EntradaProducto(models.Model):
         ('x1000', 'X1000'),
         ('ktm', 'KTM'),
         ('bajaj', 'Bajaj'),
-        ('super vestia', 'Super Vestia'),
+        ('super Bestia', 'Super Bestia'),
         ('otros', 'Otros'),
     )
     

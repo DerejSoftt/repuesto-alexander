@@ -1028,16 +1028,24 @@
                                         <th>Descripción</th>
                                         <th>Estado</th>
                                         <th>Usuarios Asignados</th>
+                                        <th>Módulos Asignados</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rolesTableBody">
                                     {% for role in roles_data %}
-                                    <tr>
+                                    <tr data-role-id="{{ role.id }}" data-modulos="{{ role.modulos_asignados|join:',' }}">
                                         <td>{{ role.name }}</td>
                                         <td>{{ role.description|default:"Sin descripción" }}</td>
                                         <td><span class="status-badge status-{{ role.status }}">{{ role.status }}</span></td>
                                         <td>{{ role.userCount }}</td>
+                                        <td>
+                                            {% if role.modulos_asignados %}
+                                                {{ role.modulos_asignados|join:", " }}
+                                            {% else %}
+                                                Sin módulos
+                                            {% endif %}
+                                        </td>
                                         <td class="actions">
                                             <button class="btn btn-info" onclick="viewRole({{ role.id }})">
                                                 <i class='bx bx-show'></i>
@@ -1053,12 +1061,11 @@
                                                     <i class='bx bx-trash'></i>
                                                 </button>
                                             </form>
-
                                         </td>
                                     </tr>
                                     {% empty %}
                                     <tr>
-                                        <td colspan="5" class="no-data">
+                                        <td colspan="6" class="no-data">
                                             <i class='bx bx-user-check'></i>
                                             <p>No hay roles registrados</p>
                                         </td>
@@ -1191,7 +1198,6 @@
                                                     <i class='bx bx-trash'></i>
                                                 </button>
                                             </form>
-
                                         </td>
                                     </tr>
                                     {% empty %}
@@ -1230,6 +1236,17 @@
                         <label for="roleDescription">Descripción</label>
                         <textarea id="roleDescription" name="description" rows="3"></textarea>
                     </div>
+                    <div class="form-group">
+                        <label>Módulos Permitidos</label>
+                        <div class="permissions-checkboxes">
+                            {% for modulo in modulos_sistema %}
+                            <label>
+                                <input type="checkbox" name="modulos" value="{{ modulo.codename }}">
+                                {{ modulo.name }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" onclick="closeModal('createRoleModal')">Cancelar</button>
@@ -1266,6 +1283,17 @@
                             <option value="inactivo">Inactivo</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label>Módulos Permitidos</label>
+                        <div class="permissions-checkboxes" id="editRolePermissions">
+                            {% for modulo in modulos_sistema %}
+                            <label>
+                                <input type="checkbox" name="modulos" value="{{ modulo.codename }}">
+                                {{ modulo.name }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" onclick="closeModal('editRoleModal')">Cancelar</button>
@@ -1300,7 +1328,7 @@
                     <div class="view-field" id="viewRoleUsers"></div>
                 </div>
                 <div class="form-group">
-                    <label>Permisos</label>
+                    <label>Módulos Permitidos</label>
                     <div class="view-field" id="viewRolePermissions"></div>
                 </div>
             </div>
@@ -1565,7 +1593,16 @@
 
         // Función para abrir el modal de editar rol
         function openEditRoleModal(roleId) {
+            const row = document.querySelector(`tr[data-role-id="${roleId}"]`);
+            const modulos = row.getAttribute('data-modulos').split(',');
+            
             document.getElementById('editRoleId').value = roleId;
+            
+            // Marcar los checkboxes correspondientes a los módulos del rol
+            document.querySelectorAll('#editRolePermissions input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = modulos.includes(checkbox.value);
+            });
+            
             document.getElementById('editRoleModal').classList.add('active');
         }
 
@@ -1577,16 +1614,22 @@
 
         // Función para ver detalles del rol
         function viewRole(roleId) {
-            document.getElementById('viewRoleName').textContent = 'Nombre del Rol ' + roleId;
-            document.getElementById('viewRoleDescription').textContent = 'Descripción del rol ' + roleId;
-            document.getElementById('viewRoleStatus').textContent = 'Activo';
-            document.getElementById('viewRoleUsers').textContent = '5 usuarios';
-            document.getElementById('viewRolePermissions').textContent = 'Ver, Editar, Eliminar';
+            const row = document.querySelector(`tr[data-role-id="${roleId}"]`);
+            const cells = row.querySelectorAll('td');
+            
+            document.getElementById('viewRoleName').textContent = cells[0].textContent;
+            document.getElementById('viewRoleDescription').textContent = cells[1].textContent;
+            document.getElementById('viewRoleStatus').textContent = cells[2].querySelector('.status-badge').textContent;
+            document.getElementById('viewRoleUsers').textContent = cells[3].textContent;
+            document.getElementById('viewRolePermissions').textContent = cells[4].textContent;
+            
             document.getElementById('viewRoleModal').classList.add('active');
         }
 
         // Función para ver detalles del usuario
         function viewUser(userId) {
+            // En una implementación real, aquí harías una petición AJAX para obtener los detalles del usuario
+            // Por ahora, usaremos datos de ejemplo
             document.getElementById('viewUserName').textContent = 'Usuario ' + userId;
             document.getElementById('viewUserEmail').textContent = 'usuario' + userId + '@ejemplo.com';
             document.getElementById('viewUserRole').textContent = 'Administrador';
@@ -1644,8 +1687,7 @@
             });
         });
 
-  
-// Manejar el cierre de sesión con SweetAlert2
+        // Manejar el cierre de sesión con SweetAlert2
         document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
             e.preventDefault();
 

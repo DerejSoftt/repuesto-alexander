@@ -46,10 +46,12 @@ import traceback
 from django.http import JsonResponse
 from functools import wraps
 
-from weasyprint import HTML
+# from weasyprint import HTML
 from django.template.loader import render_to_string
 from functools import wraps
-
+from django.contrib.contenttypes.models import ContentType
+from django.db.models.signals import post_migrate
+from django.dispatch import receiver
 
 
 
@@ -314,7 +316,7 @@ def dashboard_data(request):
             venta__anulada=False,
             venta__fecha_venta__date__gte=fecha_30_dias
         ).values(
-            'producto__descripcion'  # CAMBIO AQUÍ
+            'producto__descripcion'
         ).annotate(
             total_vendido=Sum('cantidad')
         ).order_by('-total_vendido')[:5]
@@ -327,7 +329,7 @@ def dashboard_data(request):
         # Inventario detalle - CORREGIDO
         productos_inventario = list(
             EntradaProducto.objects.filter(activo=True)
-            .values('descripcion', 'marca', 'cantidad', 'precio', 'cantidad_minima')[:10]  # CAMBIOS AQUÍ
+            .values('descripcion', 'marca', 'cantidad', 'precio', 'cantidad_minima')[:10]
         )
 
         # Alertas - CORREGIDO
@@ -335,7 +337,7 @@ def dashboard_data(request):
             f"{p['descripcion']} - Solo {p['cantidad']} unidades restantes (mínimo: {p['cantidad_minima']})"
             for p in EntradaProducto.objects.filter(
                 activo=True, cantidad__lte=F('cantidad_minima')
-            ).values('descripcion', 'cantidad', 'cantidad_minima')  # CAMBIO AQUÍ
+            ).values('descripcion', 'cantidad', 'cantidad_minima')
         ]
 
         # Cuentas vencidas
@@ -344,6 +346,71 @@ def dashboard_data(request):
             estado__in=['pendiente', 'parcial'],
             anulada=False
         ).count()
+
+        # =============================================
+        # NUEVO: CÁLCULOS DEL VALOR DEL INVENTARIO
+        # =============================================
+        
+        # Obtener todos los productos activos
+        productos_activos = EntradaProducto.objects.filter(activo=True)
+        
+        # Calcular valor total del inventario (precio de venta * cantidad)
+        valor_total_inventario = 0
+        inversion_total = 0
+        
+        for producto in productos_activos:
+            # Valor a precio de venta
+            if producto.precio and producto.cantidad:
+                valor_total_inventario += float(producto.precio * producto.cantidad)
+            
+            # Inversión total (costo * cantidad)
+            if producto.costo and producto.cantidad:
+                inversion_total += float(producto.costo * producto.cantidad)
+        
+        # Ganancia potencial
+        ganancia_potencial = valor_total_inventario - inversion_total
+
+        # Valor por marca
+        valores_por_marca = []
+        marcas_distintas = productos_activos.values('marca').distinct()
+        
+        for marca_info in marcas_distintas:
+            marca = marca_info['marca']
+            productos_marca = productos_activos.filter(marca=marca)
+            
+            valor_marca = 0
+            for producto in productos_marca:
+                if producto.precio and producto.cantidad:
+                    valor_marca += float(producto.precio * producto.cantidad)
+            
+            # Obtener el nombre legible de la marca
+            nombre_marca = dict(EntradaProducto.MARCAS).get(marca, marca)
+            
+            valores_por_marca.append({
+                'marca': nombre_marca,
+                'valorTotal': round(valor_marca, 2)
+            })
+        
+        # Ordenar marcas por valor descendente
+        valores_por_marca.sort(key=lambda x: x['valorTotal'], reverse=True)
+
+        # Productos de mayor valor (top 10 por valor total)
+        productos_con_valor = []
+        for producto in productos_activos:
+            if producto.precio and producto.cantidad:
+                valor_total = float(producto.precio * producto.cantidad)
+                productos_con_valor.append({
+                    'descripcion': producto.descripcion,
+                    'marca': dict(EntradaProducto.MARCAS).get(producto.marca, producto.marca),
+                    'cantidad': producto.cantidad,
+                    'cantidad_minima': producto.cantidad_minima,
+                    'costo': float(producto.costo) if producto.costo else 0,
+                    'precio': float(producto.precio) if producto.precio else 0,
+                    'valorTotal': round(valor_total, 2)
+                })
+        
+        # Ordenar por valor total descendente y tomar los top 10
+        productos_mayor_valor = sorted(productos_con_valor, key=lambda x: x['valorTotal'], reverse=True)[:10]
 
         data = {
             'sales': {
@@ -365,7 +432,7 @@ def dashboard_data(request):
                 ]
             },
             'topProducts': [{
-                'nombre_producto': item['producto__descripcion'],  # CAMBIO AQUÍ
+                'nombre_producto': item['producto__descripcion'],
                 'total_vendido': item['total_vendido']
             } for item in top_productos],
             'recentSales': [{
@@ -379,7 +446,17 @@ def dashboard_data(request):
             } for venta in ultimas_ventas],
             'inventoryItems': productos_inventario,
             'lowStockAlerts': alertas[:5],
-            'overdueAccounts': cuentas_vencidas
+            'overdueAccounts': cuentas_vencidas,
+            # =============================================
+            # NUEVO: DATOS DEL VALOR DEL INVENTARIO
+            # =============================================
+            'inventoryValue': {
+                'totalValue': round(valor_total_inventario, 2),
+                'totalInvestment': round(inversion_total, 2),
+                'potentialProfit': round(ganancia_potencial, 2),
+                'brandValues': valores_por_marca,
+                'highValueProducts': productos_mayor_valor
+            }
         }
         return JsonResponse(data)
 
@@ -388,7 +465,6 @@ def dashboard_data(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
-
 
 def dashboard_tradicional(request):
     """Versión tradicional sin pandas"""
@@ -728,21 +804,20 @@ def inventario_datos(request):
             'color',
             'cantidad',
             'costo',
+            'precio',  # Añade este campo
+            'precio_por_mayor',  # Añade este campo
             'precio_con_itbis',
             'precio_por_mayor_con_itbis',
             'imagen',
             'observaciones'
         ))
-
         # Construir la URL completa para las imágenes
         for producto in productos:
             if producto['imagen']:
                 producto['imagen'] = request.build_absolute_uri(settings.MEDIA_URL + producto['imagen'])
             else:
                 producto['imagen'] = None
-
         proveedores = list(Proveedor.objects.all().values())
-
         return JsonResponse({
             'productos': productos,
             'proveedores': proveedores,
@@ -754,65 +829,86 @@ def inventario_datos(request):
     except Exception as e:
         return JsonResponse({'error': f'Error interno del servidor: {str(e)}'}, status=500)
 
+
 # Vista para editar un producto (solo superusuarios)
 
-@require_http_methods(["PUT"])
+# Vista para editar un producto (solo superusuarios)
+# Vista para editar un producto (solo superusuarios)
+
+
+# Vista para editar un producto (solo superusuarios)
 @csrf_exempt
 @superuser_required
 def inventario_editar(request, id):
+    if request.method not in ['PUT', 'POST']:
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    
     try:
         producto = EntradaProducto.objects.get(id=id)
-
-        # Determinar si es JSON o FormData
-        if request.content_type == 'application/json':
-            # Procesar datos JSON
-            data = json.loads(request.body)
-            
-            # Actualizar campos desde JSON
-            producto.descripcion = data.get('descripcion', producto.descripcion)
-            producto.marca = data.get('marca', producto.marca)
-            producto.compatibilidad = data.get('compatibilidad', producto.compatibilidad)
-            producto.color = data.get('color', producto.color)
-            producto.costo = Decimal(str(data.get('costo', producto.costo)))
-            producto.precio = Decimal(str(data.get('precio', producto.precio)))
-            
-            precio_por_mayor = data.get('precio_por_mayor')
-            if precio_por_mayor is not None:
-                producto.precio_por_mayor = Decimal(str(precio_por_mayor))
-            else:
-                producto.precio_por_mayor = None
-                
-            producto.observaciones = data.get('observaciones', producto.observaciones)
-            
-        else:
-            # Procesar FormData (incluye imagen)
+        
+        is_multipart = request.content_type and 'multipart' in request.content_type
+        
+        if is_multipart:
+            # Actualizar campos del formulario
             producto.descripcion = request.POST.get('descripcion', producto.descripcion)
             producto.marca = request.POST.get('marca', producto.marca)
-            producto.compatibilidad = request.POST.get('compatibilidad', producto.compatibilidad)
-            producto.color = request.POST.get('color', producto.color)
+            producto.compatibilidad = request.POST.get('compatibilidad', producto.compatibilidad) or None
+            producto.color = request.POST.get('color', producto.color) or None
             producto.costo = Decimal(request.POST.get('costo', producto.costo))
-            producto.precio = Decimal(request.POST.get('precio', producto.precio))
             
-            precio_por_mayor = request.POST.get('precio_por_mayor')
-            if precio_por_mayor:
-                producto.precio_por_mayor = Decimal(precio_por_mayor)
-            else:
-                producto.precio_por_mayor = None
+            # Manejar precios con ITBIS - CAMBIO IMPORTANTE
+            precio_con_itbis = request.POST.get('precio_con_itbis')
+            if precio_con_itbis:
+                producto.precio = Decimal(precio_con_itbis) / Decimal('1.18')  # Convertir a precio base
                 
-            producto.observaciones = request.POST.get('observaciones', producto.observaciones)
+            precio_por_mayor_con_itbis = request.POST.get('precio_por_mayor_con_itbis')
+            if precio_por_mayor_con_itbis:
+                producto.precio_por_mayor = Decimal(precio_por_mayor_con_itbis) / Decimal('1.18')  # Convertir a precio base
             
-            # Procesar imagen si se envió
+            producto.observaciones = request.POST.get('observaciones', producto.observaciones) or None
+            
+            # Procesar la imagen si se envió una nueva
             if 'imagen' in request.FILES:
+                if producto.imagen:
+                    try:
+                        old_image_path = producto.imagen.path
+                        if os.path.isfile(old_image_path):
+                            os.remove(old_image_path)
+                    except Exception as e:
+                        print(f"Error al eliminar imagen anterior: {str(e)}")
                 producto.imagen = request.FILES['imagen']
-
-        # Guardar el producto (esto recalculará los precios con ITBIS)
+        
+        else:  # Si es JSON (sin imagen)
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                return JsonResponse({'error': 'JSON inválido'}, status=400)
+            
+            producto.descripcion = data.get('descripcion', producto.descripcion)
+            producto.marca = data.get('marca', producto.marca)
+            producto.compatibilidad = data.get('compatibilidad', producto.compatibilidad) or None
+            producto.color = data.get('color', producto.color) or None
+            producto.costo = Decimal(str(data.get('costo', producto.costo)))
+            
+            # Manejar precios con ITBIS - CAMBIO IMPORTANTE
+            precio_con_itbis = data.get('precio_con_itbis')
+            if precio_con_itbis:
+                producto.precio = Decimal(str(precio_con_itbis)) / Decimal('1.18')  # Convertir a precio base
+                
+            precio_por_mayor_con_itbis = data.get('precio_por_mayor_con_itbis')
+            if precio_por_mayor_con_itbis:
+                producto.precio_por_mayor = Decimal(str(precio_por_mayor_con_itbis)) / Decimal('1.18')  # Convertir a precio base
+            
+            producto.observaciones = data.get('observaciones', producto.observaciones) or None
+        
+        # Guardar el producto (esto recalculará los precios con ITBIS automáticamente)
         producto.save()
-
+        
         # Construir URL completa para la imagen
         imagen_url = None
         if producto.imagen:
             imagen_url = request.build_absolute_uri(producto.imagen.url)
-
+        
         # Preparar la respuesta con los datos actualizados
         producto_actualizado = {
             'id': producto.id,
@@ -830,25 +926,43 @@ def inventario_editar(request, id):
             'imagen': imagen_url,
             'observaciones': producto.observaciones,
         }
-
+        
         return JsonResponse(producto_actualizado)
-
+    
     except EntradaProducto.DoesNotExist:
         return JsonResponse({'error': 'Producto no encontrado'}, status=404)
+    except ValueError as e:
+        return JsonResponse({'error': f'Valor inválido: {str(e)}'}, status=400)
     except Exception as e:
+        print(f"Error en inventario_editar: {str(e)}")
         return JsonResponse({'error': f'Error al actualizar el producto: {str(e)}'}, status=500)
+
 # Vista para eliminar un producto (solo superusuarios)
-@require_http_methods(["DELETE"])
 @csrf_exempt
 @superuser_required
 def inventario_eliminar(request, id):
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    
     try:
         producto = EntradaProducto.objects.get(id=id)
+        
+        # Eliminar imagen si existe
+        if producto.imagen:
+            try:
+                if os.path.isfile(producto.imagen.path):
+                    os.remove(producto.imagen.path)
+                    print(f"Imagen eliminada: {producto.imagen.path}")
+            except Exception as e:
+                print(f"Error al eliminar imagen: {str(e)}")
+        
         producto.delete()
         return JsonResponse({'success': True, 'message': 'Producto eliminado correctamente'})
+    
     except EntradaProducto.DoesNotExist:
         return JsonResponse({'error': 'Producto no encontrado'}, status=404)
     except Exception as e:
+        print(f"Error en inventario_eliminar: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -1330,6 +1444,244 @@ def safe_int(value, default=0):
         return default
 
 
+# @csrf_exempt
+# @require_POST
+# @transaction.atomic
+# @login_required
+# def procesar_venta(request):
+#     try:
+#         data = request.POST
+#         user = request.user
+#         if not data:
+#             return JsonResponse({'success': False, 'message': 'No se recibieron datos'})
+
+#         # Datos de la venta
+#         payment_type = data.get('payment_type', 'contado')
+#         payment_method = data.get('payment_method', 'efectivo')
+#         subtotal_con_itbis = Decimal(data.get('subtotal', 0))  # Este valor YA INCLUYE ITBIS
+#         discount_percentage = Decimal(data.get('discount_percentage', 0))
+#         discount_amount = Decimal(data.get('discount_amount', 0))
+#         total = Decimal(data.get('total', 0))
+#         total_a_pagar = Decimal(data.get('total_a_pagar', 0))
+#         cash_received = Decimal(data.get('cash_received', 0))
+#         change_amount = Decimal(data.get('change_amount', 0))
+
+#         # Validaciones
+#         if payment_type not in ['contado', 'credito']:
+#             return JsonResponse({'success': False, 'message': 'Tipo de pago inválido'})
+#         if payment_method not in ['efectivo', 'tarjeta', 'transferencia']:
+#             return JsonResponse({'success': False, 'message': 'Método de pago inválido'})
+#         if subtotal_con_itbis <= 0:
+#             return JsonResponse({'success': False, 'message': 'El subtotal debe ser mayor a 0'})
+#         if total <= 0:
+#             return JsonResponse({'success': False, 'message': 'El total debe ser mayor a 0'})
+#         if discount_percentage < 0 or discount_percentage > 100:
+#             return JsonResponse({'success': False, 'message': 'El porcentaje de descuento debe estar entre 0 y 100'})
+
+#         # Calcular ITBIS y subtotal SIN ITBIS
+#         itbis_porcentaje = Decimal('18.00')
+#         subtotal_sin_itbis = subtotal_con_itbis / (1 + (itbis_porcentaje / 100))
+#         itbis_monto = subtotal_con_itbis - subtotal_sin_itbis
+
+#         # Validar descuento
+#         discount_amount_calculado = (subtotal_con_itbis * discount_percentage) / Decimal('100.00')
+#         total_calculado = subtotal_con_itbis - discount_amount_calculado
+#         if abs(discount_amount - discount_amount_calculado) > Decimal('0.01'):
+#             discount_amount = discount_amount_calculado
+#         if abs(total - total_calculado) > Decimal('0.01'):
+#             total = total_calculado
+
+#         # Procesar cliente
+#         client_id = data.get('client_id')
+#         client_name = data.get('client_name', '').strip()
+#         client_document = data.get('client_document', '').strip()
+#         cliente = None
+#         if payment_type == 'credito':
+#             if not client_id:
+#                 return JsonResponse({'success': False, 'message': 'Debe seleccionar un cliente para ventas a crédito'})
+#             try:
+#                 from .models import Cliente, CuentaPorCobrar
+#                 cliente = Cliente.objects.get(id=client_id, status=True)
+#                 cuentas_pendientes = CuentaPorCobrar.objects.filter(
+#                     cliente=cliente,
+#                     anulada=False,
+#                     eliminada=False
+#                 ).exclude(estado='pagada')
+#                 total_deuda = sum(cuenta.saldo_pendiente for cuenta in cuentas_pendientes)
+#                 total_con_nueva_venta = total_deuda + total
+#                 if total_con_nueva_venta > cliente.credit_limit:
+#                     return JsonResponse({
+#                         'success': False,
+#                         'message': f'El cliente {cliente.full_name} ha excedido su límite de crédito.'
+#                     })
+#             except Cliente.DoesNotExist:
+#                 return JsonResponse({'success': False, 'message': 'Cliente no válido'})
+#         else:
+#             if not client_name:
+#                 return JsonResponse({'success': False, 'message': 'Debe ingresar el nombre del cliente'})
+
+#         # Procesar items de la venta
+#         sale_items_json = data.get('sale_items')
+#         if not sale_items_json:
+#             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
+#         try:
+#             sale_items = json.loads(sale_items_json)
+#         except json.JSONDecodeError:
+#             return JsonResponse({'success': False, 'message': 'Formato de productos no válido'})
+#         if not sale_items:
+#             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
+
+#         # Verificar stock
+#         from .models import EntradaProducto
+#         for item in sale_items:
+#             try:
+#                 producto = EntradaProducto.objects.get(id=item['id'], activo=True)
+#                 cantidad_solicitada = int(item['quantity'])
+#                 if producto.cantidad < cantidad_solicitada:
+#                     nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
+#                     return JsonResponse({
+#                         'success': False,
+#                         'message': f'Stock insuficiente para {nombre_producto}. Disponible: {producto.cantidad}'
+#                     })
+#             except EntradaProducto.DoesNotExist:
+#                 return JsonResponse({'success': False, 'message': f'Producto no encontrado: {item.get("name", "Desconocido")}'})
+#             except (ValueError, KeyError):
+#                 return JsonResponse({'success': False, 'message': f'Cantidad inválida para producto: {item.get("name", "Desconocido")}'})
+
+#         # Crear la venta
+#         from .models import Venta, DetalleVenta
+#         venta = Venta(
+#             vendedor=user,
+#             cliente=cliente,
+#             cliente_nombre=client_name,
+#             cliente_documento=client_document,
+#             tipo_venta=payment_type,
+#             metodo_pago=payment_method,
+#             subtotal=subtotal_sin_itbis,
+#             itbis_porcentaje=itbis_porcentaje,
+#             itbis_monto=itbis_monto,
+#             descuento_porcentaje=discount_percentage,
+#             descuento_monto=discount_amount,
+#             total=total,
+#             total_a_pagar=total_a_pagar,
+#             montoinicial=0,
+#             efectivo_recibido=cash_received,
+#             cambio=change_amount,
+#             completada=True,
+#             fecha_venta=timezone.now(),
+#         )
+#         venta.save()  # Esto llamará al método save personalizado y generará el número de factura
+
+#         # Log de la venta
+#         print(f"=== VENTA CREADA ===")
+#         print(f"Factura: {venta.numero_factura}")
+#         print(f"Subtotal (sin ITBIS): RD${venta.subtotal}")
+#         print(f"ITBIS ({venta.itbis_porcentaje}%): RD${venta.itbis_monto}")
+#         print(f"Subtotal (con ITBIS): RD${venta.subtotal + venta.itbis_monto}")
+#         print(f"Descuento %: {venta.descuento_porcentaje}%")
+#         print(f"Descuento monto: RD${venta.descuento_monto}")
+#         print(f"Total: RD${venta.total}")
+#         print(f"Total a pagar: RD${venta.total_a_pagar}")
+
+#         # Procesar detalles de venta y descontar stock
+#         productos_para_cuenta = []
+#         for item in sale_items:
+#             try:
+#                 producto = EntradaProducto.objects.get(id=item['id'])
+#                 cantidad = int(item['quantity'])
+#                 precio_unitario = Decimal(item['price'])
+#                 subtotal_item = Decimal(item['subtotal'])
+#                 calculated_subtotal = precio_unitario * cantidad
+#                 if abs(calculated_subtotal - subtotal_item) > Decimal('0.01'):
+#                     nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
+#                     print(f"Advertencia: Subtotal inconsistente para {nombre_producto}")
+#                     subtotal_item = calculated_subtotal
+#                 producto.cantidad -= cantidad
+#                 producto.save(update_fields=['cantidad'])
+#                 nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
+#                 print(f"Stock actualizado: {nombre_producto} -{cantidad} unidades")
+#                 detalle = DetalleVenta(
+#                     venta=venta,
+#                     producto=producto,
+#                     cantidad=cantidad,
+#                     precio_unitario=precio_unitario,
+#                     subtotal=subtotal_item
+#                 )
+#                 detalle.save()
+#                 productos_para_cuenta.append(f"{nombre_producto} x{cantidad} - RD${precio_unitario:.2f}")
+#             except EntradaProducto.DoesNotExist:
+#                 transaction.set_rollback(True)
+#                 return JsonResponse({'success': False, 'message': f'Producto no encontrado: ID {item.get("id", "Desconocido")}'})
+#             except Exception as e:
+#                 transaction.set_rollback(True)
+#                 return JsonResponse({'success': False, 'message': f'Error al procesar producto: {str(e)}'})
+
+#         # Crear cuenta por cobrar si es venta a crédito
+#         if payment_type == 'credito' and cliente:
+#             try:
+#                 fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
+#                 productos_str = "\n".join(productos_para_cuenta)
+#                 cuenta_por_cobrar = CuentaPorCobrar(
+#                     venta=venta,
+#                     cliente=cliente,
+#                     monto_total=total,
+#                     monto_pagado=0,
+#                     fecha_vencimiento=fecha_vencimiento,
+#                     productos=productos_str,
+#                     estado='pendiente',
+#                     observaciones=f"""Venta a crédito - Factura: {venta.numero_factura}
+# Cliente: {cliente.full_name}
+# Productos:
+# {productos_str}"""
+#                 )
+#                 cuenta_por_cobrar.save()
+#                 print(f"Cuenta por cobrar creada: {cuenta_por_cobrar.id}")
+#             except Exception as e:
+#                 transaction.set_rollback(True)
+#                 return JsonResponse({'success': False, 'message': f'Error al crear cuenta por cobrar: {str(e)}'})
+
+#         return JsonResponse({
+#             'success': True,
+#             'message': 'Venta procesada correctamente',
+#             'venta_id': venta.id,
+#             'numero_factura': venta.numero_factura,
+#             'detalles': {
+#                 'subtotal': float(venta.subtotal),
+#                 'itbis_porcentaje': float(venta.itbis_porcentaje),
+#                 'itbis_monto': float(venta.itbis_monto),
+#                 'descuento_porcentaje': float(venta.descuento_porcentaje),
+#                 'descuento_monto': float(venta.descuento_monto),
+#                 'total': float(venta.total),
+#                 'total_a_pagar': float(venta.total_a_pagar),
+#                 'efectivo_recibido': float(venta.efectivo_recibido),
+#                 'cambio': float(venta.cambio),
+#                 'items_count': len(sale_items)
+#             }
+#         })
+
+#     except Exception as e:
+#         transaction.set_rollback(True)
+#         import traceback
+#         print(f"Error completo: {traceback.format_exc()}")
+#         return JsonResponse({'success': False, 'message': f'Error al procesar la venta: {str(e)}'})
+
+
+from django.core.mail import EmailMessage
+from django.template.loader import render_to_string
+from django.conf import settings
+import os
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import textwrap
+
 @csrf_exempt
 @require_POST
 @transaction.atomic
@@ -1344,7 +1696,7 @@ def procesar_venta(request):
         # Datos de la venta
         payment_type = data.get('payment_type', 'contado')
         payment_method = data.get('payment_method', 'efectivo')
-        subtotal_con_itbis = Decimal(data.get('subtotal', 0))  # Este valor YA INCLUYE ITBIS
+        subtotal_con_itbis = Decimal(data.get('subtotal', 0))
         discount_percentage = Decimal(data.get('discount_percentage', 0))
         discount_amount = Decimal(data.get('discount_amount', 0))
         total = Decimal(data.get('total', 0))
@@ -1456,7 +1808,7 @@ def procesar_venta(request):
             completada=True,
             fecha_venta=timezone.now(),
         )
-        venta.save()  # Esto llamará al método save personalizado y generará el número de factura
+        venta.save()
 
         # Log de la venta
         print(f"=== VENTA CREADA ===")
@@ -1526,6 +1878,59 @@ Productos:
                 transaction.set_rollback(True)
                 return JsonResponse({'success': False, 'message': f'Error al crear cuenta por cobrar: {str(e)}'})
 
+        # GENERAR Y ENVIAR PDF POR CORREO
+        try:
+            # Generar el PDF
+            pdf_buffer = generar_pdf_venta(venta)
+            
+            # Configurar el correo
+            subject = f'Factura de Venta - {venta.numero_factura}'
+            message = f'''
+            Se ha procesado una nueva venta en el sistema.
+
+            Detalles de la venta:
+            - Número de Factura: {venta.numero_factura}
+            - Cliente: {client_name if client_name else cliente.full_name if cliente else "N/A"}
+            - Documento: {client_document if client_document else cliente.identification_number if cliente else "N/A"}
+            - Tipo de Venta: {payment_type.title()}
+            - Método de Pago: {payment_method.title()}
+            - Total: RD${total:.2f}
+            - Fecha: {venta.fecha_venta.strftime("%d/%m/%Y %H:%M")}
+            - Vendedor: {user.get_full_name() or user.username}
+
+            Se adjunta el comprobante en PDF.
+
+            Saludos,
+            Sistema de Ventas
+            '''
+            
+            # Crear el email
+            email = EmailMessage(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=['josemiguelbacosta@gmail.com'],  # Cambia por tu email
+                # También puedes agregar cc o bcc si lo deseas
+                # cc=['otro_email@example.com'],
+            )
+            
+            # Adjuntar el PDF
+            email.attach(
+                filename=f'factura_{venta.numero_factura}.pdf',
+                content=pdf_buffer.getvalue(),
+                mimetype='application/pdf'
+            )
+            
+            # Enviar el correo
+            email.send()
+            
+            print(f"Correo enviado exitosamente para la factura {venta.numero_factura}")
+            
+        except Exception as e:
+            # Si falla el envío del correo, no revertimos la venta, solo lo registramos
+            print(f"Error al enviar correo: {str(e)}")
+            # Puedes decidir si quieres notificar al usuario o no
+
         return JsonResponse({
             'success': True,
             'message': 'Venta procesada correctamente',
@@ -1550,6 +1955,181 @@ Productos:
         import traceback
         print(f"Error completo: {traceback.format_exc()}")
         return JsonResponse({'success': False, 'message': f'Error al procesar la venta: {str(e)}'})
+
+def generar_pdf_venta(venta):
+    """Genera un PDF con los detalles de la venta"""
+    buffer = BytesIO()
+    
+    # Crear el documento PDF
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=72,
+        leftMargin=72,
+        topMargin=72,
+        bottomMargin=18
+    )
+    
+    # Estilos
+    styles = getSampleStyleSheet()
+    estilo_titulo = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        textColor=colors.darkblue,
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    
+    estilo_normal = ParagraphStyle(
+        'Normal',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=12
+    )
+    
+    estilo_negrita = ParagraphStyle(
+        'Bold',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=12,
+        fontName='Helvetica-Bold'
+    )
+    
+    # Contenido del PDF
+    contenido = []
+    
+    # Título
+    contenido.append(Paragraph("FACTURA DE VENTA", estilo_titulo))
+    contenido.append(Spacer(1, 20))
+    
+    # Información de la empresa
+    info_empresa = [
+        ["<b>SUPER BESTIA</b>", f"<b>Factura No:</b> {venta.numero_factura}"],
+        ["<b>Venta de Repuestos para Motos</b>", f"<b>Fecha:</b> {venta.fecha_venta.strftime('%d/%m/%Y %H:%M')}"],
+        ["Tel: (809) 123-4567", f"<b>Vendedor:</b> {venta.vendedor.get_full_name() or venta.vendedor.username}"],
+        ["Email: info@superbestia.com", ""]
+    ]
+    
+    tabla_info = Table(info_empresa, colWidths=[3*inch, 3*inch])
+    tabla_info.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    
+    contenido.append(tabla_info)
+    contenido.append(Spacer(1, 20))
+    
+    # Información del cliente
+    contenido.append(Paragraph("<b>INFORMACIÓN DEL CLIENTE</b>", estilo_negrita))
+    cliente_nombre = venta.cliente_nombre or (venta.cliente.full_name if venta.cliente else "Cliente General")
+    cliente_doc = venta.cliente_documento or (venta.cliente.identification_number if venta.cliente else "N/A")
+    
+    info_cliente = [
+        ["Nombre:", cliente_nombre],
+        ["Documento:", cliente_doc],
+        ["Tipo de Venta:", venta.tipo_venta.title()],
+        ["Método de Pago:", venta.metodo_pago.title()]
+    ]
+    
+    tabla_cliente = Table(info_cliente, colWidths=[1.5*inch, 4.5*inch])
+    tabla_cliente.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    
+    contenido.append(tabla_cliente)
+    contenido.append(Spacer(1, 20))
+    
+    # Detalles de los productos
+    contenido.append(Paragraph("<b>DETALLES DE LA VENTA</b>", estilo_negrita))
+    
+    # Encabezados de la tabla de productos
+    encabezados = ['Producto', 'Cantidad', 'Precio Unit.', 'Subtotal']
+    datos_productos = [encabezados]
+    
+    # Obtener detalles de la venta
+    detalles = venta.detalles.all()
+    for detalle in detalles:
+        nombre_producto = detalle.producto.descripcion if hasattr(detalle.producto, 'descripcion') else str(detalle.producto)
+        # Limitar longitud del nombre para que quepa en el PDF
+        if len(nombre_producto) > 40:
+            nombre_producto = nombre_producto[:37] + "..."
+            
+        fila = [
+            nombre_producto,
+            str(detalle.cantidad),
+            f"RD${detalle.precio_unitario:.2f}",
+            f"RD${detalle.subtotal:.2f}"
+        ]
+        datos_productos.append(fila)
+    
+    tabla_productos = Table(datos_productos, colWidths=[3*inch, 1*inch, 1.2*inch, 1.2*inch])
+    tabla_productos.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Alinear nombres a la izquierda
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    
+    contenido.append(tabla_productos)
+    contenido.append(Spacer(1, 20))
+    
+    # Resumen financiero
+    contenido.append(Paragraph("<b>RESUMEN FINANCIERO</b>", estilo_negrita))
+    
+    resumen = [
+        ["Subtotal (sin ITBIS):", f"RD${venta.subtotal:.2f}"],
+        [f"ITBIS ({venta.itbis_porcentaje}%):", f"RD${venta.itbis_monto:.2f}"],
+        ["Subtotal (con ITBIS):", f"RD${venta.subtotal + venta.itbis_monto:.2f}"],
+        [f"Descuento ({venta.descuento_porcentaje}%):", f"RD${venta.descuento_monto:.2f}"],
+        ["<b>TOTAL:</b>", f"<b>RD${venta.total:.2f}</b>"]
+    ]
+    
+    if venta.tipo_venta == 'contado' and venta.metodo_pago == 'efectivo':
+        resumen.extend([
+            ["Efectivo Recibido:", f"RD${venta.efectivo_recibido:.2f}"],
+            ["<b>Cambio:</b>", f"<b>RD${venta.cambio:.2f}</b>"]
+        ])
+    
+    tabla_resumen = Table(resumen, colWidths=[3*inch, 2*inch])
+    tabla_resumen.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('FONTNAME', (0, -1), (1, -1), 'Helvetica-Bold'),
+    ]))
+    
+    contenido.append(tabla_resumen)
+    contenido.append(Spacer(1, 30))
+    
+    # Mensaje de agradecimiento
+    contenido.append(Paragraph("¡Gracias por su compra!", estilo_negrita))
+    contenido.append(Paragraph("Para reclamos o devoluciones, presente esta factura.", estilo_normal))
+    
+    # Construir el PDF
+    doc.build(contenido)
+    
+    # Obtener el valor del buffer
+    pdf = buffer.getvalue()
+    buffer.close()
+    
+    return BytesIO(pdf)
+
+
 
 @login_required
 def comprobante_venta(request, venta_id):
@@ -2467,7 +3047,10 @@ def agregar_nuevo_producto(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'Error al crear la plantilla: {str(e)}'})
 
+def is_superuser_or_almacen(user):
+    return user.is_superuser or user.groups.filter(name='Almacén').exists()
 
+@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
 @csrf_exempt
 def entrada(request):
     """Vista principal para registro de entradas de productos"""
@@ -2892,6 +3475,7 @@ def registrar_pago(request):
 
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
+
 def generar_comprobante_pdf(request, comprobante_id):
     try:
         comprobante = get_object_or_404(ComprobantePago, id=comprobante_id)
@@ -2900,27 +3484,22 @@ def generar_comprobante_pdf(request, comprobante_id):
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="comprobante_{comprobante.numero_comprobante}.pdf"'
 
-        # Configurar el PDF para 80mm de ancho (aprox. 226 puntos)
-        width = 226  # 80mm en puntos (1mm = 2.83 puntos)
-        height = 1200  # Alto suficiente para el contenido y firmas
+        # Configurar el PDF en tamaño A4 (595 x 842 puntos)
+        width, height = A4
+        p = canvas.Canvas(response, pagesize=A4)
 
-        # Crear el objeto PDF con tamaño personalizado
-        p = canvas.Canvas(response, pagesize=(width, height))
+        # Ruta absoluta del logo en STATIC_ROOT
+        logo_path = os.path.join(settings.STATIC_ROOT, 'image', 'favicon12.ico')
 
-        # Configurar márgenes y fuentes para impresora térmica
-        margin_left = 10
-        y_position = height - 20  # Empezar desde la parte superior
+        # Verifica si el archivo existe
+        if not os.path.exists(logo_path):
+            raise FileNotFoundError(f"No se encontró el logo en la ruta: {logo_path}")
+
+        # Márgenes y posiciones iniciales
+        margin_left = 50
+        y_position = height - 50  # Iniciar 50 puntos desde el borde superior
         line_height = 14
         small_line_height = 10
-
-        # Usar `total_a_pagar` de Venta
-        monto_total_original = Decimal(str(comprobante.cuenta.venta.total_a_pagar))
-
-        # Obtener el total con ITBIS para referencia
-        monto_total_con_itbis = comprobante.cuenta.venta.total if comprobante.cuenta.venta else comprobante.cuenta.monto_total
-
-        # Usar `total_a_pagar` para el saldo pendiente
-        saldo_pendiente = monto_total_original - Decimal(str(comprobante.cuenta.monto_pagado))
 
         # Función para centrar texto
         def draw_centered_text(text, y, font_size=12, bold=False):
@@ -2933,7 +3512,7 @@ def generar_comprobante_pdf(request, comprobante_id):
             p.drawString(x, y, text)
             return y - line_height
 
-        # Función para texto normal alineado a la izquierda
+        # Función para texto alineado a la izquierda
         def draw_left_text(text, y, font_size=10, bold=False):
             if bold:
                 p.setFont("Helvetica-Bold", font_size)
@@ -2942,24 +3521,29 @@ def generar_comprobante_pdf(request, comprobante_id):
             p.drawString(margin_left, y, text)
             return y - line_height
 
+        # Insertar logo en el encabezado
+        logo_width = 150
+        logo_height = 80
+        logo_x = (width - logo_width) / 2
+        logo_y = y_position - logo_height
+        p.drawImage(logo_path, logo_x, logo_y, width=logo_width, height=logo_height, preserveAspectRatio=True)
+        y_position = logo_y - 20  # Espacio después del logo
+
         # Encabezado del comprobante
-        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 8, True)  # Tamaño reducido
-        y_position = draw_centered_text("COMPROBANTE DE PAGO", y_position, 10, True)
-        y_position -= line_height / 2  # Espacio adicional
+        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 16, True)
+        y_position = draw_centered_text("COMPROBANTE DE PAGO", y_position, 14, True)
+        y_position -= line_height / 2
 
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height
 
         # Información del comprobante
-        y_position = draw_left_text(f"Comprobante: {comprobante.numero_comprobante}", y_position, 9)
-        y_position = draw_left_text(f"Fecha: {comprobante.fecha_emision.strftime('%d/%m/%Y %H:%M')}", y_position, 9)
-        y_position = draw_left_text(f"Cliente: {comprobante.cliente.full_name}", y_position, 9)
-
-        # Información de la factura si existe
+        y_position = draw_left_text(f"Comprobante: {comprobante.numero_comprobante}", y_position, 10)
+        y_position = draw_left_text(f"Fecha: {comprobante.fecha_emision.strftime('%d/%m/%Y %H:%M')}", y_position, 10)
+        y_position = draw_left_text(f"Cliente: {comprobante.cliente.full_name}", y_position, 10)
         if comprobante.cuenta.venta:
-            y_position = draw_left_text(f"Factura: {comprobante.cuenta.venta.numero_factura}", y_position, 9)
-
+            y_position = draw_left_text(f"Factura: {comprobante.cuenta.venta.numero_factura}", y_position, 10)
         y_position -= line_height / 2
 
         # Línea separadora
@@ -2967,76 +3551,66 @@ def generar_comprobante_pdf(request, comprobante_id):
         y_position -= line_height
 
         # Información del pago
-        y_position = draw_centered_text("DETALLE DEL PAGO", y_position, 10, True)
+        y_position = draw_centered_text("DETALLE DEL PAGO", y_position, 12, True)
         y_position -= small_line_height
-        y_position = draw_left_text(f"Monto Pagado: RD$ {comprobante.pago.monto:,.2f}", y_position, 9, True)
-        y_position = draw_left_text(f"Método: {comprobante.pago.get_metodo_pago_display()}", y_position, 9)
-
+        y_position = draw_left_text(f"Monto Pagado: RD$ {comprobante.pago.monto:,.2f}", y_position, 10, True)
+        y_position = draw_left_text(f"Método: {comprobante.pago.get_metodo_pago_display()}", y_position, 10)
         if comprobante.pago.referencia:
-            y_position = draw_left_text(f"Referencia: {comprobante.pago.referencia}", y_position, 8)
-
+            y_position = draw_left_text(f"Referencia: {comprobante.pago.referencia}", y_position, 9)
         y_position -= line_height / 2
 
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height
 
-        # Información de totales (usando `total_a_pagar` para saldo pendiente, CON ITBIS para referencia)
-        y_position = draw_centered_text("RESUMEN DE CUENTA", y_position, 10, True)
+        # Cálculo de montos
+        monto_total_original = Decimal(str(comprobante.cuenta.venta.total_a_pagar))
+        monto_total_con_itbis = comprobante.cuenta.venta.total if comprobante.cuenta.venta else comprobante.cuenta.monto_total
+        saldo_pendiente = monto_total_original - Decimal(str(comprobante.cuenta.monto_pagado))
+
+        # Resumen de cuenta
+        y_position = draw_centered_text("RESUMEN DE CUENTA", y_position, 12, True)
         y_position -= small_line_height
-        y_position = draw_left_text(f"Monto Original: RD$ {monto_total_original:,.2f}", y_position, 9)
-        #y_position = draw_left_text(f"Monto Total (con ITBIS): RD$ {monto_total_con_itbis:,.2f}", y_position, 9)
-        y_position = draw_left_text(f"Pagado Acumulado: RD$ {comprobante.cuenta.monto_pagado:,.2f}", y_position, 9)
-        y_position = draw_left_text(f"Saldo Pendiente: RD$ {saldo_pendiente:,.2f}", y_position, 9, True)
+        y_position = draw_left_text(f"Monto Original: RD$ {monto_total_original:,.2f}", y_position, 10)
+        y_position = draw_left_text(f"Pagado Acumulado: RD$ {comprobante.cuenta.monto_pagado:,.2f}", y_position, 10)
+        y_position = draw_left_text(f"Saldo Pendiente: RD$ {saldo_pendiente:,.2f}", y_position, 10, True)
         y_position -= line_height
 
-        # Línea separadora final
+        # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
-        y_position -= line_height * 2  # Más espacio antes de las firmas
+        y_position -= line_height * 2
 
-        # SECCIÓN DE FIRMAS
-        y_position = draw_centered_text("FIRMA DEL CLIENTE", y_position, 9, True)
+        # Sección de firmas
+        y_position = draw_centered_text("FIRMA DEL CLIENTE", y_position, 10, True)
         y_position -= small_line_height
+        p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
+        y_position -= line_height * 1.2
+        y_position = draw_left_text("Cédula: _________________________", y_position, 9)
+        y_position -= line_height * 1.5
 
-        # Línea para firma del cliente
+        y_position = draw_centered_text("FIRMA DE LA EMPRESA", y_position, 10, True)
+        y_position -= small_line_height
         p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
         y_position -= line_height
 
-        # Espacio para firma y cédula del cliente
-        y_position -= line_height * 1.2  # Espacio adicional antes de la cédula
-        y_position = draw_left_text("Cédula: _________________________", y_position, 8)
-        y_position -= line_height * 1.5
-
-        # FIRMA DE LA EMPRESA
-        y_position = draw_centered_text("FIRMA DE LA EMPRESA", y_position, 9, True)
-        y_position -= small_line_height
-
-        # Línea para firma de la empresa
-        p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
+        # Pie de página
+        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 10, True)
         y_position -= line_height
-
-        # Información de la empresa
-        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 8, True)
-        y_position -= line_height * 1.5
-
-        # Mensaje de agradecimiento
-        y_position = draw_centered_text("¡Gracias por su pago!", y_position, 10, True)
+        y_position = draw_centered_text("¡Gracias por su pago!", y_position, 12, True)
         y_position -= small_line_height
-
-        # Información de contacto de la empresa (más pequeña)
-        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 7)
-        y_position = draw_centered_text("Tel: (849) 353-5344", y_position, 7)
-
-        # Agregar código de barras o QR si es necesario (opcional)
-        y_position -= line_height
-        draw_centered_text(f"Ref: {comprobante.numero_comprobante}", y_position, 7)
+        y_position = draw_centered_text("Tel: (849) 353-5344", y_position, 9)
+        y_position = draw_centered_text(f"Ref: {comprobante.numero_comprobante}", y_position, 8)
 
         # Finalizar el PDF
         p.showPage()
         p.save()
-
         return response
 
+    except FileNotFoundError as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error: {str(e)}. Asegúrate de que el logo esté en la carpeta correcta y de que hayas ejecutado `collectstatic`.'
+        })
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -4072,7 +4646,6 @@ def procesar_devolucion(request):
         return JsonResponse({'error': f'Error al procesar la devolución: {str(e)}'}, status=500)
 
 
-
 # Función para verificar si el usuario es superusuario
 def is_superuser(user):
     return user.is_superuser
@@ -4085,11 +4658,53 @@ def roles(request):
     # Obtener todos los usuarios
     users = User.objects.all().prefetch_related('groups')
     
+    # Definir los módulos del sistema
+    MODULOS_SISTEMA = [
+        {'codename': 'entrada', 'name': 'Entrada Mercancía'},
+        {'codename': 'registrosuplidores', 'name': 'Registrar Suplidores'},
+        {'codename': 'inventario', 'name': 'Inventario'},
+        {'codename': 'ventas', 'name': 'Facturación'},
+        {'codename': 'cotizacion', 'name': 'Cotización'},
+        {'codename': 'registrodecliente', 'name': 'Registrar Cliente'},
+        {'codename': 'listadecliente', 'name': 'Clientes'},
+        {'codename': 'cuentaporcobrar', 'name': 'Cuenta por Cobrar'},
+        {'codename': 'gestiondesuplidores', 'name': 'Suplidores'},
+        {'codename': 'devoluciones', 'name': 'Devoluciones'},
+        {'codename': 'anular', 'name': 'Anular Factura'},
+        {'codename': 'reimprimirfactura', 'name': 'Reimprimir'},
+        {'codename': 'dashboard', 'name': 'Dashboard'},
+        {'codename': 'roles', 'name': 'Roles'},
+    ]
+    
+    # Crear permisos si no existen
+    content_type = ContentType.objects.get_for_model(Group)
+    for modulo in MODULOS_SISTEMA:
+        Permission.objects.get_or_create(
+            codename=f'access_{modulo["codename"]}',
+            content_type=content_type,
+            defaults={'name': f'Acceso a {modulo["name"]}'}
+        )
+    
+    # Crear rol especial "Almacén" si no existe
+    grupo_almacen, created = Group.objects.get_or_create(name='Almacén')
+    if created:
+        # Asignar permisos limitados al rol Almacén
+        permisos_almacen = ['access_entrada', 'access_registrosuplidores', 'access_inventario']
+        for permiso_codename in permisos_almacen:
+            permiso = Permission.objects.get(codename=permiso_codename)
+            grupo_almacen.permissions.add(permiso)
+    
     # Procesar datos para los templates
     roles_data = []
     for group in groups:
         user_count = group.user_set.count()
         permissions = list(group.permissions.values_list('codename', flat=True))
+        
+        # Obtener módulos asignados al rol
+        modulos_asignados = []
+        for modulo in MODULOS_SISTEMA:
+            if f'access_{modulo["codename"]}' in permissions:
+                modulos_asignados.append(modulo["name"])
         
         roles_data.append({
             'id': group.id,
@@ -4098,7 +4713,8 @@ def roles(request):
             'status': 'activo',
             'isGlobal': True,
             'permissions': permissions,
-            'userCount': user_count
+            'userCount': user_count,
+            'modulos_asignados': modulos_asignados
         })
     
     users_data = []
@@ -4133,6 +4749,7 @@ def roles(request):
         'total_users': total_users,
         'active_users': active_users,
         'inactive_users': inactive_users,
+        'modulos_sistema': MODULOS_SISTEMA,
     }
     
     # Manejar búsquedas y filtros
@@ -4172,6 +4789,7 @@ def roles(request):
         if action == 'create_role':
             name = request.POST.get('name')
             description = request.POST.get('description', '')
+            modulos_seleccionados = request.POST.getlist('modulos')
             
             if not name:
                 messages.error(request, 'El nombre del rol es obligatorio.')
@@ -4179,6 +4797,15 @@ def roles(request):
                 messages.error(request, 'Ya existe un rol con este nombre.')
             else:
                 group = Group.objects.create(name=name)
+                
+                # Asignar permisos basados en los módulos seleccionados
+                for modulo_codename in modulos_seleccionados:
+                    try:
+                        permiso = Permission.objects.get(codename=f'access_{modulo_codename}')
+                        group.permissions.add(permiso)
+                    except Permission.DoesNotExist:
+                        continue
+                
                 messages.success(request, 'Rol creado exitosamente.')
                 return redirect('roles')
         
@@ -4187,6 +4814,7 @@ def roles(request):
             name = request.POST.get('name')
             description = request.POST.get('description', '')
             status = request.POST.get('status', 'activo')
+            modulos_seleccionados = request.POST.getlist('modulos')
             
             if not name:
                 messages.error(request, 'El nombre del rol es obligatorio.')
@@ -4198,6 +4826,16 @@ def roles(request):
                 else:
                     group.name = name
                     group.save()
+                    
+                    # Actualizar permisos
+                    group.permissions.clear()
+                    for modulo_codename in modulos_seleccionados:
+                        try:
+                            permiso = Permission.objects.get(codename=f'access_{modulo_codename}')
+                            group.permissions.add(permiso)
+                        except Permission.DoesNotExist:
+                            continue
+                    
                     messages.success(request, 'Rol actualizado exitosamente.')
                     return redirect('roles')
         
@@ -4306,11 +4944,13 @@ def roles(request):
             response['Content-Disposition'] = 'attachment; filename="roles.csv"'
             
             writer = csv.writer(response)
-            writer.writerow(['Nombre', 'Descripción', 'Estado', 'Usuarios Asignados'])
+            writer.writerow(['Nombre', 'Descripción', 'Estado', 'Usuarios Asignados', 'Módulos'])
             
             for group in Group.objects.all():
                 user_count = group.user_set.count()
-                writer.writerow([group.name, '', 'activo', user_count])
+                modulos = [modulo['name'] for modulo in MODULOS_SISTEMA 
+                          if group.permissions.filter(codename=f'access_{modulo["codename"]}').exists()]
+                writer.writerow([group.name, '', 'activo', user_count, ', '.join(modulos)])
             
             return response
         
@@ -4337,6 +4977,71 @@ def roles(request):
     
     return render(request, "facturacion/roles.html", context)
 
+
+
+@receiver(post_migrate)
+def crear_grupos_y_permisos(sender, **kwargs):
+    # Obtener el ContentType para Group
+    content_type = ContentType.objects.get_for_model(Group)
+
+    # Lista de módulos y sus roles
+    MODULOS = [
+        # Módulos para Usuario Normal
+        {'codename': 'ventas', 'name': 'Facturación', 'roles': ['normal', 'superuser']},
+        {'codename': 'cotizacion', 'name': 'Cotización', 'roles': ['normal', 'superuser']},
+        {'codename': 'registrodecliente', 'name': 'Registrar Cliente', 'roles': ['normal', 'superuser']},
+        {'codename': 'listadecliente', 'name': 'Clientes', 'roles': ['normal', 'superuser']},
+        {'codename': 'cuentaporcobrar', 'name': 'Cuenta por Cobrar', 'roles': ['normal', 'superuser']},
+        {'codename': 'inventario', 'name': 'Inventario', 'roles': ['normal', 'special', 'superuser']},
+        {'codename': 'reimprimirfactura', 'name': 'Reimprimir', 'roles': ['normal', 'superuser']},
+        # Módulos para Usuario Especial (Almacén)
+        {'codename': 'entrada', 'name': 'Entrada Mercancía', 'roles': ['special', 'superuser']},
+        {'codename': 'registrosuplidores', 'name': 'Registrar Suplidores', 'roles': ['special', 'superuser']},
+        {'codename': 'gestiondesuplidores', 'name': 'Suplidores', 'roles': ['special', 'superuser']},
+        # Módulos con permisos específicos
+        {'codename': 'devoluciones', 'name': 'Devoluciones', 'roles': ['superuser']},
+        {'codename': 'roles', 'name': 'Roles', 'roles': ['superuser']},
+        {'codename': 'anular', 'name': 'Anular Factura', 'roles': ['superuser']},
+        {'codename': 'dashboard', 'name': 'Dashboard', 'roles': ['superuser']},
+    ]
+
+    # Crear permisos si no existen
+    for modulo in MODULOS:
+        Permission.objects.get_or_create(
+            codename=f'access_{modulo["codename"]}',
+            name=f'Acceso a {modulo["name"]}',
+            content_type=content_type,
+        )
+
+    # Crear grupos y asignar permisos
+    grupo_normal, _ = Group.objects.get_or_create(name='Usuario Normal')
+    grupo_almacen, _ = Group.objects.get_or_create(name='Almacén')
+
+    # Asignar permisos a Usuario Normal
+    permisos_normal = [
+        'access_ventas', 'access_cotizacion', 'access_registrodecliente',
+        'access_listadecliente', 'access_cuentaporcobrar',
+        'access_inventario', 'access_reimprimirfactura'
+    ]
+    for permiso_codename in permisos_normal:
+        permiso = Permission.objects.get(codename=permiso_codename)
+        grupo_normal.permissions.add(permiso)
+
+    # Asignar permisos a Almacén
+    permisos_almacen = [
+        'access_entrada', 'access_registrosuplidores',
+        'access_gestiondesuplidores', 'access_inventario'
+    ]
+    for permiso_codename in permisos_almacen:
+        permiso = Permission.objects.get(codename=permiso_codename)
+        grupo_almacen.permissions.add(permiso)
+
+
+def crear_grupo_almacen():
+    group, created = Group.objects.get_or_create(name='Almacen')
+    if created:
+        permisos = Permission.objects.filter(codename__in=['entrada', 'registro_suplidores', 'inventario'])
+        group.permissions.set(permisos)
 
 
 def anular(request):
