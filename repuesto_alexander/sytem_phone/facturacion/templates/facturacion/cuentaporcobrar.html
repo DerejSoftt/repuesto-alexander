@@ -832,11 +832,11 @@
                 <span>Entrada Mercancía</span>
             </a>
               {% endif %}
-            <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+            <a href="{% url 'cuentaporcobrar' %}" class="menu-item active">
                 <i class='bx bx-money'></i>
                 <span>Cuenta por Cobrar</span>
             </a>
-            <a href="{% url 'inventario' %}" class="menu-item active">
+            <a href="{% url 'inventario' %}" class="menu-item ">
                 <i class='bx bx-archive'></i>
                 <span>Inventario</span>
             </a>
@@ -1145,9 +1145,12 @@
     <!-- SweetAlert2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.12/dist/sweetalert2.all.min.js"></script>
     <script>
-  // ===== CONFIGURACIÓN INICIAL =====
-// ===== CONFIGURACIÓN INICIAL =====
+ // ===== CONFIGURACIÓN INICIAL =====
 console.log('Inicializando sistema de cuentas por cobrar...');
+
+// Obtener información del usuario desde Django
+const isSuperuser = {{ user.is_superuser|yesno:"true,false" }};
+console.log('Usuario es superusuario:', isSuperuser);
 
 // Cargar datos desde Django
 let accounts = [];
@@ -1426,9 +1429,11 @@ function renderTable(data = accounts) {
                                     <i class='bx bx-trash'></i>
                                 </button>
                                 ` : `
+                                ${isSuperuser ? `
                                 <button class="btn btn-danger" onclick="anularCuenta(${invoice.id})" title="Anular Cuenta">
                                     <i class='bx bx-x-circle'></i>
                                 </button>
+                                ` : ''}
                                 `}
                             </div>
                         </td>
@@ -1868,9 +1873,9 @@ function submitPayment() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const comprobanteMensaje = data.comprobante_numero ?
+                    const comprobanteMensaje = data.comprobante_numero ? 
                         `\nComprobante generado: ${data.comprobante_numero}` : '';
-                    const saldoMensaje = data.nuevo_saldo_pendiente !== undefined ?
+                    const saldoMensaje = data.nuevo_saldo_pendiente !== undefined ? 
                         `\nNuevo saldo pendiente: RD$ ${data.nuevo_saldo_pendiente.toLocaleString('es-DO')}` : '';
 
                     if (data.comprobante_id) {
@@ -2006,8 +2011,12 @@ function anularCuenta(id) {
                 <p><strong>Monto Total:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
                 <p><strong>Estado Actual:</strong> <span class="status-badge ${getStatusClass(account.status)}">${getStatusName(account.status)}</span></p>
             </div>
-            <p style="color: #dc3545; font-weight: bold; margin-top: 15px;">⚠️ Esta acción marcará la cuenta como anulada y no se podrá deshacer.</p>
-            <p style="color: #666; font-size: 0.9rem;">La cuenta permanecerá en el sistema para auditoría pero no se podrán realizar pagos.</p>
+            <p style="color: #dc3545; font-weight: bold; margin-top: 15px;">
+                ⚠️ Esta acción marcará la cuenta como anulada y no se podrá deshacer.
+            </p>
+            <p style="color: #666; font-size: 0.9rem;">
+                Solo el superusuario puede realizar esta acción.
+            </p>
         `,
         icon: 'warning',
         showCancelButton: true,
@@ -2030,6 +2039,7 @@ function anularCuenta(id) {
                     Swal.showLoading();
                 }
             });
+            
             fetch(`/anular-cuenta/${id}/`, {
                 method: 'POST',
                 headers: {
@@ -2054,12 +2064,30 @@ function anularCuenta(id) {
                         window.location.reload();
                     });
                 } else {
-                    Swal.fire({
-                        title: 'No se pudo anular',
-                        text: data.message,
-                        icon: 'error',
-                        confirmButtonColor: '#dc3545'
-                    });
+                    // Mostrar mensaje de error específico para permisos
+                    if (data.message.includes('No tiene permisos') || data.message.includes('superusuario')) {
+                        Swal.fire({
+                            title: 'Permiso denegado',
+                            html: `
+                                <div style="text-align: left; margin: 15px 0;">
+                                    <p style="color: #dc3545; font-weight: bold;">${data.message}</p>
+                                    <p style="color: #666; margin-top: 10px;">
+                                        Esta acción requiere permisos de superusuario. 
+                                        Contacte al administrador del sistema.
+                                    </p>
+                                </div>
+                            `,
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    } else {
+                        Swal.fire({
+                            title: 'No se pudo anular',
+                            text: data.message,
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    }
                 }
             })
             .catch(error => {
@@ -2074,6 +2102,7 @@ function anularCuenta(id) {
         }
     });
 }
+
 function exportData() {
     console.log('Exportando datos...');
     const validAccounts = accounts.filter(account => account.status !== 'anulada' && !account.eliminada);

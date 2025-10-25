@@ -1,4 +1,3 @@
-
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
@@ -372,6 +371,13 @@
         .actions {
             display: flex;
             gap: 8px;
+            align-items: center;
+        }
+
+        .read-only-text {
+            font-size: 0.8rem;
+            color: #6c757d;
+            font-style: italic;
         }
 
         .no-data {
@@ -735,116 +741,116 @@
     </button>
 
     <!-- Sidebar Overlay -->
- <div class="sidebar-overlay" onclick="closeSidebar()"></div>
-<!-- Sidebar Navigation -->
-<nav class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-        <h2>
-            <i class="fas fa-motorcycle"></i>
-            Super Bestia
-        </h2>
-        <p>Usuario: {{ user.username }}</p>
-        <p>{{ user.email }}</p>
-    </div>
-     <div class="sidebar-menu">
-        <a href="#" class="menu-item">
-            <i class='bx bx-home-alt'></i>
-            <span>Inicio</span>
-        </a>
-          {% if has_ventas_access or user.is_superuser %}
-        <a href="{% url 'ventas' %}" class="menu-item">
-            <i class='bx bx-receipt'></i>
-            <span>Facturación</span>
-        </a>
-        {% endif %}
+    <div class="sidebar-overlay" onclick="closeSidebar()"></div>
 
-          {% if has_cotizacion_access or user.is_superuser %}
-         <a href="{% url 'cotizacion' %}" class="menu-item">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>
+                <i class="fas fa-motorcycle"></i>
+                Super Bestia
+            </h2>
+            <p>Usuario: {{ user.username }}</p>
+            <p>{{ user.email }}</p>
+        </div>
+        <div class="sidebar-menu">
+            <a href="#" class="menu-item">
+                <i class='bx bx-home-alt'></i>
+                <span>Inicio</span>
+            </a>
+            {% if has_ventas_access or user.is_superuser %}
+            <a href="{% url 'ventas' %}" class="menu-item">
+                <i class='bx bx-receipt'></i>
+                <span>Facturación</span>
+            </a>
+            {% endif %}
+
+            {% if has_cotizacion_access or user.is_superuser %}
+            <a href="{% url 'cotizacion' %}" class="menu-item">
                 <i class='bx bx-calculator'></i>
                 <span>Cotizacion</span>
-        </a>
-        {% endif %}
+            </a>
+            {% endif %}
 
-          {% if has_registrodecliente_access or user.is_superuser %}
-        <a href="{% url 'registrodecliente' %}" class="menu-item">
-            <i class='bx bx-user-plus'></i>
-            <span>Registrar Cliente</span>
-        </a>
-        {% endif %}
+            {% if has_registrodecliente_access or user.is_superuser %}
+            <a href="{% url 'registrodecliente' %}" class="menu-item">
+                <i class='bx bx-user-plus'></i>
+                <span>Registrar Cliente</span>
+            </a>
+            {% endif %}
 
-          {% if has_listadecliente_access or user.is_superuser %}
-        <a href="{% url 'listadecliente' %}" class="menu-item">
-            <i class='bx bx-group'></i>
-            <span>Clientes</span>
-        </a>
-        {% endif %}
+            {% if has_listadecliente_access or user.is_superuser %}
+            <a href="{% url 'listadecliente' %}" class="menu-item">
+                <i class='bx bx-group'></i>
+                <span>Clientes</span>
+            </a>
+            {% endif %}
 
-        <a href="{% url 'entrada' %}" class="menu-item">
-            <i class='bx bx-package'></i>
-            <span>Entrada Mercancía</span>
-        </a>
-          {% if has_cuentaporcobrar_access or user.is_superuser %}
-        <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
-            <i class='bx bx-money'></i>
-            <span>Cuenta por Cobrar</span>
-        </a>
-        {% endif %}
-        <a href="{% url 'inventario' %}" class="menu-item">
-            <i class='bx bx-archive'></i>
-            <span>Inventario</span>
-        </a>
-        <a href="{% url 'registrosuplidores' %}" class="menu-item ">
-            <i class='bx bx-building'></i>
-            <span>Registrar Suplidores</span>
-        </a>
-        <a href="{% url 'gestiondesuplidores' %}" class="menu-item active">
-            <i class='bx bx-buildings'></i>
-            <span>Suplidores</span>
-        </a>
-         {% if has_devoluciones_access or user.is_superuser %}
-        <a href="{% url 'devoluciones' %}" class="menu-item">
-            <i class='bx bx-undo'></i>
-            <span>Devoluciones</span>
-        </a>
-        {% endif %}
+            <a href="{% url 'entrada' %}" class="menu-item">
+                <i class='bx bx-package'></i>
+                <span>Entrada Mercancía</span>
+            </a>
+            {% if has_cuentaporcobrar_access or user.is_superuser %}
+            <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+                <i class='bx bx-money'></i>
+                <span>Cuenta por Cobrar</span>
+            </a>
+            {% endif %}
+            <a href="{% url 'inventario' %}" class="menu-item">
+                <i class='bx bx-archive'></i>
+                <span>Inventario</span>
+            </a>
+            <a href="{% url 'registrosuplidores' %}" class="menu-item ">
+                <i class='bx bx-building'></i>
+                <span>Registrar Suplidores</span>
+            </a>
+            <a href="{% url 'gestiondesuplidores' %}" class="menu-item active">
+                <i class='bx bx-buildings'></i>
+                <span>Suplidores</span>
+            </a>
+            {% if has_devoluciones_access or user.is_superuser %}
+            <a href="{% url 'devoluciones' %}" class="menu-item">
+                <i class='bx bx-undo'></i>
+                <span>Devoluciones</span>
+            </a>
+            {% endif %}
 
-          {% if has_roles_access or user.is_superuser %}
-        <a href="{% url 'roles' %}" class="menu-item">
-            <i class='bx bx-user-check'></i>
-            <span>Roles</span>
-        </a>
-        {% endif %}
+            {% if has_roles_access or user.is_superuser %}
+            <a href="{% url 'roles' %}" class="menu-item">
+                <i class='bx bx-user-check'></i>
+                <span>Roles</span>
+            </a>
+            {% endif %}
 
-          {% if has_anular_access or user.is_superuser %}
-        <a href="{% url 'anular' %}" class="menu-item">
-            <i class='bx bx-x-circle'></i>
-            <span>Anular Factura</span>
-        </a>
-        {% endif %}
+            {% if has_anular_access or user.is_superuser %}
+            <a href="{% url 'anular' %}" class="menu-item">
+                <i class='bx bx-x-circle'></i>
+                <span>Anular Factura</span>
+            </a>
+            {% endif %}
 
-          {% if has_reimprimirfactura_access or user.is_superuser %}
-        <a href="{% url 'reimprimirfactura' %}" class="menu-item">
-            <i class='bx bx-printer'></i>
-            <span>Reimprimir</span>
-        </a>
-        {% endif %}
+            {% if has_reimprimirfactura_access or user.is_superuser %}
+            <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+                <i class='bx bx-printer'></i>
+                <span>Reimprimir</span>
+            </a>
+            {% endif %}
 
-          {% if has_dashboard_access or user.is_superuser %}
-        <a href="{% url 'dashboard' %}" class="menu-item">
-            <i class='bx bx-grid-alt'></i>
-            <span>Dashboard</span>
-        </a>
-        {% endif %}
-        <a href="{% url 'index' %}" class="menu-item">
-            <i class='bx bx-log-out'></i>
-            <span>Cerrar Sesión</span>
-        </a>
-    </div>
-    <div class="sidebar-footer">
-        <p>Derejsoft v 1.2.2</p>
-    </div>
-</nav>
-
+            {% if has_dashboard_access or user.is_superuser %}
+            <a href="{% url 'dashboard' %}" class="menu-item">
+                <i class='bx bx-grid-alt'></i>
+                <span>Dashboard</span>
+            </a>
+            {% endif %}
+            <a href="{% url 'index' %}" class="menu-item">
+                <i class='bx bx-log-out'></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <p>Derejsoft v 1.2.2</p>
+        </div>
+    </nav>
 
     <!-- Main Content -->
     <div class="main-content">
@@ -898,12 +904,18 @@
                                 </td>
                                 <td>
                                     <div class="actions">
+                                        {% if user.is_superuser %}
                                         <button class="btn btn-success" onclick="editSupplier({{ proveedor.id }})" title="Editar">
                                             <i class='bx bx-edit'></i>
                                         </button>
                                         <button class="btn btn-danger" onclick="confirmDelete({{ proveedor.id }})" title="Eliminar">
                                             <i class='bx bx-trash'></i>
                                         </button>
+                                        {% else %}
+                                        <span class="read-only-text">
+                                            <i class='bx bx-lock-alt'></i> Solo lectura
+                                        </span>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
@@ -1015,22 +1027,21 @@
                                 <label for="editIsActive" class="form-label">Suplidor Activo</label>
                             </div>
                         </div>
-                          <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeEditModal()">
-                    <i class='bx bx-x'></i>
-                    Cancelar
-                </button>
-                <button type="submit" form="editSupplierForm" class="btn btn-primary">
-                    <i class='bx bx-save'></i>
-                    Guardar Cambios
-                </button>
-            </div>
-        </div>
-    </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeEditModal()">
+                            <i class='bx bx-x'></i>
+                            Cancelar
+                        </button>
+                        <button type="submit" form="editSupplierForm" class="btn btn-primary">
+                            <i class='bx bx-save'></i>
+                            Guardar Cambios
+                        </button>
                     </div>
                 </form>
             </div>
-          
+        </div>
+    </div>
 
     <!-- Modal de confirmación para eliminar -->
     <div class="modal" id="deleteModal">
@@ -1079,6 +1090,7 @@
                 document.body.classList.toggle('sidebar-open');
             }
         }
+
         function closeSidebar() {
             const sidebar = document.getElementById('sidebar');
             const sidebarOverlay = document.querySelector('.sidebar-overlay');
@@ -1087,6 +1099,7 @@
             sidebarOverlay.classList.remove('active');
             document.body.classList.remove('sidebar-open');
         }
+
         // Cerrar sidebar al hacer clic en un enlace (móvil)
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -1095,6 +1108,7 @@
                 }
             });
         });
+
         // Función para obtener datos del proveedor via AJAX
         async function fetchSupplierData(id) {
             try {
@@ -1108,8 +1122,32 @@
                 throw error;
             }
         }
+
         // Función para abrir modal de edición con datos del proveedor
         async function editSupplier(id) {
+            // Verificar si el usuario es superusuario
+            const isSuperuser = {{ user.is_superuser|yesno:"true,false" }};
+            
+            if (!isSuperuser) {
+                Swal.fire({
+                    title: 'Permiso denegado',
+                    html: `
+                        <div style="text-align: left; margin: 15px 0;">
+                            <p style="color: #dc3545; font-weight: bold;">
+                                No tiene permisos para editar suplidores.
+                            </p>
+                            <p style="color: #666; margin-top: 10px;">
+                                Solo el superusuario puede realizar esta acción. 
+                                Contacte al administrador del sistema.
+                            </p>
+                        </div>
+                    `,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
+                return;
+            }
+
             try {
                 const supplierData = await fetchSupplierData(id);
 
@@ -1128,6 +1166,7 @@
                 document.getElementById('editCreditLimit').value = supplierData.limite_credito || '0';
                 document.getElementById('editNotes').value = supplierData.notas || '';
                 document.getElementById('editIsActive').checked = supplierData.activo;
+                
                 // Mostrar modal
                 document.getElementById('editModal').classList.add('active');
                 document.body.style.overflow = 'hidden';
@@ -1138,37 +1177,37 @@
             }
         }
 
-        
-        // Función para cargar clientes desde la base de datos
-        async function cargarClientes() {
-            toggleLoading(true);
-            try {
-                const response = await fetch('/obtener-suplidores/');
-                const result = await response.json();
-
-                if (result.success) {
-                    clients = result.clientes;
-                    renderClientsTable();
-                    toastr.success(`Clientes cargados: ${supplier.length}`);
-                } else {
-                    console.error('Error al cargar clientes:', result.message);
-                    toastr.error('Error al cargar clientes: ' + result.message);
-                }
-            } catch (error) {
-                console.error('Error de conexión:', error);
-                toastr.error('Error de conexión al cargar clientes');
-            } finally {
-                toggleLoading(false);
-            }
-        }
-
         // Función para cerrar modal de edición
         function closeEditModal() {
             document.getElementById('editModal').classList.remove('active');
             document.body.style.overflow = 'auto';
         }
+
         // Función para confirmar eliminación
         function confirmDelete(id) {
+            // Verificar si el usuario es superusuario
+            const isSuperuser = {{ user.is_superuser|yesno:"true,false" }};
+            
+            if (!isSuperuser) {
+                Swal.fire({
+                    title: 'Permiso denegado',
+                    html: `
+                        <div style="text-align: left; margin: 15px 0;">
+                            <p style="color: #dc3545; font-weight: bold;">
+                                No tiene permisos para eliminar suplidores.
+                            </p>
+                            <p style="color: #666; margin-top: 10px;">
+                                Solo el superusuario puede realizar esta acción. 
+                                Contacte al administrador del sistema.
+                            </p>
+                        </div>
+                    `,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
+                return;
+            }
+
             Swal.fire({
                 title: '¿Estás seguro?',
                 text: "¡No podrás revertir la eliminación del suplidor!",
@@ -1185,11 +1224,13 @@
                 }
             });
         }
+
         // Función para cerrar modal de eliminación
         function closeDeleteModal() {
             document.getElementById('deleteModal').classList.remove('active');
             document.body.style.overflow = 'auto';
         }
+
         // Función para formatear RNC (XXX-XXXXX-X)
         function formatRNC(e) {
             let value = e.target.value.replace(/\D/g, '');
@@ -1198,6 +1239,7 @@
             }
             e.target.value = value;
         }
+
         // Función para formatear teléfonos (XXX) XXX-XXXX
         function formatPhone(e) {
             let value = e.target.value.replace(/\D/g, '');
@@ -1206,6 +1248,7 @@
             }
             e.target.value = value;
         }
+
         // Función de búsqueda en tiempo real
         function setupSearch() {
             const searchInput = document.getElementById('searchInput');
@@ -1224,6 +1267,7 @@
                 });
             });
         }
+
         // Manejar envío del formulario de edición con AJAX
         function setupEditForm() {
             const editForm = document.getElementById('editSupplierForm');
@@ -1267,6 +1311,7 @@
                 }
             });
         }
+
         // Inicialización de eventos
         document.addEventListener('DOMContentLoaded', function() {
             // Configurar eventos de los modales
@@ -1283,46 +1328,51 @@
             });
 
             // Manejar el cierre de sesión con SweetAlert2
-        document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
-            e.preventDefault();
+            document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
+                e.preventDefault();
 
-            Swal.fire({
-                title: '¿Cerrar Sesión?',
-                text: '¿Está seguro de que desea cerrar la sesión?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#667eea',
-                cancelButtonColor: '#dc3545',
-                confirmButtonText: 'Sí, Cerrar Sesión',
-                cancelButtonText: 'Cancelar',
-                backdrop: true
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = "{% url 'index' %}";
-                }
+                Swal.fire({
+                    title: '¿Cerrar Sesión?',
+                    text: '¿Está seguro de que desea cerrar la sesión?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#667eea',
+                    cancelButtonColor: '#dc3545',
+                    confirmButtonText: 'Sí, Cerrar Sesión',
+                    cancelButtonText: 'Cancelar',
+                    backdrop: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = "{% url 'index' %}";
+                    }
+                });
             });
-        });
-        
+            
             // Configurar formatos de entrada
             document.getElementById('editRnc')?.addEventListener('input', formatRNC);
             document.getElementById('editPhone')?.addEventListener('input', formatPhone);
             document.getElementById('editWhatsapp')?.addEventListener('input', formatPhone);
+            
             // Configurar búsqueda
             setupSearch();
+            
             // Configurar formulario de edición
             setupEditForm();
+            
             // Cerrar sidebar al redimensionar ventana
             window.addEventListener('resize', function() {
                 if (window.innerWidth > 768) {
                     closeSidebar();
                 }
             });
+            
             // Mostrar mensajes de Django
             {% if messages %}
                 {% for message in messages %}
                     toastr.{{ message.tags }}('{{ message }}');
                 {% endfor %}
             {% endif %}
+            
             // Configuración de Toastr
             toastr.options = {
                 "closeButton": true,

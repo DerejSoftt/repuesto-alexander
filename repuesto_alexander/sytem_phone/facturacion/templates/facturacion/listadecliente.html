@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Clientes </title>
-    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
+    <title>Lista de Clientes</title>
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}" type="image/x-icon">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -544,6 +544,14 @@
         .credit-limit.normal {
             color: #28a745;
         }
+        
+        /* Estilo para el texto de permisos */
+        .no-permission {
+            color: #6c757d;
+            font-style: italic;
+            font-size: 0.8rem;
+        }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -719,7 +727,7 @@
                 <i class='bx bx-user-plus'></i>
                 <span>Registrar Cliente</span>
             </a>
-            <a href="{% url 'listadecliente' %}" class="menu-item">
+            <a href="{% url 'listadecliente' %}" class="menu-item active">
                 <i class='bx bx-group'></i>
                 <span>Clientes</span>
             </a>
@@ -733,7 +741,7 @@
                 <i class='bx bx-money'></i>
                 <span>Cuenta por Cobrar</span>
             </a>
-            <a href="{% url 'inventario' %}" class="menu-item active">
+            <a href="{% url 'inventario' %}" class="menu-item">
                 <i class='bx bx-archive'></i>
                 <span>Inventario</span>
             </a>
@@ -837,7 +845,7 @@
                     <div class="no-data" id="noDataMessage" style="display: none;">
                         <i class='bx bx-user-x'></i>
                         <p>No hay clientes registrados</p>
-                        <a href="registrodecliente.html" class="btn btn-primary" style="margin-top: 20px;">
+                        <a href="{% url 'registrodecliente' %}" class="btn btn-primary" style="margin-top: 20px;">
                             <i class='bx bx-plus'></i>
                             Registrar Primer Cliente
                         </a>
@@ -913,135 +921,139 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
     <script>
         // Variables globales
-  // Variables globales
-let clients = [];
-// Referencias a elementos del DOM
-const sidebar = document.getElementById('sidebar');
-const sidebarOverlay = document.querySelector('.sidebar-overlay');
-const searchInput = document.getElementById('searchInput');
-const clientsTableBody = document.getElementById('clientsTableBody');
-const noDataMessage = document.getElementById('noDataMessage');
-const editClientModal = document.getElementById('editClientModal');
-const editClientForm = document.getElementById('editClientForm');
-const loadingOverlay = document.getElementById('loadingOverlay');
-// Configuración de Toastr
-toastr.options = {
-    "closeButton": true,
-    "debug": false,
-    "newestOnTop": false,
-    "progressBar": true,
-    "positionClass": "toast-top-right",
-    "preventDuplicates": false,
-    "onclick": null,
-    "showDuration": "300",
-    "hideDuration": "1000",
-    "timeOut": "5000",
-    "extendedTimeOut": "1000",
-    "showEasing": "swing",
-    "hideEasing": "linear",
-    "showMethod": "fadeIn",
-    "hideMethod": "fadeOut"
-};
-// Función para formatear moneda
-function formatCurrency(amount) {
-    return new Intl.NumberFormat('es-DO', {
-        style: 'currency',
-        currency: 'DOP'
-    }).format(amount);
-}
-// Función para obtener la clase CSS según el límite de crédito
-function getCreditLimitClass(limit) {
-    if (limit === 0) return 'zero';
-    if (limit < 0) return 'overdue';
-    return 'normal';
-}
-// Función para mostrar/ocultar loading
-function toggleLoading(show) {
-    loadingOverlay.style.display = show ? 'flex' : 'none';
-}
-// Función para obtener el token CSRF
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
+        let clients = [];
+        const isSuperUser = {{ user.is_superuser|yesno:"true,false" }};
+        
+        // Referencias a elementos del DOM
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.querySelector('.sidebar-overlay');
+        const searchInput = document.getElementById('searchInput');
+        const clientsTableBody = document.getElementById('clientsTableBody');
+        const noDataMessage = document.getElementById('noDataMessage');
+        const editClientModal = document.getElementById('editClientModal');
+        const editClientForm = document.getElementById('editClientForm');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        // Configuración de Toastr
+        toastr.options = {
+            "closeButton": true,
+            "debug": false,
+            "newestOnTop": false,
+            "progressBar": true,
+            "positionClass": "toast-top-right",
+            "preventDuplicates": false,
+            "onclick": null,
+            "showDuration": "300",
+            "hideDuration": "1000",
+            "timeOut": "5000",
+            "extendedTimeOut": "1000",
+            "showEasing": "swing",
+            "hideEasing": "linear",
+            "showMethod": "fadeIn",
+            "hideMethod": "fadeOut"
+        };
+        
+        // Función para formatear moneda
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('es-DO', {
+                style: 'currency',
+                currency: 'DOP'
+            }).format(amount);
+        }
+        
+        // Función para obtener la clase CSS según el límite de crédito
+        function getCreditLimitClass(limit) {
+            if (limit === 0) return 'zero';
+            if (limit < 0) return 'overdue';
+            return 'normal';
+        }
+        
+        // Función para mostrar/ocultar loading
+        function toggleLoading(show) {
+            loadingOverlay.style.display = show ? 'flex' : 'none';
+        }
+        
+        // Función para obtener el token CSRF
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // Funciones para el sidebar
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            sidebarOverlay.classList.toggle('active');
+            if (window.innerWidth <= 768) {
+                document.body.classList.toggle('sidebar-open');
             }
         }
-    }
-    return cookieValue;
-}
-// Funciones para el sidebar
-function toggleSidebar() {
-    sidebar.classList.toggle('active');
-    sidebarOverlay.classList.toggle('active');
-    if (window.innerWidth <= 768) {
-        document.body.classList.toggle('sidebar-open');
-    }
-}
-function closeSidebar() {
-    sidebar.classList.remove('active');
-    sidebarOverlay.classList.remove('active');
-    document.body.classList.remove('sidebar-open');
-}
-// Cerrar sidebar al hacer clic en un enlace (móvil)
-document.querySelectorAll('.menu-item').forEach(item => {
-    item.addEventListener('click', () => {
-        if (window.innerWidth <= 768) {
-            closeSidebar();
+        
+        function closeSidebar() {
+            sidebar.classList.remove('active');
+            sidebarOverlay.classList.remove('active');
+            document.body.classList.remove('sidebar-open');
         }
-    });
-});
-// Función para cargar clientes desde la base de datos
-async function cargarClientes() {
-    toggleLoading(true);
-    try {
-        const response = await fetch('/obtener-clientes/');
-        const result = await response.json();
-        if (result.success) {
-            clients = result.clientes;
-            renderClientsTable();
-            toastr.success(`Clientes cargados: ${clients.length}`);
-        } else {
-            console.error('Error al cargar clientes:', result.message);
-            toastr.error('Error al cargar clientes: ' + result.message);
-        }
-    } catch (error) {
-        console.error('Error de conexión:', error);
-        toastr.error('Error de conexión al cargar clientes');
-    } finally {
-        toggleLoading(false);
-    }
-}
-// Función para renderizar la tabla de clientes
-function renderClientsTable() {
-    if (clients.length === 0) {
-        clientsTableBody.innerHTML = '';
-        noDataMessage.style.display = 'block';
-        return;
-    }
-    noDataMessage.style.display = 'none';
-    const tableHTML = clients.map(client => {
-        const date = new Date(client.date_registered).toLocaleDateString('es-DO', {
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit'
+        
+        // Cerrar sidebar al hacer clic en un enlace (móvil)
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    closeSidebar();
+                }
+            });
         });
-        const creditLimit = parseFloat(client.credit_limit) || 0;
-        const creditLimitClass = getCreditLimitClass(creditLimit);
-        const formattedCreditLimit = formatCurrency(creditLimit);
-        return `
-            <tr>
-                <td><strong>${client.full_name}</strong></td>
-                <td><code>${client.identification_number}</code></td>
-                <td>${client.address}</td>
-                <td>${client.primary_phone}</td>
-                <td>${client.secondary_phone || 'N/A'}</td>
-                <td class="credit-limit ${creditLimitClass}">${formattedCreditLimit}</td>
-                <td>${date}</td>
-                <td>
+        
+        // Función para cargar clientes desde la base de datos
+        async function cargarClientes() {
+            toggleLoading(true);
+            try {
+                const response = await fetch('/obtener-clientes/');
+                const result = await response.json();
+                if (result.success) {
+                    clients = result.clientes;
+                    renderClientsTable();
+                    toastr.success(`Clientes cargados: ${clients.length}`);
+                } else {
+                    console.error('Error al cargar clientes:', result.message);
+                    toastr.error('Error al cargar clientes: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error de conexión:', error);
+                toastr.error('Error de conexión al cargar clientes');
+            } finally {
+                toggleLoading(false);
+            }
+        }
+        
+        // Función para renderizar la tabla de clientes
+        function renderClientsTable() {
+            if (clients.length === 0) {
+                clientsTableBody.innerHTML = '';
+                noDataMessage.style.display = 'block';
+                return;
+            }
+            noDataMessage.style.display = 'none';
+            const tableHTML = clients.map(client => {
+                const date = new Date(client.fecha_registro).toLocaleDateString('es-DO', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                });
+                const creditLimit = parseFloat(client.credit_limit) || 0;
+                const creditLimitClass = getCreditLimitClass(creditLimit);
+                const formattedCreditLimit = formatCurrency(creditLimit);
+                
+                // Mostrar botones solo si es superusuario
+                const actionsHTML = isSuperUser ? `
                     <div class="actions">
                         <button class="btn btn-success" onclick="editClient(${client.id})" title="Editar">
                             <i class='bx bx-edit'></i>
@@ -1050,46 +1062,52 @@ function renderClientsTable() {
                             <i class='bx bx-trash'></i>
                         </button>
                     </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
-    clientsTableBody.innerHTML = tableHTML;
-}
-// Función de búsqueda y filtrado
-function filterClients() {
-    const searchTerm = searchInput.value.toLowerCase().trim();
-    const filteredClients = clients.filter(client => {
-        return !searchTerm ||
-            client.full_name.toLowerCase().includes(searchTerm) ||
-            client.identification_number.toLowerCase().includes(searchTerm) ||
-            client.primary_phone.toLowerCase().includes(searchTerm) ||
-            (client.secondary_phone && client.secondary_phone.toLowerCase().includes(searchTerm));
-    });
-    // Re-renderizar la tabla con los resultados filtrados
-    if (filteredClients.length === 0) {
-        clientsTableBody.innerHTML = '';
-        noDataMessage.style.display = 'block';
-    } else {
-        noDataMessage.style.display = 'none';
-        const tableHTML = filteredClients.map(client => {
-            const date = new Date(client.date_registered).toLocaleDateString('es-DO', {
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit'
+                ` : `<span class="no-permission">Solo administrador</span>`;
+
+                return `
+                    <tr>
+                        <td><strong>${client.full_name}</strong></td>
+                        <td><code>${client.identification_number}</code></td>
+                        <td>${client.address}</td>
+                        <td>${client.primary_phone}</td>
+                        <td>${client.secondary_phone || 'N/A'}</td>
+                        <td class="credit-limit ${creditLimitClass}">${formattedCreditLimit}</td>
+                        <td>${date}</td>
+                        <td>${actionsHTML}</td>
+                    </tr>
+                `;
+            }).join('');
+            clientsTableBody.innerHTML = tableHTML;
+        }
+        
+        // Función de búsqueda y filtrado
+        function filterClients() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const filteredClients = clients.filter(client => {
+                return !searchTerm ||
+                    client.full_name.toLowerCase().includes(searchTerm) ||
+                    client.identification_number.toLowerCase().includes(searchTerm) ||
+                    client.primary_phone.toLowerCase().includes(searchTerm) ||
+                    (client.secondary_phone && client.secondary_phone.toLowerCase().includes(searchTerm));
             });
-            const creditLimit = parseFloat(client.credit_limit) || 0;
-            const creditLimitClass = getCreditLimitClass(creditLimit);
-            const formattedCreditLimit = formatCurrency(creditLimit);
-            return `
-                <tr>
-                    <td><strong>${client.full_name}</strong></td>
-                    <td><code>${client.identification_number}</code></td>
-                    <td>${client.address}</td>
-                    <td>${client.primary_phone}</td>
-                    <td>${client.secondary_phone || 'N/A'}</td>
-                    <td class="credit-limit ${creditLimitClass}">${formattedCreditLimit}</td>
-                    <td>${date}</td>
-                    <td>
+            
+            // Re-renderizar la tabla con los resultados filtrados
+            if (filteredClients.length === 0) {
+                clientsTableBody.innerHTML = '';
+                noDataMessage.style.display = 'block';
+            } else {
+                noDataMessage.style.display = 'none';
+                const tableHTML = filteredClients.map(client => {
+                    const date = new Date(client.fecha_registro).toLocaleDateString('es-DO', {
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                    const creditLimit = parseFloat(client.credit_limit) || 0;
+                    const creditLimitClass = getCreditLimitClass(creditLimit);
+                    const formattedCreditLimit = formatCurrency(creditLimit);
+                    
+                    // Mostrar botones solo si es superusuario
+                    const actionsHTML = isSuperUser ? `
                         <div class="actions">
                             <button class="btn btn-success" onclick="editClient(${client.id})" title="Editar">
                                 <i class='bx bx-edit'></i>
@@ -1098,193 +1116,218 @@ function filterClients() {
                                 <i class='bx bx-trash'></i>
                             </button>
                         </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-        clientsTableBody.innerHTML = tableHTML;
-    }
-}
-// Event listener para búsqueda
-searchInput.addEventListener('input', filterClients);
-// Función para eliminar cliente
-async function deleteClient(id) {
-    const client = clients.find(c => c.id === id);
-    if (!client) return;
-    Swal.fire({
-        title: '¿Estás seguro?',
-        text: `¡No podrás revertir la eliminación del cliente "${client.full_name}"!`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Sí, eliminarlo!',
-        cancelButtonText: 'No, Cancelar'
-    }).then(async (result) => {
-        if (result.isConfirmed) {
+                    ` : `<span class="no-permission">Solo administrador</span>`;
+
+                    return `
+                        <tr>
+                            <td><strong>${client.full_name}</strong></td>
+                            <td><code>${client.identification_number}</code></td>
+                            <td>${client.address}</td>
+                            <td>${client.primary_phone}</td>
+                            <td>${client.secondary_phone || 'N/A'}</td>
+                            <td class="credit-limit ${creditLimitClass}">${formattedCreditLimit}</td>
+                            <td>${date}</td>
+                            <td>${actionsHTML}</td>
+                        </tr>
+                    `;
+                }).join('');
+                clientsTableBody.innerHTML = tableHTML;
+            }
+        }
+        
+        // Event listener para búsqueda
+        searchInput.addEventListener('input', filterClients);
+        
+        // Función para eliminar cliente
+        async function deleteClient(id) {
+            const client = clients.find(c => c.id === id);
+            if (!client) return;
+            
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: `¡No podrás revertir la eliminación del cliente "${client.full_name}"!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Sí, eliminarlo!',
+                cancelButtonText: 'No, Cancelar'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    toggleLoading(true);
+                    try {
+                        const csrftoken = getCookie('csrftoken');
+                        const response = await fetch(`/eliminar-cliente/${id}/`, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRFToken': csrftoken
+                            }
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            toastr.success('Cliente eliminado exitosamente');
+                            await cargarClientes();
+                        } else {
+                            toastr.error('Error al eliminar cliente: ' + result.message);
+                        }
+                    } catch (error) {
+                        console.error('Error de conexión:', error);
+                        toastr.error('Error de conexión al eliminar cliente');
+                    } finally {
+                        toggleLoading(false);
+                    }
+                }
+            });
+        }
+        
+        // Función para abrir modal de edición
+        function editClient(id) {
+            const client = clients.find(c => c.id === id);
+            if (!client) return;
+            
+            // Llenar el formulario con los datos del cliente
+            document.getElementById('editClientId').value = client.id;
+            document.getElementById('editFullName').value = client.full_name;
+            document.getElementById('editIdentificationNumber').value = client.identification_number;
+            document.getElementById('editAddress').value = client.address;
+            document.getElementById('editPrimaryPhone').value = client.primary_phone;
+            document.getElementById('editSecondaryPhone').value = client.secondary_phone || '';
+            document.getElementById('editCreditLimit').value = client.credit_limit || 0;
+            
+            // Mostrar modal
+            editClientModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        // Función para cerrar modal de edición
+        function closeEditClientModal() {
+            editClientModal.classList.remove('active');
+            document.body.style.overflow = 'auto';
+            editClientForm.reset();
+        }
+        
+        // Cerrar modal al hacer clic fuera de él
+        editClientModal.addEventListener('click', function(e) {
+            if (e.target === editClientModal) {
+                closeEditClientModal();
+            }
+        });
+        
+        // Formatear número de identificación (Cédula/RNC) en el modal
+        document.getElementById('editIdentificationNumber').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 11) {
+                value = value.substring(0, 11);
+            }
+            if (value.length > 7) {
+                value = value.replace(/(\d{3})(\d{7})(\d{1})/, '$1-$2-$3');
+            } else if (value.length > 3) {
+                value = value.replace(/(\d{3})(\d{0,7})/, '$1-$2');
+            }
+            e.target.value = value;
+        });
+        
+        // Formatear números de teléfono en el modal
+        function formatPhoneModal(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 10) {
+                value = value.substring(0, 10);
+            }
+            if (value.length > 6) {
+                value = value.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+            } else if (value.length > 3) {
+                value = value.replace(/(\d{3})(\d{0,3})/, '($1) $2');
+            }
+            e.target.value = value;
+        }
+        
+        document.getElementById('editPrimaryPhone').addEventListener('input', formatPhoneModal);
+        document.getElementById('editSecondaryPhone').addEventListener('input', formatPhoneModal);
+        
+        // Manejar envío del formulario de edición
+        editClientForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(editClientForm);
+            const clientId = parseInt(formData.get('clientId'));
+
+            // Validar campos requeridos
+            const requiredFields = ['fullName', 'identificationNumber', 'address', 'primaryPhone'];
+            let isValid = true;
+            requiredFields.forEach(fieldName => {
+                const value = formData.get(fieldName);
+                if (!value || !value.trim()) {
+                    toastr.error(`El campo ${fieldName} es requerido`);
+                    isValid = false;
+                }
+            });
+            if (!isValid) return;
+
             toggleLoading(true);
             try {
                 const csrftoken = getCookie('csrftoken');
-                const response = await fetch(`/eliminar-cliente/${id}/`, {
-                    method: 'DELETE',
+                const data = {
+                    'fullName': formData.get('fullName'),
+                    'identificationNumber': formData.get('identificationNumber'),
+                    'address': formData.get('address'),
+                    'primaryPhone': formData.get('primaryPhone'),
+                    'secondaryPhone': formData.get('secondaryPhone'),
+                    'creditLimit': formData.get('creditLimit')
+                };
+                const response = await fetch(`/editar-cliente/${clientId}/`, {
+                    method: 'POST',
                     headers: {
+                        'Content-Type': 'application/json',
                         'X-CSRFToken': csrftoken
-                    }
+                    },
+                    body: JSON.stringify(data)
                 });
                 const result = await response.json();
                 if (result.success) {
-                    toastr.success('Cliente eliminado exitosamente');
+                    toastr.success('Cliente actualizado exitosamente');
                     await cargarClientes();
+                    closeEditClientModal();
                 } else {
-                    toastr.error('Error al eliminar cliente: ' + result.message);
+                    toastr.error('Error al actualizar cliente: ' + result.message);
                 }
             } catch (error) {
                 console.error('Error de conexión:', error);
-                toastr.error('Error de conexión al eliminar cliente');
+                toastr.error('Error de conexión al actualizar cliente');
             } finally {
                 toggleLoading(false);
             }
-        }
-    });
-}
-// Función para abrir modal de edición
-function editClient(id) {
-    const client = clients.find(c => c.id === id);
-    if (!client) return;
-    // Llenar el formulario con los datos del cliente
-    document.getElementById('editClientId').value = client.id;
-    document.getElementById('editFullName').value = client.full_name;
-    document.getElementById('editIdentificationNumber').value = client.identification_number;
-    document.getElementById('editAddress').value = client.address;
-    document.getElementById('editPrimaryPhone').value = client.primary_phone;
-    document.getElementById('editSecondaryPhone').value = client.secondary_phone || '';
-    document.getElementById('editCreditLimit').value = client.credit_limit || 0;
-    // Mostrar modal
-    editClientModal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-// Función para cerrar modal de edición
-function closeEditClientModal() {
-    editClientModal.classList.remove('active');
-    document.body.style.overflow = 'auto';
-    editClientForm.reset();
-}
-// Cerrar modal al hacer clic fuera de él
-editClientModal.addEventListener('click', function(e) {
-    if (e.target === editClientModal) {
-        closeEditClientModal();
-    }
-});
-// Formatear número de identificación (Cédula/RNC) en el modal
-document.getElementById('editIdentificationNumber').addEventListener('input', function(e) {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length > 11) {
-        value = value.substring(0, 11);
-    }
-    if (value.length > 7) {
-        value = value.replace(/(\d{3})(\d{7})(\d{1})/, '$1-$2-$3');
-    } else if (value.length > 3) {
-        value = value.replace(/(\d{3})(\d{0,7})/, '$1-$2');
-    }
-    e.target.value = value;
-});
-// Formatear números de teléfono en el modal
-function formatPhoneModal(e) {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length > 10) {
-        value = value.substring(0, 10);
-    }
-    if (value.length > 6) {
-        value = value.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
-    } else if (value.length > 3) {
-        value = value.replace(/(\d{3})(\d{0,3})/, '($1) $2');
-    }
-    e.target.value = value;
-}
-document.getElementById('editPrimaryPhone').addEventListener('input', formatPhoneModal);
-document.getElementById('editSecondaryPhone').addEventListener('input', formatPhoneModal);
-// Manejar envío del formulario de edición
-editClientForm.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const formData = new FormData(editClientForm);
-    const clientId = parseInt(formData.get('clientId'));
-
-    // Validar campos requeridos
-    const requiredFields = ['fullName', 'identificationNumber', 'address', 'primaryPhone'];
-    let isValid = true;
-    requiredFields.forEach(fieldName => {
-        const value = formData.get(fieldName);
-        if (!value || !value.trim()) {
-            toastr.error(`El campo ${fieldName} es requerido`);
-            isValid = false;
-        }
-    });
-    if (!isValid) return;
-
-    toggleLoading(true);
-    try {
-        const csrftoken = getCookie('csrftoken');
-        const data = {
-            'fullName': formData.get('fullName'),
-            'identificationNumber': formData.get('identificationNumber'),
-            'address': formData.get('address'),
-            'primaryPhone': formData.get('primaryPhone'),
-            'secondaryPhone': formData.get('secondaryPhone'),
-            'creditLimit': formData.get('creditLimit')  // Asegúrate de que este valor se envíe
-        };
-        const response = await fetch(`/editar-cliente/${clientId}/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            body: JSON.stringify(data)
         });
-        const result = await response.json();
-        if (result.success) {
-            toastr.success('Cliente actualizado exitosamente');
-            await cargarClientes();
-            closeEditClientModal();
-        } else {
-            toastr.error('Error al actualizar cliente: ' + result.message);
-        }
-    } catch (error) {
-        console.error('Error de conexión:', error);
-        toastr.error('Error de conexión al actualizar cliente');
-    } finally {
-        toggleLoading(false);
-    }
-});
-// Manejar el cierre de sesión con SweetAlert2
-document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
-    e.preventDefault();
-    Swal.fire({
-        title: '¿Cerrar Sesión?',
-        text: '¿Está seguro de que desea cerrar la sesión?',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#667eea',
-        cancelButtonColor: '#dc3545',
-        confirmButtonText: 'Sí, Cerrar Sesión',
-        cancelButtonText: 'Cancelar',
-        backdrop: true
-    }).then((result) => {
-        if (result.isConfirmed) {
-            window.location.href = "{% url 'index' %}";
-        }
-    });
-});
-// Cerrar sidebar al redimensionar ventana
-window.addEventListener('resize', function() {
-    if (window.innerWidth > 768) {
-        closeSidebar();
-    }
-});
-// Inicializar la página
-window.addEventListener('load', function() {
-    cargarClientes();
-});
-
+        
+        // Manejar el cierre de sesión con SweetAlert2
+        document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
+            e.preventDefault();
+            Swal.fire({
+                title: '¿Cerrar Sesión?',
+                text: '¿Está seguro de que desea cerrar la sesión?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#667eea',
+                cancelButtonColor: '#dc3545',
+                confirmButtonText: 'Sí, Cerrar Sesión',
+                cancelButtonText: 'Cancelar',
+                backdrop: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = "{% url 'index' %}";
+                }
+            });
+        });
+        
+        // Cerrar sidebar al redimensionar ventana
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                closeSidebar();
+            }
+        });
+        
+        // Inicializar la página
+        window.addEventListener('load', function() {
+            cargarClientes();
+        });
     </script>
 </body>
 </html>

@@ -1,11 +1,12 @@
 {% load static %}
+{% load auth_extras %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Roles y Usuarios</title>
-    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}" type="image/x-icon">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -500,6 +501,17 @@
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(255, 193, 7, 0.4);
         }
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+            padding: 8px 12px;
+            font-size: 0.85rem;
+        }
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(108, 117, 125, 0.4);
+        }
         /* Modal Styles */
         .modal {
             display: none;
@@ -695,6 +707,10 @@
             border: 1px solid #e1e8ed;
             min-height: 20px;
         }
+        .text-muted {
+            color: #6c757d;
+            font-size: 0.8rem;
+        }
 
         @keyframes fadeIn {
             from { opacity: 0; }
@@ -828,86 +844,99 @@
     <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" onclick="closeSidebar()"></div>
 
-<!-- Sidebar Navigation -->
-<nav class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-        <h2>
-            <i class="fas fa-motorcycle"></i>
-            Super Bestia
-        </h2>
-        <p>Usuario: {{ user.username }}</p>
-        <p>{{ user.email }}</p>
-    </div>
-    <div class="sidebar-menu">
-        <a href="#" class="menu-item">
-            <i class='bx bx-home-alt'></i>
-            <span>Inicio</span>
-        </a>
-        <a href="{% url 'ventas' %}" class="menu-item">
-            <i class='bx bx-receipt'></i>
-            <span>Facturación</span>
-        </a>
-         <a href="{% url 'cotizacion' %}" class="menu-item">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>
+                <i class="fas fa-motorcycle"></i>
+                Super Bestia
+            </h2>
+            <p>Usuario: {{ user.username }}</p>
+            <p>{{ user.email }}</p>
+        </div>
+        <div class="sidebar-menu">
+            <a href="#" class="menu-item">
+                <i class='bx bx-home-alt'></i>
+                <span>Inicio</span>
+            </a>
+            
+            <!-- Menú para usuarios normales y superusuarios -->
+            {% if user.is_superuser or user|has_group:"Usuario Normal" %}
+            <a href="{% url 'ventas' %}" class="menu-item">
+                <i class='bx bx-receipt'></i>
+                <span>Facturación</span>
+            </a>
+            <a href="{% url 'cotizacion' %}" class="menu-item">
                 <i class='bx bx-calculator'></i>
-                <span>Cotizacion</span>
-        </a>
-        <a href="{% url 'registrodecliente' %}" class="menu-item">
-            <i class='bx bx-user-plus'></i>
-            <span>Registrar Cliente</span>
-        </a>
-        <a href="{% url 'listadecliente' %}" class="menu-item">
-            <i class='bx bx-group'></i>
-            <span>Clientes</span>
-        </a>
-        <a href="{% url 'entrada' %}" class="menu-item">
-            <i class='bx bx-package'></i>
-            <span>Entrada Mercancía</span>
-        </a>
-        <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
-            <i class='bx bx-money'></i>
-            <span>Cuenta por Cobrar</span>
-        </a>
-        <a href="{% url 'inventario' %}" class="menu-item">
-            <i class='bx bx-archive'></i>
-            <span>Inventario</span>
-        </a>
-        <a href="{% url 'registrosuplidores' %}" class="menu-item">
-            <i class='bx bx-building'></i>
-            <span>Registrar Suplidores</span>
-        </a>
-        <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
-            <i class='bx bx-buildings'></i>
-            <span>Suplidores</span>
-        </a>
-        <a href="{% url 'devoluciones' %}" class="menu-item">
-            <i class='bx bx-undo'></i>
-            <span>Devoluciones</span>
-        </a>
-        <a href="{% url 'roles' %}" class="menu-item active">
-            <i class='bx bx-user-check'></i>
-            <span>Roles</span>
-        </a>
-        <a href="{% url 'anular' %}" class="menu-item">
-            <i class='bx bx-x-circle'></i>
-            <span>Anular Factura</span>
-        </a>
-        <a href="{% url 'reimprimirfactura' %}" class="menu-item">
-            <i class='bx bx-printer'></i>
-            <span>Reimprimir</span>
-        </a>
-        <a href="{% url 'dashboard' %}" class="menu-item">
-            <i class='bx bx-grid-alt'></i>
-            <span>Dashboard</span>
-        </a>
-        <a href="{% url 'index' %}" class="menu-item">
-            <i class='bx bx-log-out'></i>
-            <span>Cerrar Sesión</span>
-        </a>
-    </div>
-    <div class="sidebar-footer">
-        <p>Derejsoft v 1.2.2</p>
-    </div>
-</nav>
+                <span>Cotización</span>
+            </a>
+            <a href="{% url 'registrodecliente' %}" class="menu-item">
+                <i class='bx bx-user-plus'></i>
+                <span>Registrar Cliente</span>
+            </a>
+            <a href="{% url 'listadecliente' %}" class="menu-item">
+                <i class='bx bx-group'></i>
+                <span>Clientes</span>
+            </a>
+            <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+                <i class='bx bx-money'></i>
+                <span>Cuenta por Cobrar</span>
+            </a>
+            <a href="{% url 'inventario' %}" class="menu-item">
+                <i class='bx bx-archive'></i>
+                <span>Inventario</span>
+            </a>
+            <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+                <i class='bx bx-printer'></i>
+                <span>Reimprimir</span>
+            </a>
+            {% endif %}
+
+            <!-- Menú para usuarios de Almacén y superusuarios -->
+            {% if user.is_superuser or user|has_group:"Almacén" %}
+            <a href="{% url 'entrada' %}" class="menu-item">
+                <i class='bx bx-package'></i>
+                <span>Entrada Mercancía</span>
+            </a>
+            <a href="{% url 'registrosuplidores' %}" class="menu-item">
+                <i class='bx bx-building'></i>
+                <span>Registrar Suplidores</span>
+            </a>
+            <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
+                <i class='bx bx-buildings'></i>
+                <span>Suplidores</span>
+            </a>
+            {% endif %}
+
+            <!-- Menú solo para superusuarios -->
+            {% if user.is_superuser %}
+            <a href="{% url 'devoluciones' %}" class="menu-item">
+                <i class='bx bx-undo'></i>
+                <span>Devoluciones</span>
+            </a>
+            <a href="{% url 'roles' %}" class="menu-item active">
+                <i class='bx bx-user-check'></i>
+                <span>Roles</span>
+            </a>
+            <a href="{% url 'anular' %}" class="menu-item">
+                <i class='bx bx-x-circle'></i>
+                <span>Anular Factura</span>
+            </a>
+            <a href="{% url 'dashboard' %}" class="menu-item">
+                <i class='bx bx-grid-alt'></i>
+                <span>Dashboard</span>
+            </a>
+            {% endif %}
+            
+            <a href="{% url 'index' %}" class="menu-item">
+                <i class='bx bx-log-out'></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <p>Derejsoft v 1.2.2</p>
+        </div>
+    </nav>
 
     <!-- Main Content -->
     <div class="main-content">
@@ -1035,7 +1064,12 @@
                                 <tbody id="rolesTableBody">
                                     {% for role in roles_data %}
                                     <tr data-role-id="{{ role.id }}" data-modulos="{{ role.modulos_asignados|join:',' }}">
-                                        <td>{{ role.name }}</td>
+                                        <td>
+                                            {{ role.name }}
+                                            {% if role.es_especial %}
+                                            <br><small class="text-muted">Rol especial del sistema</small>
+                                            {% endif %}
+                                        </td>
                                         <td>{{ role.description|default:"Sin descripción" }}</td>
                                         <td><span class="status-badge status-{{ role.status }}">{{ role.status }}</span></td>
                                         <td>{{ role.userCount }}</td>
@@ -1050,6 +1084,7 @@
                                             <button class="btn btn-info" onclick="viewRole({{ role.id }})">
                                                 <i class='bx bx-show'></i>
                                             </button>
+                                            {% if not role.es_especial %}
                                             <button class="btn btn-warning" onclick="openEditRoleModal({{ role.id }})">
                                                 <i class='bx bx-edit'></i>
                                             </button>
@@ -1061,6 +1096,14 @@
                                                     <i class='bx bx-trash'></i>
                                                 </button>
                                             </form>
+                                            {% else %}
+                                            <button class="btn btn-warning" onclick="openEditRoleModal({{ role.id }})" title="Editar permisos">
+                                                <i class='bx bx-edit'></i>
+                                            </button>
+                                            <button class="btn btn-secondary" disabled title="Rol del sistema">
+                                                <i class='bx bx-lock'></i>
+                                            </button>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% empty %}
@@ -1123,7 +1166,7 @@
                                     <label for="roleFilter">Rol</label>
                                     <select class="filter-input select" id="roleFilter" name="role_filter">
                                         <option value="">Todos los roles</option>
-                                        {% for role in roles_data %}
+                                        {% for role in roles_para_usuarios %}
                                         <option value="{{ role.name }}" {% if request.GET.role_filter == role.name %}selected{% endif %}>{{ role.name }}</option>
                                         {% endfor %}
                                     </select>
@@ -1233,10 +1276,6 @@
                         <input type="text" id="roleName" name="name" required>
                     </div>
                     <div class="form-group">
-                        <label for="roleDescription">Descripción</label>
-                        <textarea id="roleDescription" name="description" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
                         <label>Módulos Permitidos</label>
                         <div class="permissions-checkboxes">
                             {% for modulo in modulos_sistema %}
@@ -1271,17 +1310,6 @@
                     <div class="form-group">
                         <label for="editRoleName">Nombre del Rol *</label>
                         <input type="text" id="editRoleName" name="name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="editRoleDescription">Descripción</label>
-                        <textarea id="editRoleDescription" name="description" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="editRoleStatus">Estado</label>
-                        <select id="editRoleStatus" name="status" class="filter-input select">
-                            <option value="activo">Activo</option>
-                            <option value="inactivo">Inactivo</option>
-                        </select>
                     </div>
                     <div class="form-group">
                         <label>Módulos Permitidos</label>
@@ -1378,10 +1406,11 @@
                         <label for="role_id">Rol *</label>
                         <select id="role_id" name="role_id" class="filter-input select" required>
                             <option value="">Seleccione un rol</option>
-                            {% for role in roles_data %}
+                            {% for role in roles_para_usuarios %}
                             <option value="{{ role.id }}">{{ role.name }}</option>
                             {% endfor %}
                         </select>
+                        <small class="text-muted">Solo se pueden asignar los roles básicos del sistema</small>
                     </div>
                     <div class="form-group">
                         <label for="userStatus">Estado</label>
@@ -1440,10 +1469,11 @@
                         <label for="editRoleId">Rol *</label>
                         <select id="editRoleId" name="role_id" class="filter-input select" required>
                             <option value="">Seleccione un rol</option>
-                            {% for role in roles_data %}
+                            {% for role in roles_para_usuarios %}
                             <option value="{{ role.id }}">{{ role.name }}</option>
                             {% endfor %}
                         </select>
+                        <small class="text-muted">Solo se pueden asignar los roles básicos del sistema</small>
                     </div>
                     <div class="form-group">
                         <label for="editUserStatus">Estado</label>
@@ -1495,6 +1525,7 @@
             </div>
         </div>
     </div>
+
     <!-- jQuery (requerido para Toastr) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Toastr JS -->
@@ -1595,13 +1626,25 @@
         function openEditRoleModal(roleId) {
             const row = document.querySelector(`tr[data-role-id="${roleId}"]`);
             const modulos = row.getAttribute('data-modulos').split(',');
+            const isEspecial = row.querySelector('small.text-muted') !== null;
             
             document.getElementById('editRoleId').value = roleId;
+            document.getElementById('editRoleName').value = row.querySelector('td').textContent.trim();
             
             // Marcar los checkboxes correspondientes a los módulos del rol
             document.querySelectorAll('#editRolePermissions input[type="checkbox"]').forEach(checkbox => {
                 checkbox.checked = modulos.includes(checkbox.value);
             });
+            
+            // Si es un rol especial, mostrar advertencia
+            if (isEspecial) {
+                Swal.fire({
+                    title: 'Rol Especial',
+                    text: 'Estás editando un rol especial del sistema. Ten cuidado al modificar los permisos.',
+                    icon: 'warning',
+                    confirmButtonText: 'Entendido'
+                });
+            }
             
             document.getElementById('editRoleModal').classList.add('active');
         }
@@ -1617,7 +1660,7 @@
             const row = document.querySelector(`tr[data-role-id="${roleId}"]`);
             const cells = row.querySelectorAll('td');
             
-            document.getElementById('viewRoleName').textContent = cells[0].textContent;
+            document.getElementById('viewRoleName').textContent = cells[0].textContent.trim();
             document.getElementById('viewRoleDescription').textContent = cells[1].textContent;
             document.getElementById('viewRoleStatus').textContent = cells[2].querySelector('.status-badge').textContent;
             document.getElementById('viewRoleUsers').textContent = cells[3].textContent;

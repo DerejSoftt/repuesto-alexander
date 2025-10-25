@@ -4,6 +4,35 @@ from django.utils import timezone
 import string
 import random
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.models import Group, User, Permission
+class Rol(models.Model):
+    ESTADOS = (
+        ('activo', 'Activo'),
+        ('inactivo', 'Inactivo'),
+    )
+    
+    group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name='rol_extension')
+    descripcion = models.TextField(blank=True, null=True)
+    estado = models.CharField(max_length=10, choices=ESTADOS, default='activo')
+    es_global = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return self.group.name
+    
+    @property
+    def nombre(self):
+        return self.group.name
+    
+    @property
+    def permisos(self):
+        return self.group.permissions.all()
+    
+    @property
+    def cantidad_usuarios(self):
+        return self.group.user_set.count()
 
 class Proveedor(models.Model):
     PAIS_CHOICES = [

@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404 
-from .models import EntradaProducto, Proveedor,  Cliente, Caja, Venta, DetalleVenta, MovimientoStock, CuentaPorCobrar, PagoCuentaPorCobrar, CierreCaja, ComprobantePago
+from .models import EntradaProducto, Proveedor,  Cliente, Caja, Venta, DetalleVenta, MovimientoStock, CuentaPorCobrar, PagoCuentaPorCobrar, CierreCaja, ComprobantePago, Rol
 from django.contrib import messages
 from django.utils import timezone
 
@@ -1909,7 +1909,7 @@ Productos:
                 subject=subject,
                 body=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                to=['josemiguelbacosta@gmail.com'],  # Cambia por tu email
+                to=['superbestiard16@gmail.com'],  # Cambia por tu email
                 # También puedes agregar cc o bcc si lo deseas
                 # cc=['otro_email@example.com'],
             )
@@ -2753,9 +2753,9 @@ def obtener_clientes(request):
         })
 
 
-
 @csrf_exempt
 @require_http_methods(["DELETE"])
+@superuser_required  # 👈 Nuevo decorador agregado
 def eliminar_cliente(request, cliente_id):
     try:
         cliente = get_object_or_404(Cliente, id=cliente_id)
@@ -2775,9 +2775,9 @@ def eliminar_cliente(request, cliente_id):
             'message': f'Error al eliminar cliente: {str(e)}'
         })
 
-
 @csrf_exempt
 @require_POST
+@superuser_required  # 👈 Nuevo decorador agregado
 def editar_cliente(request, cliente_id):
     try:
         cliente = get_object_or_404(Cliente, id=cliente_id)
@@ -2826,8 +2826,6 @@ def editar_cliente(request, cliente_id):
             'success': False,
             'message': f'Error al editar cliente: {str(e)}'
         })
-
-
 
 
 
@@ -3677,85 +3675,470 @@ def lista_comprobantes(request):
 
 
 
+def cuentaporcobrar(request):
+    # Obtener parámetros de filtrado
+    search = request.GET.get('search', '')
+    status_filter = request.GET.get('status', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    # Filtrar cuentas por cobrar (excluir anuladas y eliminadas)
+    cuentas = CuentaPorCobrar.objects.select_related('venta', 'cliente').filter(
+        anulada=False,
+        eliminada=False
+    )
+
+    if search:
+        cuentas = cuentas.filter(
+            Q(cliente__full_name__icontains=search) |
+            Q(venta__numero_factura__icontains=search) |
+            Q(cliente__identification_number__icontains=search)
+        )
+
+    if status_filter:
+        cuentas = cuentas.filter(estado=status_filter)
+
+    if date_from:
+        cuentas = cuentas.filter(venta__fecha_venta__gte=date_from)
+
+    if date_to:
+        cuentas = cuentas.filter(venta__fecha_venta__lte=date_to)
+
+    # Calcular estadísticas usando `total_a_pagar` de Venta (SIN ITBIS)
+    total_pendiente = Decimal('0.00')
+    total_vencido = Decimal('0.00')
+    total_por_cobrar = Decimal('0.00')
+
+    for cuenta in cuentas:
+        # Usar `total_a_pagar` de Venta
+        monto_total_original = Decimal(str(cuenta.venta.total_a_pagar))
+
+        # Calcular saldo pendiente (usando `total_a_pagar`)
+        saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
+
+        if cuenta.estado in ['pendiente', 'parcial']:
+            total_pendiente += saldo_pendiente
+        elif cuenta.estado == 'vencida':
+            total_vencido += saldo_pendiente
+
+        if cuenta.estado != 'pagada':
+            total_por_cobrar += saldo_pendiente
+
+    # Pagos del mes actual (solo de cuentas no anuladas y no eliminadas)
+    mes_actual = timezone.now().month
+    año_actual = timezone.now().year
+    pagos_mes = PagoCuentaPorCobrar.objects.filter(
+        fecha_pago__month=mes_actual,
+        fecha_pago__year=año_actual,
+        cuenta__anulada=False,
+        cuenta__eliminada=False
+    ).aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+
+    # Preparar datos para el template
+    cuentas_data = []
+    for cuenta in cuentas:
+        # Usar `total_a_pagar` de Venta
+        monto_total_original = float(cuenta.venta.total_a_pagar)
+
+        # Obtener productos de la venta (USANDO PRECIO SIN ITBIS)
+        productos = []
+        if cuenta.venta and hasattr(cuenta.venta, 'detalles'):
+            for detalle in cuenta.venta.detalles.all():
+                nombre_producto = 'Servicio'
+                precio_sin_itbis = float(detalle.precio_unitario)  # Precio sin ITBIS
+                if hasattr(detalle, 'producto') and detalle.producto:
+                    nombre_producto = detalle.producto.descripcion
+                elif hasattr(detalle, 'servicio') and detalle.servicio:
+                    nombre_producto = detalle.servicio.nombre
+                elif hasattr(detalle, 'descripcion') and detalle.descripcion:
+                    nombre_producto = detalle.descripcion
+
+                cantidad = 1
+                if hasattr(detalle, 'cantidad'):
+                    cantidad = float(detalle.cantidad)
+
+                productos.append({
+                    'nombre': nombre_producto,
+                    'cantidad': cantidad,
+                    'precio': precio_sin_itbis,  # Precio sin ITBIS
+                })
+
+        # Obtener información del cliente
+        client_name = 'Cliente no disponible'
+        client_phone = 'N/A'
+        if cuenta.cliente:
+            client_name = cuenta.cliente.full_name or 'Cliente sin nombre'
+            client_phone = cuenta.cliente.primary_phone or 'N/A'
+
+        # Obtener información de la factura
+        invoice_number = 'N/A'
+        sale_date = ''
+        if cuenta.venta:
+            invoice_number = cuenta.venta.numero_factura or 'N/A'
+            if cuenta.venta.fecha_venta:
+                sale_date = cuenta.venta.fecha_venta.strftime('%Y-%m-%d')
+
+        # Obtener fecha de vencimiento
+        due_date = ''
+        if cuenta.fecha_vencimiento:
+            due_date = cuenta.fecha_vencimiento.strftime('%Y-%m-%d')
+
+        # Usar `total_a_pagar` para "Monto Original" y cálculos
+        monto_pagado = float(cuenta.monto_pagado)
+
+        # Calcular saldo pendiente basado en `total_a_pagar`
+        saldo_pendiente = monto_total_original - monto_pagado
+
+        # Asegurarse de que el saldo pendiente no sea negativo
+        if saldo_pendiente < 0:
+            saldo_pendiente = 0
+
+        # Determinar si la cuenta puede ser eliminada (solo cuentas pagadas)
+        puede_eliminar = cuenta.estado == 'pagada'
+
+        cuentas_data.append({
+            'id': cuenta.id,
+            'invoiceNumber': invoice_number,
+            'clientName': client_name,
+            'clientPhone': client_phone,
+            'products': productos,  # Productos con precio sin ITBIS
+            'saleDate': sale_date,
+            'dueDate': due_date,
+            'totalAmount': monto_total_original,  # Monto total sin ITBIS (total_a_pagar)
+            'paidAmount': monto_pagado,
+            'pendingBalance': saldo_pendiente,  # Saldo pendiente basado en total_a_pagar
+            'status': cuenta.estado,
+            'observations': cuenta.observaciones or '',
+            'puede_eliminar': puede_eliminar,
+            'totalConItbis': float(cuenta.venta.total),  # Solo para referencia (con ITBIS)
+        })
+
+    # Convertir a JSON para pasarlo al template
+    cuentas_json = json.dumps(cuentas_data)
+
+    context = {
+        'cuentas_json': cuentas_json,
+        'total_pendiente': float(total_pendiente),
+        'total_vencido': float(total_vencido),
+        'pagos_mes': float(pagos_mes),
+        'total_por_cobrar': float(total_por_cobrar),
+        'search': search,
+        'status_filter': status_filter,
+        'date_from': date_from,
+        'date_to': date_to,
+    }
+
+    return render(request, "facturacion/cuentaporcobrar.html", context)
+
+@csrf_exempt
+def registrar_pago(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            cuenta_id = data.get('cuenta_id')
+            monto = Decimal(data.get('monto'))
+            metodo_pago = data.get('metodo_pago')
+            referencia = data.get('referencia', '')
+            observaciones = data.get('observaciones', '')
+
+            cuenta = get_object_or_404(CuentaPorCobrar, id=cuenta_id)
+
+            # Verificar que la cuenta no esté anulada
+            if cuenta.anulada:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No se puede registrar pago en una cuenta anulada'
+                })
+
+            # Usar `total_a_pagar` de Venta
+            monto_total_original = Decimal(str(cuenta.venta.total_a_pagar))
+
+            # Calcular saldo pendiente (usando `total_a_pagar`)
+            saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
+
+            # Validar que el monto no exceda el saldo pendiente
+            if monto > saldo_pendiente:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'El monto excede el saldo pendiente de RD${saldo_pendiente}'
+                })
+
+            # Crear el pago
+            pago = PagoCuentaPorCobrar(
+                cuenta=cuenta,
+                monto=monto,
+                metodo_pago=metodo_pago,
+                referencia=referencia,
+                observaciones=observaciones
+            )
+            pago.save()
+
+            # Actualizar monto pagado (sumar el nuevo pago)
+            cuenta.monto_pagado += monto
+
+            # Calcular nuevo saldo (usando `total_a_pagar`)
+            nuevo_saldo = monto_total_original - Decimal(str(cuenta.monto_pagado))
+
+            # Actualizar el estado basado en el nuevo saldo
+            if nuevo_saldo <= 0:
+                cuenta.estado = 'pagada'
+                cuenta.monto_pagado = monto_total_original
+            elif cuenta.monto_pagado > 0:
+                cuenta.estado = 'parcial'
+            else:
+                cuenta.estado = 'pendiente'
+
+            cuenta.save()
+
+            # Crear comprobante de pago
+            comprobante = ComprobantePago(
+                pago=pago,
+                cuenta=cuenta,
+                cliente=cuenta.cliente,
+                tipo_comprobante='recibo'
+            )
+            comprobante.save()
+
+            return JsonResponse({
+                'success': True,
+                'message': f'Pago registrado exitosamente. Comprobante: {comprobante.numero_comprobante}',
+                'comprobante_numero': comprobante.numero_comprobante,
+                'comprobante_id': comprobante.id,
+                'nuevo_saldo_pendiente': float(nuevo_saldo),
+                'monto_total_original': float(monto_total_original),
+                'monto_pagado_total': float(cuenta.monto_pagado),
+                'estado_actual': cuenta.estado
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error al registrar pago: {str(e)}'
+            })
+
+    return JsonResponse({'success': False, 'message': 'Método no permitido'})
+
+
+def generar_comprobante_pdf(request, comprobante_id):
+    try:
+        comprobante = get_object_or_404(ComprobantePago, id=comprobante_id)
+
+        # Crear respuesta HTTP con tipo PDF
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="comprobante_{comprobante.numero_comprobante}.pdf"'
+
+        # Configurar el PDF en tamaño A4 (595 x 842 puntos)
+        width, height = A4
+        p = canvas.Canvas(response, pagesize=A4)
+
+        # Ruta absoluta del logo en STATIC_ROOT
+        logo_path = os.path.join(settings.STATIC_ROOT, 'image', 'favicon12.ico')
+
+        # Verifica si el archivo existe
+        if not os.path.exists(logo_path):
+            raise FileNotFoundError(f"No se encontró el logo en la ruta: {logo_path}")
+
+        # Márgenes y posiciones iniciales
+        margin_left = 50
+        y_position = height - 50  # Iniciar 50 puntos desde el borde superior
+        line_height = 14
+        small_line_height = 10
+
+        # Función para centrar texto
+        def draw_centered_text(text, y, font_size=12, bold=False):
+            if bold:
+                p.setFont("Helvetica-Bold", font_size)
+            else:
+                p.setFont("Helvetica", font_size)
+            text_width = p.stringWidth(text, "Helvetica", font_size)
+            x = (width - text_width) / 2
+            p.drawString(x, y, text)
+            return y - line_height
+
+        # Función para texto alineado a la izquierda
+        def draw_left_text(text, y, font_size=10, bold=False):
+            if bold:
+                p.setFont("Helvetica-Bold", font_size)
+            else:
+                p.setFont("Helvetica", font_size)
+            p.drawString(margin_left, y, text)
+            return y - line_height
+
+        # Insertar logo en el encabezado
+        logo_width = 150
+        logo_height = 80
+        logo_x = (width - logo_width) / 2
+        logo_y = y_position - logo_height
+        p.drawImage(logo_path, logo_x, logo_y, width=logo_width, height=logo_height, preserveAspectRatio=True)
+        y_position = logo_y - 20  # Espacio después del logo
+
+        # Encabezado del comprobante
+        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 16, True)
+        y_position = draw_centered_text("COMPROBANTE DE PAGO", y_position, 14, True)
+        y_position -= line_height / 2
+
+        # Línea separadora
+        p.line(margin_left, y_position, width - margin_left, y_position)
+        y_position -= line_height
+
+        # Información del comprobante
+        y_position = draw_left_text(f"Comprobante: {comprobante.numero_comprobante}", y_position, 10)
+        y_position = draw_left_text(f"Fecha: {comprobante.fecha_emision.strftime('%d/%m/%Y %H:%M')}", y_position, 10)
+        y_position = draw_left_text(f"Cliente: {comprobante.cliente.full_name}", y_position, 10)
+        if comprobante.cuenta.venta:
+            y_position = draw_left_text(f"Factura: {comprobante.cuenta.venta.numero_factura}", y_position, 10)
+        y_position -= line_height / 2
+
+        # Línea separadora
+        p.line(margin_left, y_position, width - margin_left, y_position)
+        y_position -= line_height
+
+        # Información del pago
+        y_position = draw_centered_text("DETALLE DEL PAGO", y_position, 12, True)
+        y_position -= small_line_height
+        y_position = draw_left_text(f"Monto Pagado: RD$ {comprobante.pago.monto:,.2f}", y_position, 10, True)
+        y_position = draw_left_text(f"Método: {comprobante.pago.get_metodo_pago_display()}", y_position, 10)
+        if comprobante.pago.referencia:
+            y_position = draw_left_text(f"Referencia: {comprobante.pago.referencia}", y_position, 9)
+        y_position -= line_height / 2
+
+        # Línea separadora
+        p.line(margin_left, y_position, width - margin_left, y_position)
+        y_position -= line_height
+
+        # Cálculo de montos
+        monto_total_original = Decimal(str(comprobante.cuenta.venta.total_a_pagar))
+        monto_total_con_itbis = comprobante.cuenta.venta.total if comprobante.cuenta.venta else comprobante.cuenta.monto_total
+        saldo_pendiente = monto_total_original - Decimal(str(comprobante.cuenta.monto_pagado))
+
+        # Resumen de cuenta
+        y_position = draw_centered_text("RESUMEN DE CUENTA", y_position, 12, True)
+        y_position -= small_line_height
+        y_position = draw_left_text(f"Monto Original: RD$ {monto_total_original:,.2f}", y_position, 10)
+        y_position = draw_left_text(f"Pagado Acumulado: RD$ {comprobante.cuenta.monto_pagado:,.2f}", y_position, 10)
+        y_position = draw_left_text(f"Saldo Pendiente: RD$ {saldo_pendiente:,.2f}", y_position, 10, True)
+        y_position -= line_height
+
+        # Línea separadora
+        p.line(margin_left, y_position, width - margin_left, y_position)
+        y_position -= line_height * 2
+
+        # Sección de firmas
+        y_position = draw_centered_text("FIRMA DEL CLIENTE", y_position, 10, True)
+        y_position -= small_line_height
+        p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
+        y_position -= line_height * 1.2
+        y_position = draw_left_text("Cédula: _________________________", y_position, 9)
+        y_position -= line_height * 1.5
+
+        y_position = draw_centered_text("FIRMA DE LA EMPRESA", y_position, 10, True)
+        y_position -= small_line_height
+        p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
+        y_position -= line_height
+
+        # Pie de página
+        y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 10, True)
+        y_position -= line_height
+        y_position = draw_centered_text("¡Gracias por su pago!", y_position, 12, True)
+        y_position -= small_line_height
+        y_position = draw_centered_text("Tel: (849) 353-5344", y_position, 9)
+        y_position = draw_centered_text(f"Ref: {comprobante.numero_comprobante}", y_position, 8)
+
+        # Finalizar el PDF
+        p.showPage()
+        p.save()
+        return response
+
+    except FileNotFoundError as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error: {str(e)}. Asegúrate de que el logo esté en la carpeta correcta y de que hayas ejecutado `collectstatic`.'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al generar comprobante: {str(e)}'
+        })
+
+def eliminar_cuenta_pagada(request, cuenta_id):
+    if request.method == 'POST':
+        try:
+            cuenta = get_object_or_404(CuentaPorCobrar, id=cuenta_id)
+
+            # Verificar que la cuenta esté pagada
+            if cuenta.estado != 'pagada':
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Solo se pueden eliminar cuentas que estén completamente pagadas'
+                })
+
+            # Verificar que no esté ya eliminada
+            if cuenta.eliminada:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Esta cuenta ya ha sido eliminada'
+                })
+
+            # Realizar soft delete
+            cuenta.eliminar_cuenta()
+
+            return JsonResponse({
+                'success': True,
+                'message': f'Cuenta #{cuenta.id} - Factura {cuenta.venta.numero_factura} eliminada exitosamente'
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error al eliminar cuenta: {str(e)}'
+            })
+
+    return JsonResponse({'success': False, 'message': 'Método no permitido'})
+
+@csrf_exempt
 def anular_cuenta(request, cuenta_id):
     if request.method == 'POST':
         try:
-            # Verificar permisos
-            if not request.user.is_superuser and not request.user.groups.filter(name='Administrador').exists():
+            # Verificar que el usuario sea superusuario
+            if not request.user.is_superuser:
                 return JsonResponse({
                     'success': False,
-                    'message': 'No tiene permisos para anular cuentas'
+                    'message': 'No tiene permisos para anular cuentas. Solo el superusuario puede realizar esta acción.'
                 })
-            
+
             cuenta = get_object_or_404(CuentaPorCobrar, id=cuenta_id)
-            
-            # Verificar que la cuenta no esté ya anulada
-            if cuenta.estado == 'anulada':
+
+            # Verificar que la cuenta no esté anulada
+            if cuenta.anulada:
                 return JsonResponse({
                     'success': False,
-                    'message': 'Esta cuenta ya está anulada'
+                    'message': 'Esta cuenta ya se encuentra anulada'
                 })
-            
-            # Obtener el monto con interés si existe
-            monto_con_interes = cuenta.monto_total
-            if cuenta.venta and hasattr(cuenta.venta, 'total_con_interes') and cuenta.venta.total_con_interes:
-                monto_con_interes = cuenta.venta.total_con_interes
-            
-            # Verificar que la cuenta no esté completamente pagada
-            if cuenta.monto_pagado >= monto_con_interes:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'No se puede anular una cuenta completamente pagada. Use la opción de eliminar en su lugar.'
-                })
-            
-            # Verificar si hay pagos parciales
+
+            # Verificar que no tenga pagos
             if cuenta.monto_pagado > 0:
                 return JsonResponse({
                     'success': False,
-                    'message': f'Esta cuenta tiene pagos registrados por RD$ {cuenta.monto_pagado:,.2f}. No se puede anular una cuenta con pagos parciales.'
+                    'message': 'No se puede anular una cuenta que tiene pagos registrados'
                 })
-            
+
             # Anular la cuenta
+            cuenta.anulada = True
             cuenta.estado = 'anulada'
             cuenta.save()
-            
-            # Registrar en el log o auditoría si existe
-            try:
-                from django.contrib.admin.models import LogEntry, CHANGE
-                from django.contrib.contenttypes.models import ContentType
-                
-                LogEntry.objects.log_action(
-                    user_id=request.user.id,
-                    content_type_id=ContentType.objects.get_for_model(cuenta).pk,
-                    object_id=cuenta.id,
-                    object_repr=f"Cuenta #{cuenta.id} - {cuenta.cliente.nombre if cuenta.cliente else 'Sin cliente'}",
-                    action_flag=CHANGE,
-                    change_message=f"Cuenta anulada por {request.user.username}"
-                )
-            except:
-                pass  # Si no se puede registrar el log, continuar
-            
+
             return JsonResponse({
                 'success': True,
-                'message': f'Cuenta #{cuenta.id} anulada exitosamente'
+                'message': f'Cuenta #{cuenta.id} - Factura {cuenta.venta.numero_factura} anulada exitosamente'
             })
-            
-        except CuentaPorCobrar.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'message': 'Cuenta no encontrada'
-            })
+
         except Exception as e:
-            import traceback
-            print(traceback.format_exc())  # Para debug en consola
             return JsonResponse({
                 'success': False,
                 'message': f'Error al anular cuenta: {str(e)}'
             })
-    
+
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
-
-
 
 
 def detalle_cuenta(request, cuenta_id):
@@ -3809,18 +4192,16 @@ def detalle_cuenta(request, cuenta_id):
 
 
 
-
 def gestiondesuplidores(request):
     proveedores = Proveedor.objects.all().order_by('nombre_empresa')
     paises = Proveedor.PAIS_CHOICES
-    # categorias = Proveedor.CATEGORIA_CHOICES
     terminos_pago = Proveedor.TERMINOS_PAGO_CHOICES
     
     context = {
         'proveedores': proveedores,
         'paises': paises,
-        # 'categorias': categorias,
         'terminos_pago': terminos_pago,
+        'user': request.user,  # Asegurar que el usuario esté en el contexto
     }
     return render(request, "facturacion/gestiondesuplidores.html", context)
 
@@ -3836,7 +4217,6 @@ def agregar_proveedor(request):
                 whatsapp=request.POST.get('whatsapp', ''),
                 pais=request.POST.get('country'),
                 ciudad=request.POST.get('city'),
-                # categoria=request.POST.get('category'),
                 direccion=request.POST.get('address', ''),
                 terminos_pago=request.POST.get('paymentTerms', ''),
                 limite_credito=request.POST.get('creditLimit', 0) or 0,
@@ -3851,8 +4231,20 @@ def agregar_proveedor(request):
     
     return redirect('gestiondesuplidores')
 
+@csrf_exempt
 def editar_proveedor(request):
     if request.method == 'POST':
+        # Verificar si el usuario es superusuario
+        if not request.user.is_superuser:
+            error_msg = 'No tiene permisos para editar suplidores. Solo el superusuario puede realizar esta acción.'
+            
+            # Si es una petición AJAX, retornar JSON
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'message': error_msg})
+            else:
+                messages.error(request, error_msg)
+                return redirect('gestiondesuplidores')
+        
         try:
             # Debug: ver qué datos están llegando
             print("Datos recibidos en editar_proveedor:")
@@ -3907,6 +4299,11 @@ def editar_proveedor(request):
 @require_POST
 def eliminar_proveedor(request):
     try:
+        # Verificar si el usuario es superusuario
+        if not request.user.is_superuser:
+            messages.error(request, 'No tiene permisos para eliminar suplidores. Solo el superusuario puede realizar esta acción.')
+            return redirect('gestiondesuplidores')
+
         proveedor = get_object_or_404(Proveedor, id=request.POST.get('supplierId'))
         proveedor.delete()
         messages.success(request, 'Proveedor eliminado exitosamente')
@@ -3927,7 +4324,6 @@ def get_proveedor_data(request, id):
         'whatsapp': proveedor.whatsapp or '',
         'pais': proveedor.pais,
         'ciudad': proveedor.ciudad,
-        # 'categoria': proveedor.categoria,
         'direccion': proveedor.direccion or '',
         'terminos_pago': proveedor.terminos_pago or '',
         'limite_credito': str(proveedor.limite_credito),
@@ -3935,6 +4331,7 @@ def get_proveedor_data(request, id):
         'activo': proveedor.activo
     }
     return JsonResponse(data)
+
 
 def registrosuplidores(request):
     if request.method == 'POST':
@@ -4650,28 +5047,34 @@ def procesar_devolucion(request):
 def is_superuser(user):
     return user.is_superuser
 
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.models import Group, User, Permission
+from django.contrib.contenttypes.models import ContentType
+from django.contrib import messages
+from django.db import transaction
+from django.http import HttpResponse
+import csv
+
+def is_superuser(user):
+    return user.is_superuser
+
 @user_passes_test(is_superuser, login_url='/admin/login/')
 def roles(request):
-    # Obtener todos los grupos (roles)
-    groups = Group.objects.all()
-    
-    # Obtener todos los usuarios
-    users = User.objects.all().prefetch_related('groups')
-    
     # Definir los módulos del sistema
     MODULOS_SISTEMA = [
-        {'codename': 'entrada', 'name': 'Entrada Mercancía'},
-        {'codename': 'registrosuplidores', 'name': 'Registrar Suplidores'},
-        {'codename': 'inventario', 'name': 'Inventario'},
         {'codename': 'ventas', 'name': 'Facturación'},
         {'codename': 'cotizacion', 'name': 'Cotización'},
         {'codename': 'registrodecliente', 'name': 'Registrar Cliente'},
         {'codename': 'listadecliente', 'name': 'Clientes'},
         {'codename': 'cuentaporcobrar', 'name': 'Cuenta por Cobrar'},
+        {'codename': 'reimprimirfactura', 'name': 'Reimprimir'},
+        {'codename': 'inventario', 'name': 'Inventario'},
+        {'codename': 'entrada', 'name': 'Entrada Mercancía'},
+        {'codename': 'registrosuplidores', 'name': 'Registrar Suplidores'},
         {'codename': 'gestiondesuplidores', 'name': 'Suplidores'},
         {'codename': 'devoluciones', 'name': 'Devoluciones'},
         {'codename': 'anular', 'name': 'Anular Factura'},
-        {'codename': 'reimprimirfactura', 'name': 'Reimprimir'},
         {'codename': 'dashboard', 'name': 'Dashboard'},
         {'codename': 'roles', 'name': 'Roles'},
     ]
@@ -4685,19 +5088,41 @@ def roles(request):
             defaults={'name': f'Acceso a {modulo["name"]}'}
         )
     
-    # Crear rol especial "Almacén" si no existe
-    grupo_almacen, created = Group.objects.get_or_create(name='Almacén')
-    if created:
-        # Asignar permisos limitados al rol Almacén
-        permisos_almacen = ['access_entrada', 'access_registrosuplidores', 'access_inventario']
-        for permiso_codename in permisos_almacen:
-            permiso = Permission.objects.get(codename=permiso_codename)
-            grupo_almacen.permissions.add(permiso)
+    # Crear grupos especiales si no existen
+    grupos_especiales = [
+        {
+            'name': 'Usuario Normal',
+            'permisos': ['ventas', 'cotizacion', 'registrodecliente', 'listadecliente',
+                        'cuentaporcobrar', 'reimprimirfactura', 'inventario']
+        },
+        {
+            'name': 'Almacén',
+            'permisos': ['entrada', 'registrosuplidores', 'gestiondesuplidores', 'inventario']
+        }
+    ]
+    
+    for grupo_info in grupos_especiales:
+        group, created = Group.objects.get_or_create(name=grupo_info['name'])
+        # Asignar permisos si el grupo es nuevo
+        if created:
+            for permiso_codename in grupo_info['permisos']:
+                try:
+                    permiso = Permission.objects.get(codename=f'access_{permiso_codename}')
+                    group.permissions.add(permiso)
+                except Permission.DoesNotExist:
+                    continue
+    
+    # Obtener todos los grupos (roles)
+    groups = Group.objects.all().prefetch_related('permissions', 'user_set')
+    
+    # Obtener todos los usuarios
+    users = User.objects.all().prefetch_related('groups')
     
     # Procesar datos para los templates
     roles_data = []
+    roles_para_usuarios = []  # Solo los roles que se mostrarán en usuarios
+
     for group in groups:
-        user_count = group.user_set.count()
         permissions = list(group.permissions.values_list('codename', flat=True))
         
         # Obtener módulos asignados al rol
@@ -4706,16 +5131,24 @@ def roles(request):
             if f'access_{modulo["codename"]}' in permissions:
                 modulos_asignados.append(modulo["name"])
         
-        roles_data.append({
+        # Determinar si es un grupo especial
+        es_especial = group.name in ['Usuario Normal', 'Almacén']
+        
+        role_data = {
             'id': group.id,
             'name': group.name,
-            'description': '',
-            'status': 'activo',
-            'isGlobal': True,
-            'permissions': permissions,
-            'userCount': user_count,
-            'modulos_asignados': modulos_asignados
-        })
+            'description': '',  # Los grupos de Django no tienen descripción por defecto
+            'status': 'activo',  # Asumimos que todos están activos
+            'userCount': group.user_set.count(),
+            'modulos_asignados': modulos_asignados,
+            'es_especial': es_especial
+        }
+        
+        roles_data.append(role_data)
+        
+        # Solo incluir los roles especiales para asignar a usuarios
+        if group.name in ['Usuario Normal', 'Almacén']:
+            roles_para_usuarios.append(role_data)
     
     users_data = []
     for user in users:
@@ -4733,7 +5166,7 @@ def roles(request):
     
     # Estadísticas
     total_roles = groups.count()
-    active_roles = total_roles
+    active_roles = total_roles  # Asumimos que todos están activos
     inactive_roles = 0
     
     total_users = users.count()
@@ -4742,6 +5175,7 @@ def roles(request):
     
     context = {
         'roles_data': roles_data,
+        'roles_para_usuarios': roles_para_usuarios,  # Nuevo contexto
         'users_data': users_data,
         'total_roles': total_roles,
         'active_roles': active_roles,
@@ -4761,6 +5195,7 @@ def roles(request):
                                 if search_role.lower() in r['name'].lower()]
     
     if status_filter:
+        # En este caso, todos están activos, pero si quieres filtrar por inactivo, no mostrará ninguno
         context['roles_data'] = [r for r in context['roles_data'] 
                                 if r['status'] == status_filter]
     
@@ -4788,7 +5223,6 @@ def roles(request):
         
         if action == 'create_role':
             name = request.POST.get('name')
-            description = request.POST.get('description', '')
             modulos_seleccionados = request.POST.getlist('modulos')
             
             if not name:
@@ -4812,8 +5246,6 @@ def roles(request):
         elif action == 'edit_role':
             role_id = request.POST.get('role_id')
             name = request.POST.get('name')
-            description = request.POST.get('description', '')
-            status = request.POST.get('status', 'activo')
             modulos_seleccionados = request.POST.getlist('modulos')
             
             if not name:
@@ -4821,13 +5253,17 @@ def roles(request):
             else:
                 group = get_object_or_404(Group, id=role_id)
                 
-                if Group.objects.filter(name=name).exclude(id=role_id).exists():
+                # No permitir editar nombres de grupos especiales
+                if group.name in ['Usuario Normal', 'Almacén'] and name != group.name:
+                    messages.error(request, f'No se puede cambiar el nombre del rol especial "{group.name}".')
+                elif Group.objects.filter(name=name).exclude(id=role_id).exists():
                     messages.error(request, 'Ya existe otro rol con este nombre.')
                 else:
                     group.name = name
                     group.save()
                     
-                    # Actualizar permisos
+                    # Actualizar permisos (excepto para grupos especiales, pero en este caso, permitimos editar permisos?)
+                    # Si quieres que los grupos especiales no se editen, puedes agregar una condición aquí.
                     group.permissions.clear()
                     for modulo_codename in modulos_seleccionados:
                         try:
@@ -4843,7 +5279,10 @@ def roles(request):
             role_id = request.POST.get('role_id')
             group = get_object_or_404(Group, id=role_id)
             
-            if group.user_set.exists():
+            # No permitir eliminar grupos especiales
+            if group.name in ['Usuario Normal', 'Almacén']:
+                messages.error(request, 'No se pueden eliminar los roles especiales del sistema.')
+            elif group.user_set.exists():
                 messages.error(request, 'No se puede eliminar un rol que tiene usuarios asignados.')
             else:
                 group.delete()
@@ -4944,13 +5383,13 @@ def roles(request):
             response['Content-Disposition'] = 'attachment; filename="roles.csv"'
             
             writer = csv.writer(response)
-            writer.writerow(['Nombre', 'Descripción', 'Estado', 'Usuarios Asignados', 'Módulos'])
+            writer.writerow(['Nombre', 'Usuarios Asignados', 'Módulos'])
             
             for group in Group.objects.all():
                 user_count = group.user_set.count()
                 modulos = [modulo['name'] for modulo in MODULOS_SISTEMA 
                           if group.permissions.filter(codename=f'access_{modulo["codename"]}').exists()]
-                writer.writerow([group.name, '', 'activo', user_count, ', '.join(modulos)])
+                writer.writerow([group.name, user_count, ', '.join(modulos)])
             
             return response
         
@@ -4978,70 +5417,58 @@ def roles(request):
     return render(request, "facturacion/roles.html", context)
 
 
-
 @receiver(post_migrate)
-def crear_grupos_y_permisos(sender, **kwargs):
-    # Obtener el ContentType para Group
-    content_type = ContentType.objects.get_for_model(Group)
-
-    # Lista de módulos y sus roles
-    MODULOS = [
-        # Módulos para Usuario Normal
-        {'codename': 'ventas', 'name': 'Facturación', 'roles': ['normal', 'superuser']},
-        {'codename': 'cotizacion', 'name': 'Cotización', 'roles': ['normal', 'superuser']},
-        {'codename': 'registrodecliente', 'name': 'Registrar Cliente', 'roles': ['normal', 'superuser']},
-        {'codename': 'listadecliente', 'name': 'Clientes', 'roles': ['normal', 'superuser']},
-        {'codename': 'cuentaporcobrar', 'name': 'Cuenta por Cobrar', 'roles': ['normal', 'superuser']},
-        {'codename': 'inventario', 'name': 'Inventario', 'roles': ['normal', 'special', 'superuser']},
-        {'codename': 'reimprimirfactura', 'name': 'Reimprimir', 'roles': ['normal', 'superuser']},
-        # Módulos para Usuario Especial (Almacén)
-        {'codename': 'entrada', 'name': 'Entrada Mercancía', 'roles': ['special', 'superuser']},
-        {'codename': 'registrosuplidores', 'name': 'Registrar Suplidores', 'roles': ['special', 'superuser']},
-        {'codename': 'gestiondesuplidores', 'name': 'Suplidores', 'roles': ['special', 'superuser']},
-        # Módulos con permisos específicos
-        {'codename': 'devoluciones', 'name': 'Devoluciones', 'roles': ['superuser']},
-        {'codename': 'roles', 'name': 'Roles', 'roles': ['superuser']},
-        {'codename': 'anular', 'name': 'Anular Factura', 'roles': ['superuser']},
-        {'codename': 'dashboard', 'name': 'Dashboard', 'roles': ['superuser']},
-    ]
-
-    # Crear permisos si no existen
-    for modulo in MODULOS:
-        Permission.objects.get_or_create(
-            codename=f'access_{modulo["codename"]}',
-            name=f'Acceso a {modulo["name"]}',
-            content_type=content_type,
-        )
-
-    # Crear grupos y asignar permisos
-    grupo_normal, _ = Group.objects.get_or_create(name='Usuario Normal')
-    grupo_almacen, _ = Group.objects.get_or_create(name='Almacén')
-
-    # Asignar permisos a Usuario Normal
-    permisos_normal = [
-        'access_ventas', 'access_cotizacion', 'access_registrodecliente',
-        'access_listadecliente', 'access_cuentaporcobrar',
-        'access_inventario', 'access_reimprimirfactura'
-    ]
-    for permiso_codename in permisos_normal:
-        permiso = Permission.objects.get(codename=permiso_codename)
-        grupo_normal.permissions.add(permiso)
-
-    # Asignar permisos a Almacén
-    permisos_almacen = [
-        'access_entrada', 'access_registrosuplidores',
-        'access_gestiondesuplidores', 'access_inventario'
-    ]
-    for permiso_codename in permisos_almacen:
-        permiso = Permission.objects.get(codename=permiso_codename)
-        grupo_almacen.permissions.add(permiso)
+def crear_grupos_especiales(sender, **kwargs):
+    # Solo ejecutar para esta aplicación
+    if sender.name == 'facturacion':  # Reemplaza 'facturacion' con el nombre de tu aplicación
+        content_type = ContentType.objects.get_for_model(Group)
+        
+        # Crear permisos si no existen
+        MODULOS = [
+            'ventas', 'cotizacion', 'registrodecliente', 'listadecliente', 
+            'cuentaporcobrar', 'reimprimirfactura', 'inventario',
+            'entrada', 'registrosuplidores', 'gestiondesuplidores',
+            'devoluciones', 'anular', 'dashboard', 'roles'
+        ]
+        
+        for modulo in MODULOS:
+            Permission.objects.get_or_create(
+                codename=f'access_{modulo}',
+                name=f'Acceso a {modulo}',
+                content_type=content_type,
+            )
+        
+        # Crear grupos especiales
+        grupos_especiales = [
+            {
+                'name': 'Usuario Normal',
+                'permisos': ['ventas', 'cotizacion', 'registrodecliente', 'listadecliente', 
+                            'cuentaporcobrar', 'reimprimirfactura', 'inventario']
+            },
+            {
+                'name': 'Almacén',
+                'permisos': ['entrada', 'registrosuplidores', 'gestiondesuplidores', 'inventario']
+            }
+        ]
+        
+        for grupo_info in grupos_especiales:
+            group, created = Group.objects.get_or_create(name=grupo_info['name'])
+            
+            # Asignar permisos si el grupo es nuevo
+            if created:
+                for permiso_codename in grupo_info['permisos']:
+                    try:
+                        permiso = Permission.objects.get(codename=f'access_{permiso_codename}')
+                        group.permissions.add(permiso)
+                    except Permission.DoesNotExist:
+                        continue
 
 
-def crear_grupo_almacen():
-    group, created = Group.objects.get_or_create(name='Almacen')
-    if created:
-        permisos = Permission.objects.filter(codename__in=['entrada', 'registro_suplidores', 'inventario'])
-        group.permissions.set(permisos)
+# def crear_grupo_almacen():
+#     group, created = Group.objects.get_or_create(name='Almacen')
+#     if created:
+#         permisos = Permission.objects.filter(codename__in=['entrada', 'registro_suplidores', 'inventario'])
+#         group.permissions.set(permisos)
 
 
 def anular(request):
