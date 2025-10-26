@@ -97,6 +97,7 @@ def index(request):
     
     return render(request, "facturacion/index.html")
 
+@login_required
 def dashboard(request):
     hoy = timezone.now().date()
     inicio_mes = hoy.replace(day=1)
@@ -2833,7 +2834,7 @@ def editar_cliente(request, cliente_id):
 
 
 
-
+@login_required
 def registrodecliente(request):
     return render(request, "facturacion/registrodecliente.html")
 
@@ -3230,6 +3231,7 @@ def buscar_productos_similares(request):
     
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
 
+@login_required
 def cuentaporcobrar(request):
     # Obtener parámetros de filtrado
     search = request.GET.get('search', '')
@@ -3674,7 +3676,7 @@ def lista_comprobantes(request):
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
 
-
+@login_required
 def cuentaporcobrar(request):
     # Obtener parámetros de filtrado
     search = request.GET.get('search', '')
@@ -4191,7 +4193,7 @@ def detalle_cuenta(request, cuenta_id):
 
 
 
-
+@login_required
 def gestiondesuplidores(request):
     proveedores = Proveedor.objects.all().order_by('nombre_empresa')
     paises = Proveedor.PAIS_CHOICES
@@ -4332,7 +4334,7 @@ def get_proveedor_data(request, id):
     }
     return JsonResponse(data)
 
-
+@login_required
 def registrosuplidores(request):
     if request.method == 'POST':
         # Crear el proveedor directamente desde los datos del request
@@ -4859,7 +4861,7 @@ def cuadre(request):
 
 
 
-
+@login_required
 def reavastecer(request):
     # Obtener todos los productos activos
     productos = EntradaProducto.objects.filter(activo=True)
@@ -4926,7 +4928,7 @@ def actualizar_stock(request):
         return JsonResponse({'success': False, 'error': str(e)})
     
 
-
+@login_required
 def devoluciones(request):
     return render(request, "facturacion/devoluciones.html")
 
@@ -5044,8 +5046,8 @@ def procesar_devolucion(request):
 
 
 # Función para verificar si el usuario es superusuario
-def is_superuser(user):
-    return user.is_superuser
+# def is_superuser(user):
+#     return user.is_superuser
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import user_passes_test
@@ -5470,7 +5472,7 @@ def crear_grupos_especiales(sender, **kwargs):
 #         permisos = Permission.objects.filter(codename__in=['entrada', 'registro_suplidores', 'inventario'])
 #         group.permissions.set(permisos)
 
-
+@login_required
 def anular(request):
     return render(request, "facturacion/anular.html")
 
@@ -5609,7 +5611,7 @@ def anular_factura(request):
 
 
 
-
+@login_required
 def reimprimir_factura(request):
     # Esta vista renderiza la página de reimpresión
     return render(request, 'facturacion/reimprimirfactura.html')
@@ -6007,7 +6009,7 @@ def generar_factura(request):
         )
 
 
-
+@login_required
 def cotizacion(request):
     return render(request, "facturacion/cotizacion.html")
 
