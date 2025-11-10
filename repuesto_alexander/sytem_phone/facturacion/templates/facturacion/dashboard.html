@@ -1,4 +1,5 @@
 {% load static %}
+{% load custom_filters %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -325,7 +326,7 @@
         }
 
         .refresh-btn {
-            background-color: 	#28a745;
+            background-color:     #28a745;
             color: white;
             border: none;
             padding: 0.75rem 1.5rem;
@@ -543,6 +544,11 @@
             color: white;
         }
 
+        .badge-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+            color: white;
+        }
+
         /* Progress Bars */
         .progress {
             height: 1rem;
@@ -603,6 +609,63 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1.5rem;
+        }
+
+        /* Estilos para los filtros de cuadre */
+        .filtros-cuadre .form-control {
+            background: white;
+            border: 1px solid #e1e8ed;
+            transition: all 0.3s ease;
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .filtros-cuadre .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-buscar, .btn-limpiar {
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-buscar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-limpiar {
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            color: white;
+        }
+
+        .btn-buscar:hover, .btn-limpiar:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-imprimir {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-imprimir:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
         }
 
         /* Desktop specific styles */
@@ -674,6 +737,10 @@
             .content-area {
                 padding: 0 10px 10px 10px;
             }
+
+            .filtros-cuadre .form-control {
+                margin-bottom: 1rem;
+            }
         }
 
         /* Animations */
@@ -715,85 +782,156 @@
     <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <!-- Sidebar Navigation -->
-<nav class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-        <h2>
-            <i class="fas fa-motorcycle"></i>
-            Super Bestia
-        </h2>
-        <p>Usuario: {{ user.username }}</p>
-        <p>{{ user.email }}</p>
-    </div>
-    <div class="sidebar-menu">
-        <a href="#" class="menu-item">
-            <i class='bx bx-home-alt'></i>
-            <span>Inicio</span>
-        </a>
-        <a href="{% url 'ventas' %}" class="menu-item">
-            <i class='bx bx-receipt'></i>
-            <span>Facturación</span>
-        </a>
-         <a href="{% url 'cotizacion' %}" class="menu-item">
-                <i class='bx bx-calculator'></i>
-                <span>Cotizacion</span>
-        </a>
-        <a href="{% url 'registrodecliente' %}" class="menu-item">
-            <i class='bx bx-user-plus'></i>
-            <span>Registrar Cliente</span>
-        </a>
-        <a href="{% url 'listadecliente' %}" class="menu-item">
-            <i class='bx bx-group'></i>
-            <span>Clientes</span>
-        </a>
-        <a href="{% url 'entrada' %}" class="menu-item">
-            <i class='bx bx-package'></i>
-            <span>Entrada Mercancía</span>
-        </a>
-        <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
-            <i class='bx bx-money'></i>
-            <span>Cuenta por Cobrar</span>
-        </a>
-        <a href="{% url 'inventario' %}" class="menu-item">
-            <i class='bx bx-archive'></i>
-            <span>Inventario</span>
-        </a>
-        <a href="{% url 'registrosuplidores' %}" class="menu-item">
-            <i class='bx bx-building'></i>
-            <span>Registrar Suplidores</span>
-        </a>
-        <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
-            <i class='bx bx-buildings'></i>
-            <span>Suplidores</span>
-        </a>
-        <a href="{% url 'devoluciones' %}" class="menu-item">
-            <i class='bx bx-undo'></i>
-            <span>Devoluciones</span>
-        </a>
-        <a href="{% url 'roles' %}" class="menu-item">
-            <i class='bx bx-user-check'></i>
-            <span>Roles</span>
-        </a>
-        <a href="{% url 'anular' %}" class="menu-item">
-            <i class='bx bx-x-circle'></i>
-            <span>Anular Factura</span>
-        </a>
-        <a href="{% url 'reimprimirfactura' %}" class="menu-item">
-            <i class='bx bx-printer'></i>
-            <span>Reimprimir</span>
-        </a>
-        <a href="{% url 'dashboard' %}" class="menu-item active">
-            <i class='bx bx-grid-alt'></i>
-            <span>Dashboard</span>
-        </a>
-        <a href="{% url 'index' %}" class="menu-item">
-            <i class='bx bx-log-out'></i>
-            <span>Cerrar Sesión</span>
-        </a>
-    </div>
-    <div class="sidebar-footer">
-        <p>Derejsoft v 1.2.2</p>
-    </div>
-</nav>
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>
+                <i class="fas fa-motorcycle"></i>
+                Super Bestia
+            </h2>
+            <p>Usuario: {{ user.username }}</p>
+            <p>{{ user.email }}</p>
+        </div>
+     <div class="sidebar-menu">
+    <!-- Menú para todos los usuarios -->
+    <a href="#" class="menu-item">
+        <i class='bx bx-home-alt'></i>
+        <span>Inicio</span>
+    </a>
+
+    <!-- Menú para Usuario Normal (excluye superusuarios de este bloque) -->
+    {% if user|has_group:"Usuario Normal" and not user.is_superuser %}
+    <a href="{% url 'ventas' %}" class="menu-item">
+        <i class='bx bx-receipt'></i>
+        <span>Facturación</span>
+    </a>
+    <a href="{% url 'cotizacion' %}" class="menu-item">
+        <i class='bx bx-calculator'></i>
+        <span>Cotización</span>
+    </a>
+    <a href="{% url 'registrodecliente' %}" class="menu-item">
+        <i class='bx bx-user-plus'></i>
+        <span>Registrar Cliente</span>
+    </a>
+    <a href="{% url 'listadecliente' %}" class="menu-item">
+        <i class='bx bx-group'></i>
+        <span>Clientes</span>
+    </a>
+    <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+        <i class='bx bx-money'></i>
+        <span>Cuenta por Cobrar</span>
+    </a>
+    <a href="{% url 'inventario' %}" class="menu-item active">
+        <i class='bx bx-archive'></i>
+        <span>Inventario</span>
+    </a>
+    <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+        <i class='bx bx-printer'></i>
+        <span>Reimprimir</span>
+    </a>
+    {% endif %}
+
+    <!-- Menú para Almacén (excluye superusuarios de este bloque) -->
+    {% if user|has_group:"Almacén" and not user.is_superuser %}
+    <a href="{% url 'entrada' %}" class="menu-item">
+        <i class='bx bx-package'></i>
+        <span>Entrada Mercancía</span>
+    </a>
+    <a href="{% url 'compras' %}" class="menu-item">
+        <i class='bx bx-cart-download'></i>
+        <span>Compras</span>
+    </a>
+    <a href="{% url 'inventario' %}" class="menu-item">
+        <i class='bx bx-archive'></i>
+        <span>Inventario</span>
+    </a>
+    <a href="{% url 'registrosuplidores' %}" class="menu-item">
+        <i class='bx bx-building'></i>
+        <span>Registrar Suplidores</span>
+    </a>
+    <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
+        <i class='bx bx-buildings'></i>
+        <span>Suplidores</span>
+    </a>
+    {% endif %}
+
+    <!-- Menú EXCLUSIVO para superusuarios -->
+    {% if user.is_superuser %}
+    <a href="{% url 'ventas' %}" class="menu-item">
+        <i class='bx bx-receipt'></i>
+        <span>Facturación</span>
+    </a>
+    <a href="{% url 'cotizacion' %}" class="menu-item">
+        <i class='bx bx-calculator'></i>
+        <span>Cotización</span>
+    </a>
+    <a href="{% url 'registrodecliente' %}" class="menu-item">
+        <i class='bx bx-user-plus'></i>
+        <span>Registrar Cliente</span>
+    </a>
+    <a href="{% url 'listadecliente' %}" class="menu-item">
+        <i class='bx bx-group'></i>
+        <span>Clientes</span>
+    </a>
+    <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+        <i class='bx bx-money'></i>
+        <span>Cuenta por Cobrar</span>
+    </a>
+    <a href="{% url 'inventario' %}" class="menu-item ">
+        <i class='bx bx-archive'></i>
+        <span>Inventario</span>
+    </a>
+    <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+        <i class='bx bx-printer'></i>
+        <span>Reimprimir</span>
+    </a>
+    <a href="{% url 'entrada' %}" class="menu-item">
+        <i class='bx bx-package'></i>
+        <span>Entrada Mercancía</span>
+    </a>
+    <a href="{% url 'compras' %}" class="menu-item">
+        <i class='bx bx-cart-download'></i>
+        <span>Compras</span>
+    </a>
+    <a href="{% url 'registrosuplidores' %}" class="menu-item">
+        <i class='bx bx-building'></i>
+        <span>Registrar Suplidores</span>
+    </a>
+    <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
+        <i class='bx bx-buildings'></i>
+        <span>Suplidores</span>
+    </a>
+    <a href="{% url 'devoluciones' %}" class="menu-item">
+        <i class='bx bx-undo'></i>
+        <span>Devoluciones</span>
+    </a>
+    <a href="{% url 'roles' %}" class="menu-item">
+        <i class='bx bx-user-check'></i>
+        <span>Roles</span>
+    </a>
+    <a href="{% url 'cuentaporpagar' %}" class="menu-item">
+        <i class='bx bx-credit-card'></i>
+        <span>Cuenta Por Pagar</span>
+    </a>
+    <a href="{% url 'anular' %}" class="menu-item">
+        <i class='bx bx-x-circle'></i>
+        <span>Anular Factura</span>
+    </a>
+    <a href="{% url 'dashboard' %}" class="menu-item active">
+        <i class='bx bx-grid-alt'></i>
+        <span>Dashboard</span>
+    </a>
+    {% endif %}
+
+    <!-- Cerrar sesión para todos -->
+    <a href="{% url 'index' %}" class="menu-item">
+        <i class='bx bx-log-out'></i>
+        <span>Cerrar Sesión</span>
+    </a>
+</div>
+        <div class="sidebar-footer">
+            <p>Derejsoft v 1.2.2</p>
+        </div>
+    </nav>
 
     <!-- Main Content -->
     <div class="main-content" id="mainContent">
@@ -839,6 +977,14 @@
             </button>
             <button class="nav-tab" onclick="showView('alerts')" data-view="alerts">
                 <i class='bx bx-dollar'></i> Valor Inventario
+            </button>
+            <!-- NUEVA PESTAÑA DE REIMPRESIÓN DE CUADRE -->
+            <button class="nav-tab" onclick="showView('cuadre')" data-view="cuadre">
+                <i class='bx bx-receipt'></i> Reimpresión Cuadre
+            </button>
+            <!-- NUEVA PESTAÑA DE MOVIMIENTOS DE INVENTARIO -->
+            <button class="nav-tab" onclick="showView('movimientos')" data-view="movimientos">
+                <i class='bx bx-transfer-alt'></i> Movimientos Inventario
             </button>
             <button class="refresh-btn" onclick="refreshData()">
                 <i class='bx bx-refresh'></i> Actualizar
@@ -1159,6 +1305,174 @@
                 </div>
             </div>
 
+            <!-- Cuadre Section -->
+            <div id="cuadre" class="view-section fade-in">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                            <i class='bx bx-receipt'></i>
+                        </div>
+                        <h3 class="card-title">Reimpresión de Cuadres de Caja</h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- Filtros de Búsqueda -->
+                        <div class="filtros-cuadre" style="margin-bottom: 2rem;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 1rem; align-items: end;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Fecha</label>
+                                    <input type="date" id="fechaCuadre" class="form-control">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Usuario</label>
+                                    <select id="usuarioCuadre" class="form-control">
+                                        <option value="">Todos los usuarios</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn-buscar" onclick="buscarCuadres()">
+                                        <i class='bx bx-search'></i> Buscar
+                                    </button>
+                                    <button class="btn-limpiar" onclick="limpiarFiltrosCuadre()">
+                                        <i class='bx bx-reset'></i> Limpiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resultados -->
+                        <div class="table-container">
+                            <table class="data-table" id="tablaCuadres">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha Cierre</th>
+                                        <th>Usuario</th>
+                                        <th>Monto Inicial</th>
+                                        <th>Monto Final</th>
+                                        <th>Efectivo Real</th>
+                                        <th>Tarjeta Real</th>
+                                        <th>Total Esperado</th>
+                                        <th>Diferencia</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Se llenará con JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Mensaje cuando no hay resultados -->
+                        <div id="mensajeVacio" style="text-align: center; padding: 2rem; display: none;">
+                            <i class='bx bx-inbox' style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;"></i>
+                            <p style="color: #6c757d; font-size: 1.1rem;">No se encontraron cuadres con los filtros seleccionados</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Movimientos Section -->
+            <div id="movimientos" class="view-section fade-in">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                            <i class='bx bx-transfer-alt'></i>
+                        </div>
+                        <h3 class="card-title">Movimientos de Inventario</h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- Filtros -->
+                        <div class="filtros-movimientos" style="margin-bottom: 2rem;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Fecha Desde</label>
+                                    <input type="date" id="fechaDesde" class="form-control">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Fecha Hasta</label>
+                                    <input type="date" id="fechaHasta" class="form-control">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Tipo Movimiento</label>
+                                    <select id="tipoMovimiento" class="form-control">
+                                        <option value="">Todos</option>
+                                        <option value="entrada">Entrada</option>
+                                        <option value="salida">Salida</option>
+                                        <option value="venta">Venta</option>
+                                        <option value="ajuste">Ajuste</option>
+                                        <option value="devolucion">Devolución</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn-buscar" onclick="buscarMovimientos()">
+                                        <i class='bx bx-search'></i> Buscar
+                                    </button>
+                                    <button class="btn-limpiar" onclick="limpiarFiltrosMovimientos()">
+                                        <i class='bx bx-reset'></i> Limpiar
+                                    </button>
+                                    <button class="btn-imprimir" onclick="imprimirReporteMovimientos()">
+                                        <i class='bx bx-printer'></i> Imprimir
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Estadísticas Rápidas -->
+                        <div class="stats-grid" style="margin-bottom: 2rem;">
+                            <div class="stat-card success">
+                                <div class="stat-title">Total Entradas</div>
+                                <div class="stat-value" id="totalEntradas">0</div>
+                                <div class="stat-change positive">
+                                    <i class='bx bx-up-arrow-alt'></i> Productos ingresados
+                                </div>
+                            </div>
+                            <div class="stat-card danger">
+                                <div class="stat-title">Total Salidas</div>
+                                <div class="stat-value" id="totalSalidas">0</div>
+                                <div class="stat-change negative">
+                                    <i class='bx bx-down-arrow-alt'></i> Productos vendidos
+                                </div>
+                            </div>
+                            <div class="stat-card info">
+                                <div class="stat-title">Movimientos</div>
+                                <div class="stat-value" id="totalMovimientos">0</div>
+                                <div class="stat-change positive">
+                                    <i class='bx bx-transfer-alt'></i> Total registros
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Resultados -->
+                        <div class="table-container">
+                            <table class="data-table" id="tablaMovimientos">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Producto</th>
+                                        <th>Tipo</th>
+                                        <th>Cantidad</th>
+                                        <th>Stock Anterior</th>
+                                        <th>Stock Nuevo</th>
+                                        <th>Motivo</th>
+                                        <th>Usuario</th>
+                                        <th>Referencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Se llenará con JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Mensaje cuando no hay resultados -->
+                        <div id="mensajeVacioMovimientos" style="text-align: center; padding: 2rem; display: none;">
+                            <i class='bx bx-inbox' style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;"></i>
+                            <p style="color: #6c757d; font-size: 1.1rem;">No se encontraron movimientos con los filtros seleccionados</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Settings Section -->
             <div id="settings" class="view-section fade-in">
                 <div class="card">
@@ -1197,612 +1511,876 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-       // Datos reales del sistema (se llenarán desde Django)
-        let dashboardData = {
-            sales: {
-                daily: 0,
-                monthly: 0,
-                weekly: [],
-                monthlyTrend: [],
-                weekLabels: [],
-                monthLabels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+      // Datos reales del sistema (se llenarán desde Django)
+let dashboardData = {
+    sales: {
+        daily: 0,
+        monthly: 0,
+        weekly: [],
+        monthlyTrend: [],
+        weekLabels: [],
+        monthLabels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    },
+    inventory: {
+        totalStock: 0,
+        totalSold: 0,
+        lowStockItems: 0,
+        categories: []
+    },
+    inventoryValue: {
+        totalValue: 0,
+        totalInvestment: 0,
+        potentialProfit: 0,
+        brandValues: [],
+        highValueProducts: []
+    },
+    topProducts: [],
+    recentSales: [],
+    inventoryItems: [],
+    lowStockAlerts: []
+};
+
+// Variables para los gráficos
+let weeklySalesChart, salesChart, inventoryChart, brandValueChart;
+
+// Formatear moneda
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('es-DO', {
+        style: 'currency',
+        currency: 'DOP',
+        minimumFractionDigits: 0
+    }).format(amount);
+}
+
+// Mostrar/ocultar sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    const mainContent = document.getElementById('mainContent');
+
+    sidebar.classList.toggle('show');
+    overlay.classList.toggle('active');
+    mainContent.classList.toggle('expanded');
+}
+
+// Cambiar vista
+function showView(viewId) {
+    // Ocultar todas las vistas
+    document.querySelectorAll('.view-section').forEach(view => {
+        view.classList.remove('active');
+    });
+
+    // Mostrar la vista seleccionada
+    const targetView = document.getElementById(viewId);
+    if (targetView) {
+        targetView.classList.add('active');
+    }
+
+    // Actualizar pestañas de navegación
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    const activeTab = document.querySelector(`.nav-tab[data-view="${viewId}"]`);
+    if (activeTab) {
+        activeTab.classList.add('active');
+    }
+
+    // Actualizar título de página
+    updatePageTitle(viewId);
+
+    // Pequeño delay para asegurar que el DOM esté listo antes de actualizar gráficos
+    setTimeout(() => {
+        updateViewContent(viewId);
+    }, 100);
+
+    // Cerrar sidebar en móviles después de seleccionar
+    if (window.innerWidth <= 992) {
+        toggleSidebar();
+    }
+}
+
+// Actualizar título de página según la vista
+function updatePageTitle(viewId) {
+    const titles = {
+        'overview': 'Resumen General',
+        'sales': 'Análisis de Ventas',
+        'inventory': 'Gestión de Inventario',
+        'products': 'Catálogo de Productos',
+        'alerts': 'Valor del Inventario',
+        'cuadre': 'Reimpresión de Cuadres',
+        'movimientos': 'Movimientos de Inventario',
+        'settings': 'Configuración',
+        'reports': 'Reportes'
+    };
+
+    const subtitles = {
+        'overview': 'Vista general de las métricas del negocio',
+        'sales': 'Tendencias y análisis de ventas',
+        'inventory': 'Estado actual del inventario',
+        'products': 'Listado completo de productos',
+        'alerts': 'Valor total e inversión en inventario',
+        'cuadre': 'Buscar y reimprimir cuadres de caja',
+        'movimientos': 'Control de entradas y salidas de productos',
+        'settings': 'Configuración del sistema',
+        'reports': 'Generación de reportes'
+    };
+
+    document.getElementById('pageTitle').textContent = titles[viewId] || 'Dashboard';
+    document.getElementById('pageSubtitle').textContent = subtitles[viewId] || 'Panel de control';
+}
+
+// Actualizar contenido de la vista
+function updateViewContent(viewId) {
+    switch(viewId) {
+        case 'overview':
+            updateOverview();
+            break;
+        case 'sales':
+            updateSalesView();
+            break;
+        case 'inventory':
+            updateInventoryView();
+            break;
+        case 'products':
+            updateProductsView();
+            break;
+        case 'alerts':
+            updateInventoryValueView();
+            break;
+        case 'cuadre':
+            updateCuadreView();
+            break;
+        case 'movimientos':
+            updateMovimientosView();
+            break;
+    }
+}
+
+// Actualizar vista de resumen
+function updateOverview() {
+    // Actualizar estadísticas
+    document.getElementById('dailySales').textContent = formatCurrency(dashboardData.sales.daily);
+    document.getElementById('monthlySales').textContent = formatCurrency(dashboardData.sales.monthly);
+    document.getElementById('totalStock').textContent = dashboardData.inventory.totalStock;
+    document.getElementById('lowStockItems').textContent = dashboardData.inventory.lowStockItems;
+
+    // Crear/actualizar gráfico de ventas semanales
+    const weeklyCanvas = document.getElementById('weeklySalesChart');
+    if (weeklyCanvas && weeklyCanvas.getContext) {
+        if (weeklySalesChart) {
+            weeklySalesChart.destroy();
+        }
+
+        const weeklyCtx = weeklyCanvas.getContext('2d');
+        weeklySalesChart = new Chart(weeklyCtx, {
+            type: 'bar',
+            data: {
+                labels: dashboardData.sales.weekLabels,
+                datasets: [{
+                    label: 'Ventas diarias',
+                    data: dashboardData.sales.weekly,
+                    backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                    borderColor: 'rgba(102, 126, 234, 1)',
+                    borderWidth: 1
+                }]
             },
-            inventory: {
-                totalStock: 0,
-                totalSold: 0,
-                lowStockItems: 0,
-                categories: []
-            },
-            inventoryValue: {
-                totalValue: 0,
-                totalInvestment: 0,
-                potentialProfit: 0,
-                brandValues: [],
-                highValueProducts: []
-            },
-            topProducts: [],
-            recentSales: [],
-            inventoryItems: [],
-            lowStockAlerts: []
-        };
-
-        // Variables para los gráficos
-        let weeklySalesChart, salesChart, inventoryChart, brandValueChart;
-
-        // Formatear moneda
-        function formatCurrency(amount) {
-            return new Intl.NumberFormat('es-DO', {
-                style: 'currency',
-                currency: 'DOP',
-                minimumFractionDigits: 0
-            }).format(amount);
-        }
-
-        // Mostrar/ocultar sidebar
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.querySelector('.sidebar-overlay');
-            const mainContent = document.getElementById('mainContent');
-
-            sidebar.classList.toggle('show');
-            overlay.classList.toggle('active');
-            mainContent.classList.toggle('expanded');
-        }
-
-        // Cambiar vista
-        function showView(viewId) {
-            // Ocultar todas las vistas
-            document.querySelectorAll('.view-section').forEach(view => {
-                view.classList.remove('active');
-            });
-
-            // Mostrar la vista seleccionada
-            const targetView = document.getElementById(viewId);
-            if (targetView) {
-                targetView.classList.add('active');
-            }
-
-            // Actualizar pestañas de navegación
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            const activeTab = document.querySelector(`.nav-tab[data-view="${viewId}"]`);
-            if (activeTab) {
-                activeTab.classList.add('active');
-            }
-
-            // Actualizar título de página
-            updatePageTitle(viewId);
-
-            // Pequeño delay para asegurar que el DOM esté listo antes de actualizar gráficos
-            setTimeout(() => {
-                updateViewContent(viewId);
-            }, 100);
-
-            // Cerrar sidebar en móviles después de seleccionar
-            if (window.innerWidth <= 992) {
-                toggleSidebar();
-            }
-        }
-
-        // Actualizar título de página según la vista
-        function updatePageTitle(viewId) {
-            const titles = {
-                'overview': 'Resumen General',
-                'sales': 'Análisis de Ventas',
-                'inventory': 'Gestión de Inventario',
-                'products': 'Catálogo de Productos',
-                'alerts': 'Valor del Inventario',
-                'settings': 'Configuración',
-                'reports': 'Reportes'
-            };
-
-            const subtitles = {
-                'overview': 'Vista general de las métricas del negocio',
-                'sales': 'Tendencias y análisis de ventas',
-                'inventory': 'Estado actual del inventario',
-                'products': 'Listado completo de productos',
-                'alerts': 'Valor total e inversión en inventario',
-                'settings': 'Configuración del sistema',
-                'reports': 'Generación de reportes'
-            };
-
-            document.getElementById('pageTitle').textContent = titles[viewId] || 'Dashboard';
-            document.getElementById('pageSubtitle').textContent = subtitles[viewId] || 'Panel de control';
-        }
-
-        // Actualizar contenido de la vista
-        function updateViewContent(viewId) {
-            switch(viewId) {
-                case 'overview':
-                    updateOverview();
-                    break;
-                case 'sales':
-                    updateSalesView();
-                    break;
-                case 'inventory':
-                    updateInventoryView();
-                    break;
-                case 'products':
-                    updateProductsView();
-                    break;
-                case 'alerts':
-                    updateInventoryValueView();
-                    break;
-            }
-        }
-
-        // Actualizar vista de resumen
-        function updateOverview() {
-            // Actualizar estadísticas
-            document.getElementById('dailySales').textContent = formatCurrency(dashboardData.sales.daily);
-            document.getElementById('monthlySales').textContent = formatCurrency(dashboardData.sales.monthly);
-            document.getElementById('totalStock').textContent = dashboardData.inventory.totalStock;
-            document.getElementById('lowStockItems').textContent = dashboardData.inventory.lowStockItems;
-
-            // Crear/actualizar gráfico de ventas semanales
-            const weeklyCanvas = document.getElementById('weeklySalesChart');
-            if (weeklyCanvas && weeklyCanvas.getContext) {
-                if (weeklySalesChart) {
-                    weeklySalesChart.destroy();
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return formatCurrency(value);
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return formatCurrency(context.raw);
+                            }
+                        }
+                    }
                 }
-
-                const weeklyCtx = weeklyCanvas.getContext('2d');
-                weeklySalesChart = new Chart(weeklyCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: dashboardData.sales.weekLabels,
-                        datasets: [{
-                            label: 'Ventas diarias',
-                            data: dashboardData.sales.weekly,
-                            backgroundColor: 'rgba(102, 126, 234, 0.8)',
-                            borderColor: 'rgba(102, 126, 234, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) {
-                                        return formatCurrency(value);
-                                    }
-                                }
-                            }
-                        },
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return formatCurrency(context.raw);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
             }
+        });
+    }
 
-            // Actualizar tabla de últimas ventas
-            const recentSalesTable = document.querySelector('#recentSalesTable tbody');
-            if (recentSalesTable) {
-                recentSalesTable.innerHTML = '';
+    // Actualizar tabla de últimas ventas
+    const recentSalesTable = document.querySelector('#recentSalesTable tbody');
+    if (recentSalesTable) {
+        recentSalesTable.innerHTML = '';
 
-                dashboardData.recentSales.slice(0, 5).forEach(sale => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${sale.producto}</td>
-                        <td>${sale.hora}</td>
-                        <td>${formatCurrency(sale.monto)}</td>
-                    `;
-                    recentSalesTable.appendChild(row);
-                });
-            }
+        dashboardData.recentSales.slice(0, 5).forEach(sale => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${sale.producto}</td>
+                <td>${sale.hora}</td>
+                <td>${formatCurrency(sale.monto)}</td>
+            `;
+            recentSalesTable.appendChild(row);
+        });
+    }
 
-            // Actualizar tabla de productos más vendidos
-            const topProductsTable = document.querySelector('#topProductsTable tbody');
-            if (topProductsTable) {
-                topProductsTable.innerHTML = '';
+    // Actualizar tabla de productos más vendidos
+    const topProductsTable = document.querySelector('#topProductsTable tbody');
+    if (topProductsTable) {
+        topProductsTable.innerHTML = '';
 
-                dashboardData.topProducts.forEach((product, index) => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${index + 1}</td>
-                        <td>${product.nombre_producto}</td>
-                        <td>${product.total_vendido}</td>
-                    `;
-                    topProductsTable.appendChild(row);
-                });
-            }
-        }
+        dashboardData.topProducts.forEach((product, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${product.nombre_producto}</td>
+                <td>${product.total_vendido}</td>
+            `;
+            topProductsTable.appendChild(row);
+        });
+    }
+}
 
-        // Actualizar vista de ventas
-        function updateSalesView() {
-            // Crear/actualizar gráfico de ventas mensuales
-            if (salesChart) {
-                salesChart.destroy();
-            }
+// Actualizar vista de ventas
+function updateSalesView() {
+    // Crear/actualizar gráfico de ventas mensuales
+    if (salesChart) {
+        salesChart.destroy();
+    }
 
-            const salesCanvas = document.getElementById('salesChart');
-            if (salesCanvas && salesCanvas.getContext) {
-                const salesCtx = salesCanvas.getContext('2d');
-                salesChart = new Chart(salesCtx, {
-                    type: 'line',
-                    data: {
-                        labels: dashboardData.sales.monthLabels,
-                        datasets: [{
-                            label: 'Ventas mensuales',
-                            data: dashboardData.sales.monthlyTrend,
-                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                            borderColor: 'rgba(102, 126, 234, 1)',
-                            borderWidth: 2,
-                            tension: 0.3,
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) {
-                                        return formatCurrency(value);
-                                    }
-                                }
-                            }
-                        },
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return formatCurrency(context.raw);
-                                    }
-                                }
+    const salesCanvas = document.getElementById('salesChart');
+    if (salesCanvas && salesCanvas.getContext) {
+        const salesCtx = salesCanvas.getContext('2d');
+        salesChart = new Chart(salesCtx, {
+            type: 'line',
+            data: {
+                labels: dashboardData.sales.monthLabels,
+                datasets: [{
+                    label: 'Ventas mensuales',
+                    data: dashboardData.sales.monthlyTrend,
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderColor: 'rgba(102, 126, 234, 1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return formatCurrency(value);
                             }
                         }
                     }
-                });
-            }
-
-            // Actualizar tabla de ventas
-            const salesTable = document.querySelector('#salesTable tbody');
-            if (salesTable) {
-                salesTable.innerHTML = '';
-
-                dashboardData.recentSales.forEach(sale => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>#${sale.id}</td>
-                        <td>${sale.fecha} ${sale.hora}</td>
-                        <td>${sale.producto}</td>
-                        <td>${sale.cantidad}</td>
-                        <td>${formatCurrency(sale.monto)}</td>
-                        <td><span class="badge badge-success">${sale.estado}</span></td>
-                    `;
-                    salesTable.appendChild(row);
-                });
-            }
-        }
-
-        // Actualizar vista de inventario
-        function updateInventoryView() {
-            // Actualizar estadísticas de inventario
-            const totalItems = dashboardData.inventory.totalStock + dashboardData.inventory.totalSold;
-            const stockPercentage = totalItems > 0 ? Math.round((dashboardData.inventory.totalStock / totalItems) * 100) : 0;
-
-            document.getElementById('inventoryProgress').textContent = `${stockPercentage}%`;
-            document.getElementById('inventoryProgress').style.width = `${stockPercentage}%`;
-            document.getElementById('inventoryStock').textContent = dashboardData.inventory.totalStock;
-            document.getElementById('inventorySold').textContent = dashboardData.inventory.totalSold;
-
-            // Crear/actualizar gráfico de categorías
-            const inventoryCanvas = document.getElementById('inventoryChart');
-            if (inventoryCanvas && inventoryCanvas.getContext) {
-                if (inventoryChart) {
-                    inventoryChart.destroy();
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return formatCurrency(context.raw);
+                            }
+                        }
+                    }
                 }
+            }
+        });
+    }
 
-                const inventoryCtx = inventoryCanvas.getContext('2d');
-                inventoryChart = new Chart(inventoryCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: dashboardData.inventory.categories.map(c => c.name),
-                        datasets: [{
-                            data: dashboardData.inventory.categories.map(c => c.count),
-                            backgroundColor: [
-                                'rgba(102, 126, 234, 0.8)',
-                                'rgba(79, 172, 254, 0.8)',
-                                'rgba(255, 107, 107, 0.8)',
-                                'rgba(255, 193, 7, 0.8)'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'right'
+    // Actualizar tabla de ventas
+    const salesTable = document.querySelector('#salesTable tbody');
+    if (salesTable) {
+        salesTable.innerHTML = '';
+
+        dashboardData.recentSales.forEach(sale => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>#${sale.id}</td>
+                <td>${sale.fecha} ${sale.hora}</td>
+                <td>${sale.producto}</td>
+                <td>${sale.cantidad}</td>
+                <td>${formatCurrency(sale.monto)}</td>
+                <td><span class="badge badge-success">${sale.estado}</span></td>
+            `;
+            salesTable.appendChild(row);
+        });
+    }
+}
+
+// Actualizar vista de inventario
+function updateInventoryView() {
+    // Actualizar estadísticas de inventario
+    const totalItems = dashboardData.inventory.totalStock + dashboardData.inventory.totalSold;
+    const stockPercentage = totalItems > 0 ? Math.round((dashboardData.inventory.totalStock / totalItems) * 100) : 0;
+
+    document.getElementById('inventoryProgress').textContent = `${stockPercentage}%`;
+    document.getElementById('inventoryProgress').style.width = `${stockPercentage}%`;
+    document.getElementById('inventoryStock').textContent = dashboardData.inventory.totalStock;
+    document.getElementById('inventorySold').textContent = dashboardData.inventory.totalSold;
+
+    // Crear/actualizar gráfico de categorías
+    const inventoryCanvas = document.getElementById('inventoryChart');
+    if (inventoryCanvas && inventoryCanvas.getContext) {
+        if (inventoryChart) {
+            inventoryChart.destroy();
+        }
+
+        const inventoryCtx = inventoryCanvas.getContext('2d');
+        inventoryChart = new Chart(inventoryCtx, {
+            type: 'doughnut',
+            data: {
+                labels: dashboardData.inventory.categories.map(c => c.name),
+                datasets: [{
+                    data: dashboardData.inventory.categories.map(c => c.count),
+                    backgroundColor: [
+                        'rgba(102, 126, 234, 0.8)',
+                        'rgba(79, 172, 254, 0.8)',
+                        'rgba(255, 107, 107, 0.8)',
+                        'rgba(255, 193, 7, 0.8)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+    }
+
+    // Actualizar tabla de inventario
+    const inventoryTable = document.querySelector('#inventoryTable tbody');
+    if (inventoryTable) {
+        inventoryTable.innerHTML = '';
+
+        dashboardData.inventoryItems.forEach(item => {
+            const row = document.createElement('tr');
+            const statusBadge = item.cantidad <= item.cantidad_minima ?
+                '<span class="badge badge-danger">Bajo</span>' :
+                '<span class="badge badge-success">OK</span>';
+
+            row.innerHTML = `
+                <td>${item.descripcion}</td>
+                <td>${item.marca}</td>
+                <td>${item.cantidad}</td>
+                <td>${formatCurrency(item.precio)}</td>
+                <td>${statusBadge}</td>
+            `;
+            inventoryTable.appendChild(row);
+        });
+    }
+}
+
+// Actualizar vista de productos
+function updateProductsView() {
+    // Actualizar tabla de productos
+    const productsTable = document.querySelector('#productsTable tbody');
+    if (productsTable) {
+        productsTable.innerHTML = '';
+
+        dashboardData.inventoryItems.forEach(product => {
+            const stockBadge = product.cantidad <= product.cantidad_minima ?
+                '<span class="badge badge-danger">' + product.cantidad + '</span>' :
+                '<span class="badge badge-success">' + product.cantidad + '</span>';
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><img src="https://via.placeholder.com/50" alt="${product.descripcion}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"></td>
+                <td>${product.descripcion}</td>
+                <td>${product.marca}</td>
+                <td>${formatCurrency(product.precio)}</td>
+                <td>${stockBadge}</td>
+                <td>
+                    <button style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; margin-right: 0.25rem;">
+                        <i class='bx bx-edit'></i>
+                    </button>
+                    <button style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
+                        <i class='bx bx-trash'></i>
+                    </button>
+                </td>
+            `;
+            productsTable.appendChild(row);
+        });
+    }
+}
+
+// Actualizar vista de valor del inventario
+function updateInventoryValueView() {
+    const inventoryValue = dashboardData.inventoryValue;
+    
+    // Actualizar estadísticas principales
+    document.getElementById('totalInventoryValue').textContent = formatCurrency(inventoryValue.totalValue);
+    document.getElementById('totalInvestment').textContent = formatCurrency(inventoryValue.totalInvestment);
+    document.getElementById('potentialProfit').textContent = formatCurrency(inventoryValue.potentialProfit);
+
+    // Crear/actualizar gráfico de valor por marca
+    const brandValueCanvas = document.getElementById('brandValueChart');
+    if (brandValueCanvas && brandValueCanvas.getContext) {
+        const brandValueCtx = brandValueCanvas.getContext('2d');
+        
+        if (brandValueChart) {
+            brandValueChart.destroy();
+        }
+
+        brandValueChart = new Chart(brandValueCtx, {
+            type: 'bar',
+            data: {
+                labels: inventoryValue.brandValues.map(b => b.marca),
+                datasets: [{
+                    label: 'Valor por Marca',
+                    data: inventoryValue.brandValues.map(b => b.valorTotal),
+                    backgroundColor: [
+                        'rgba(102, 126, 234, 0.8)',
+                        'rgba(79, 172, 254, 0.8)',
+                        'rgba(255, 107, 107, 0.8)',
+                        'rgba(255, 193, 7, 0.8)',
+                        'rgba(40, 167, 69, 0.8)',
+                        'rgba(108, 117, 125, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgba(102, 126, 234, 1)',
+                        'rgba(79, 172, 254, 1)',
+                        'rgba(255, 107, 107, 1)',
+                        'rgba(255, 193, 7, 1)',
+                        'rgba(40, 167, 69, 1)',
+                        'rgba(108, 117, 125, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return formatCurrency(value);
                             }
                         }
                     }
-                });
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return formatCurrency(context.raw);
+                            }
+                        }
+                    }
+                }
             }
+        });
+    }
 
-            // Actualizar tabla de inventario
-            const inventoryTable = document.querySelector('#inventoryTable tbody');
-            if (inventoryTable) {
-                inventoryTable.innerHTML = '';
+    // Actualizar tabla de productos de mayor valor
+    const highValueTable = document.querySelector('#highValueProductsTable tbody');
+    if (highValueTable) {
+        highValueTable.innerHTML = '';
 
-                dashboardData.inventoryItems.forEach(item => {
-                    const row = document.createElement('tr');
-                    const statusBadge = item.cantidad <= item.cantidad_minima ?
-                        '<span class="badge badge-danger">Bajo</span>' :
-                        '<span class="badge badge-success">OK</span>';
+        inventoryValue.highValueProducts.forEach(product => {
+            const row = document.createElement('tr');
+            const statusBadge = product.cantidad <= product.cantidad_minima ? 
+                '<span class="badge badge-danger">Bajo</span>' : 
+                '<span class="badge badge-success">OK</span>';
 
-                    row.innerHTML = `
-                        <td>${item.descripcion}</td>
-                        <td>${item.marca}</td>
-                        <td>${item.cantidad}</td>
-                        <td>${formatCurrency(item.precio)}</td>
-                        <td>${statusBadge}</td>
-                    `;
-                    inventoryTable.appendChild(row);
-                });
-            }
-        }
+            row.innerHTML = `
+                <td>${product.descripcion}</td>
+                <td>${product.marca}</td>
+                <td>${product.cantidad}</td>
+                <td>${formatCurrency(product.costo)}</td>
+                <td>${formatCurrency(product.valorTotal)}</td>
+                <td>${statusBadge}</td>
+            `;
+            highValueTable.appendChild(row);
+        });
+    }
+}
 
-        // Actualizar vista de productos
-        function updateProductsView() {
-            // Actualizar tabla de productos
-            const productsTable = document.querySelector('#productsTable tbody');
-            if (productsTable) {
-                productsTable.innerHTML = '';
+// NUEVA FUNCIÓN: Actualizar vista de cuadres
+function updateCuadreView() {
+    cargarUsuariosCuadre();
+    buscarCuadres();
+}
 
-                dashboardData.inventoryItems.forEach(product => {
-                    const stockBadge = product.cantidad <= product.cantidad_minima ?
-                        '<span class="badge badge-danger">' + product.cantidad + '</span>' :
-                        '<span class="badge badge-success">' + product.cantidad + '</span>';
-
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><img src="https://via.placeholder.com/50" alt="${product.descripcion}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;"></td>
-                        <td>${product.descripcion}</td>
-                        <td>${product.marca}</td>
-                        <td>${formatCurrency(product.precio)}</td>
-                        <td>${stockBadge}</td>
-                        <td>
-                            <button style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; margin-right: 0.25rem;">
-                                <i class='bx bx-edit'></i>
-                            </button>
-                            <button style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
-                                <i class='bx bx-trash'></i>
-                            </button>
-                        </td>
-                    `;
-                    productsTable.appendChild(row);
-                });
-            }
-        }
-
-        // Actualizar vista de valor del inventario
-        function updateInventoryValueView() {
-            const inventoryValue = dashboardData.inventoryValue;
+// Función para cargar usuarios en el select
+function cargarUsuariosCuadre() {
+    fetch('/dashboard/usuarios/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('usuarioCuadre');
+            select.innerHTML = '<option value="">Todos los usuarios</option>';
             
-            // Actualizar estadísticas principales
-            document.getElementById('totalInventoryValue').textContent = formatCurrency(inventoryValue.totalValue);
-            document.getElementById('totalInvestment').textContent = formatCurrency(inventoryValue.totalInvestment);
-            document.getElementById('potentialProfit').textContent = formatCurrency(inventoryValue.potentialProfit);
-
-            // Crear/actualizar gráfico de valor por marca
-            const brandValueCanvas = document.getElementById('brandValueChart');
-            if (brandValueCanvas && brandValueCanvas.getContext) {
-                const brandValueCtx = brandValueCanvas.getContext('2d');
-                
-                if (brandValueChart) {
-                    brandValueChart.destroy();
-                }
-
-                brandValueChart = new Chart(brandValueCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: inventoryValue.brandValues.map(b => b.marca),
-                        datasets: [{
-                            label: 'Valor por Marca',
-                            data: inventoryValue.brandValues.map(b => b.valorTotal),
-                            backgroundColor: [
-                                'rgba(102, 126, 234, 0.8)',
-                                'rgba(79, 172, 254, 0.8)',
-                                'rgba(255, 107, 107, 0.8)',
-                                'rgba(255, 193, 7, 0.8)',
-                                'rgba(40, 167, 69, 0.8)',
-                                'rgba(108, 117, 125, 0.8)'
-                            ],
-                            borderColor: [
-                                'rgba(102, 126, 234, 1)',
-                                'rgba(79, 172, 254, 1)',
-                                'rgba(255, 107, 107, 1)',
-                                'rgba(255, 193, 7, 1)',
-                                'rgba(40, 167, 69, 1)',
-                                'rgba(108, 117, 125, 1)'
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) {
-                                        return formatCurrency(value);
-                                    }
-                                }
-                            }
-                        },
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return formatCurrency(context.raw);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Actualizar tabla de productos de mayor valor
-            const highValueTable = document.querySelector('#highValueProductsTable tbody');
-            if (highValueTable) {
-                highValueTable.innerHTML = '';
-
-                inventoryValue.highValueProducts.forEach(product => {
-                    const row = document.createElement('tr');
-                    const statusBadge = product.cantidad <= product.cantidad_minima ? 
-                        '<span class="badge badge-danger">Bajo</span>' : 
-                        '<span class="badge badge-success">OK</span>';
-
-                    row.innerHTML = `
-                        <td>${product.descripcion}</td>
-                        <td>${product.marca}</td>
-                        <td>${product.cantidad}</td>
-                        <td>${formatCurrency(product.costo)}</td>
-                        <td>${formatCurrency(product.valorTotal)}</td>
-                        <td>${statusBadge}</td>
-                    `;
-                    highValueTable.appendChild(row);
-                });
-            }
-        }
-
-        // Refrescar datos
-        function refreshData() {
-            // Hacer una solicitud al servidor para obtener datos actualizados
-            fetch('/dashboard/data/')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Error al actualizar los datos');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // Actualizar dashboardData con los nuevos datos
-                    dashboardData = data;
-
-                    // Actualizar la vista actual
-                    const activeView = document.querySelector('.view-section.active').id;
-                    updateViewContent(activeView);
-
-                    // Mostrar feedback de actualización
-                    const btn = document.querySelector('.refresh-btn');
-                    const originalText = btn.innerHTML;
-                    btn.innerHTML = '<i class="bx bx-check"></i> Actualizado';
-                    btn.style.background = 'linear-gradient(135deg, #28a745 0%, #218838 100%)';
-
-                    setTimeout(() => {
-                        btn.innerHTML = originalText;
-                        btn.style.background = '';
-                    }, 2000);
-                })
-                .catch(error => {
-                    console.error('Error al actualizar datos:', error);
-
-                    // Mostrar mensaje de error
-                    const btn = document.querySelector('.refresh-btn');
-                    const originalText = btn.innerHTML;
-                    btn.innerHTML = '<i class="bx bx-error"></i> Error';
-                    btn.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
-
-                    setTimeout(() => {
-                        btn.innerHTML = originalText;
-                        btn.style.background = '';
-                    }, 2000);
-                });
-        }
-
-        // Inicializar el dashboard
-        document.addEventListener('DOMContentLoaded', function() {
-            // Cargar datos iniciales desde Django
-            fetch('/dashboard/data/')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Error al cargar los datos iniciales');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    dashboardData = data;
-                    updateOverview();
-                })
-                .catch(error => {
-                    console.error('Error al cargar datos iniciales:', error);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'No se pudieron cargar los datos del dashboard. Inténtalo de nuevo más tarde.'
-                    });
-                });
-
-            // Configurar eventos para las pestañas
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.addEventListener('click', function() {
-                    showView(this.dataset.view);
-                });
+            data.usuarios.forEach(usuario => {
+                const option = document.createElement('option');
+                option.value = usuario.id;
+                option.textContent = usuario.username;
+                select.appendChild(option);
             });
+        })
+        .catch(error => {
+            console.error('Error al cargar usuarios:', error);
+        });
+}
 
-            // Manejar el cierre de sesión con SweetAlert2
-            const logoutLink = document.querySelector("a[href*='index']");
-            if (logoutLink) {
-                logoutLink.addEventListener("click", function(e) {
-                    e.preventDefault();
-                    Swal.fire({
-                        title: '¿Cerrar Sesión?',
-                        text: '¿Está seguro de que desea cerrar la sesión?',
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonColor: '#667eea',
-                        cancelButtonColor: '#dc3545',
-                        confirmButtonText: 'Sí, Cerrar Sesión',
-                        cancelButtonText: 'Cancelar',
-                        backdrop: true
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            window.location.href = logoutLink.href;
-                        }
-                    });
-                });
+// Función para buscar cuadres
+function buscarCuadres() {
+    const fecha = document.getElementById('fechaCuadre').value;
+    const usuario = document.getElementById('usuarioCuadre').value;
+    
+    let url = '/dashboard/cuadres/';
+    const params = new URLSearchParams();
+    
+    if (fecha) params.append('fecha', fecha);
+    if (usuario) params.append('usuario', usuario);
+    
+    if (params.toString()) {
+        url += '?' + params.toString();
+    }
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.querySelector('#tablaCuadres tbody');
+            const mensajeVacio = document.getElementById('mensajeVacio');
+            
+            tbody.innerHTML = '';
+            
+            if (data.cuadres.length === 0) {
+                mensajeVacio.style.display = 'block';
+                return;
             }
+            
+            mensajeVacio.style.display = 'none';
+            
+            data.cuadres.forEach(cuadre => {
+                const row = document.createElement('tr');
+                const estadoBadge = cuadre.estado === 'cerrada' ? 
+                    '<span class="badge badge-success">Cerrada</span>' : 
+                    '<span class="badge badge-warning">Abierta</span>';
+                
+                row.innerHTML = `
+                    <td>${cuadre.fecha_cierre}</td>
+                    <td>${cuadre.usuario}</td>
+                    <td>${formatCurrency(cuadre.monto_inicial)}</td>
+                    <td>${formatCurrency(cuadre.monto_final)}</td>
+                    <td>${formatCurrency(cuadre.monto_efectivo_real)}</td>
+                    <td>${formatCurrency(cuadre.monto_tarjeta_real)}</td>
+                    <td>${formatCurrency(cuadre.total_esperado)}</td>
+                    <td>
+                        <span style="color: ${cuadre.diferencia >= 0 ? '#28a745' : '#dc3545'}; font-weight: bold;">
+                            ${formatCurrency(cuadre.diferencia)}
+                        </span>
+                    </td>
+                    <td>${estadoBadge}</td>
+                    <td>
+                        <button class="btn-imprimir" onclick="reimprimirCuadre(${cuadre.id})">
+                            <i class='bx bx-printer'></i> Imprimir
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Error al buscar cuadres:', error);
+            Swal.fire('Error', 'No se pudieron cargar los cuadres', 'error');
+        });
+}
 
-            // Manejar redimensionamiento de ventana
-            window.addEventListener('resize', function() {
-                const sidebar = document.getElementById('sidebar');
-                const overlay = document.querySelector('.sidebar-overlay');
+// Función para limpiar filtros
+function limpiarFiltrosCuadre() {
+    document.getElementById('fechaCuadre').value = '';
+    document.getElementById('usuarioCuadre').value = '';
+    buscarCuadres();
+}
 
-                if (window.innerWidth > 992) {
-                    sidebar.classList.remove('show');
-                    overlay.classList.remove('active');
+// Función para reimprimir cuadre
+function reimprimirCuadre(cuadreId) {
+    // Abrir en nueva pestaña el reporte del cuadre
+    window.open(`/dashboard/cuadre/${cuadreId}/pdf/`, '_blank');
+}
+
+// =============================================
+// FUNCIONES PARA MOVIMIENTOS DE INVENTARIO
+// =============================================
+
+// Función para actualizar la vista de movimientos
+function updateMovimientosView() {
+    // Establecer fechas por defecto (últimos 30 días)
+    const fechaHasta = new Date();
+    const fechaDesde = new Date();
+    fechaDesde.setDate(fechaHasta.getDate() - 30);
+    
+    document.getElementById('fechaDesde').value = fechaDesde.toISOString().split('T')[0];
+    document.getElementById('fechaHasta').value = fechaHasta.toISOString().split('T')[0];
+    
+    buscarMovimientos();
+}
+
+// Función para buscar movimientos
+function buscarMovimientos() {
+    const fechaDesde = document.getElementById('fechaDesde').value;
+    const fechaHasta = document.getElementById('fechaHasta').value;
+    const tipoMovimiento = document.getElementById('tipoMovimiento').value;
+    
+    let url = '/dashboard/movimientos/';
+    const params = new URLSearchParams();
+    
+    if (fechaDesde) params.append('fecha_desde', fechaDesde);
+    if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+    if (tipoMovimiento) params.append('tipo_movimiento', tipoMovimiento);
+    
+    if (params.toString()) {
+        url += '?' + params.toString();
+    }
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.querySelector('#tablaMovimientos tbody');
+            const mensajeVacio = document.getElementById('mensajeVacioMovimientos');
+            
+            tbody.innerHTML = '';
+            
+            if (data.movimientos.length === 0) {
+                mensajeVacio.style.display = 'block';
+                // Limpiar estadísticas
+                document.getElementById('totalEntradas').textContent = '0';
+                document.getElementById('totalSalidas').textContent = '0';
+                document.getElementById('totalMovimientos').textContent = '0';
+                return;
+            }
+            
+            mensajeVacio.style.display = 'none';
+            
+            // Calcular estadísticas
+            let totalEntradas = 0;
+            let totalSalidas = 0;
+            
+            data.movimientos.forEach(mov => {
+                const row = document.createElement('tr');
+                const tipoBadge = getTipoMovimientoBadge(mov.tipo_movimiento);
+                
+                row.innerHTML = `
+                    <td>${mov.fecha_movimiento}</td>
+                    <td>${mov.producto}</td>
+                    <td>${tipoBadge}</td>
+                    <td>${mov.cantidad}</td>
+                    <td>${mov.cantidad_anterior}</td>
+                    <td>${mov.cantidad_nueva}</td>
+                    <td>${mov.motivo}</td>
+                    <td>${mov.usuario}</td>
+                    <td>${mov.referencia || ''}</td>
+                `;
+                tbody.appendChild(row);
+                
+                // Acumular estadísticas
+                if (mov.tipo_movimiento === 'entrada') {
+                    totalEntradas += mov.cantidad;
+                } else if (['salida', 'venta'].includes(mov.tipo_movimiento)) {
+                    totalSalidas += mov.cantidad;
                 }
+            });
+            
+            // Actualizar estadísticas
+            document.getElementById('totalEntradas').textContent = totalEntradas;
+            document.getElementById('totalSalidas').textContent = totalSalidas;
+            document.getElementById('totalMovimientos').textContent = data.movimientos.length;
+        })
+        .catch(error => {
+            console.error('Error al buscar movimientos:', error);
+            Swal.fire('Error', 'No se pudieron cargar los movimientos', 'error');
+        });
+}
 
-                // Re-renderizar gráficos después de redimensionar
-                setTimeout(() => {
-                    const activeView = document.querySelector('.view-section.active');
-                    if (activeView) {
-                        updateViewContent(activeView.id);
-                    }
-                }, 300);
+// Función para obtener el badge del tipo de movimiento
+function getTipoMovimientoBadge(tipo) {
+    const badges = {
+        'entrada': '<span class="badge badge-success">Entrada</span>',
+        'salida': '<span class="badge badge-danger">Salida</span>',
+        'venta': '<span class="badge badge-primary">Venta</span>',
+        'ajuste': '<span class="badge badge-warning">Ajuste</span>',
+        'devolucion': '<span class="badge badge-info">Devolución</span>'
+    };
+    return badges[tipo] || `<span class="badge badge-secondary">${tipo}</span>`;
+}
+
+// Función para limpiar filtros de movimientos
+function limpiarFiltrosMovimientos() {
+    document.getElementById('fechaDesde').value = '';
+    document.getElementById('fechaHasta').value = '';
+    document.getElementById('tipoMovimiento').value = '';
+    buscarMovimientos();
+}
+
+// Función para imprimir reporte de movimientos
+function imprimirReporteMovimientos() {
+    const fechaDesde = document.getElementById('fechaDesde').value;
+    const fechaHasta = document.getElementById('fechaHasta').value;
+    const tipoMovimiento = document.getElementById('tipoMovimiento').value;
+    
+    let url = '/dashboard/movimientos/pdf/';
+    const params = new URLSearchParams();
+    
+    if (fechaDesde) params.append('fecha_desde', fechaDesde);
+    if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+    if (tipoMovimiento) params.append('tipo_movimiento', tipoMovimiento);
+    
+    if (params.toString()) {
+        url += '?' + params.toString();
+    }
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Generando PDF',
+        text: 'Por favor espere...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Abrir en nueva pestaña el reporte PDF
+    const newWindow = window.open(url, '_blank');
+    
+    // Verificar si la ventana se abrió correctamente
+    if (newWindow) {
+        Swal.close();
+    } else {
+        Swal.fire('Error', 'No se pudo abrir el PDF. Verifica los bloqueadores de ventanas emergentes.', 'error');
+    }
+}
+
+// Refrescar datos
+function refreshData() {
+    // Hacer una solicitud al servidor para obtener datos actualizados
+    fetch('/dashboard/data/')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al actualizar los datos');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Actualizar dashboardData con los nuevos datos
+            dashboardData = data;
+
+            // Actualizar la vista actual
+            const activeView = document.querySelector('.view-section.active').id;
+            updateViewContent(activeView);
+
+            // Mostrar feedback de actualización
+            const btn = document.querySelector('.refresh-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bx bx-check"></i> Actualizado';
+            btn.style.background = 'linear-gradient(135deg, #28a745 0%, #218838 100%)';
+
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.background = '';
+            }, 2000);
+        })
+        .catch(error => {
+            console.error('Error al actualizar datos:', error);
+
+            // Mostrar mensaje de error
+            const btn = document.querySelector('.refresh-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bx bx-error"></i> Error';
+            btn.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.background = '';
+            }, 2000);
+        });
+}
+
+// Inicializar el dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    // Cargar datos iniciales desde Django
+    fetch('/dashboard/data/')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar los datos iniciales');
+            }
+            return response.json();
+        })
+        .then(data => {
+            dashboardData = data;
+            updateOverview();
+        })
+        .catch(error => {
+            console.error('Error al cargar datos iniciales:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudieron cargar los datos del dashboard. Inténtalo de nuevo más tarde.'
             });
         });
 
+    // Configurar eventos para las pestañas
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            showView(this.dataset.view);
+        });
+    });
+
+    // Manejar el cierre de sesión con SweetAlert2
+    const logoutLink = document.querySelector("a[href*='index']");
+    if (logoutLink) {
+        logoutLink.addEventListener("click", function(e) {
+            e.preventDefault();
+            Swal.fire({
+                title: '¿Cerrar Sesión?',
+                text: '¿Está seguro de que desea cerrar la sesión?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#667eea',
+                cancelButtonColor: '#dc3545',
+                confirmButtonText: 'Sí, Cerrar Sesión',
+                cancelButtonText: 'Cancelar',
+                backdrop: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = logoutLink.href;
+                }
+            });
+        });
+    }
+
+    // Manejar redimensionamiento de ventana
+    window.addEventListener('resize', function() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+
+        if (window.innerWidth > 992) {
+            sidebar.classList.remove('show');
+            overlay.classList.remove('active');
+        }
+
+        // Re-renderizar gráficos después de redimensionar
+        setTimeout(() => {
+            const activeView = document.querySelector('.view-section.active');
+            if (activeView) {
+                updateViewContent(activeView.id);
+            }
+        }, 300);
+    });
+});
     </script>
 </body>
 </html>

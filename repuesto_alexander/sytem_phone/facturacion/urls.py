@@ -4,7 +4,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-       path('', views.index, name='login'),  # Página de login
+    # path('logout/', views.logout_view, name='logout'),  
+    path('', views.index, name='login'),  # Página de login
     path("" , views.index, name="index"),
     path("dashboard" , views.dashboard, name="dashboard"),
     path('dashboard/data/', views.dashboard_data, name='dashboard_data'),
@@ -20,6 +21,7 @@ urlpatterns = [
     path('productos-disponibles/', views.obtener_productos_disponibles, name='obtener_productos_disponibles'),
     path('producto/<int:entrada_id>/', views.obtener_datos_entrada, name='obtener_datos_entrada'),
     path('obtener-datos-plantilla/<int:plantilla_id>/', views.obtener_datos_plantilla, name='obtener_datos_plantilla'),
+    path('buscar-productos-similares/', views.buscar_productos_similares, name='buscar_productos_similares'),
     path("cuentaporcobrar", views.cuentaporcobrar, name="cuentaporcobrar"),
     path("gestiondesuplidores", views.gestiondesuplidores, name="gestiondesuplidores"),
     path("registrosuplidores", views.registrosuplidores, name="registrosuplidores"),
@@ -67,6 +69,25 @@ urlpatterns = [
     path('generar-factura/', views.generar_factura, name='generar_factura'),
     path('obtener-productoscotizacion/', views.obtener_productoscotizacion, name='obtener_productoscotizacion'),
     path('ver-factura/', views.ver_factura, name='ver_factura'),
+     path('dashboard/usuarios/', views.get_usuarios, name='get_usuarios'),
+    path('dashboard/cuadres/', views.get_cuadres, name='get_cuadres'),
+    path('dashboard/cuadre/<int:cuadre_id>/pdf/', views.generar_pdf_cuadre, name='generar_pdf_cuadre'),
+
+    path('compras', views.compras, name='compras'),
+      path('buscar-productos-cuentas-pagar/', views.buscar_productos_cuentas_pagar, name='buscar_productos_cuentas_pagar'),
+    path('guardar-cuenta-por-pagar/', views.guardar_cuenta_por_pagar, name='guardar_cuenta_por_pagar'),
+    path('cuentaporpagar', views.cuentaporpagar, name='cuentaporpagar'),
+   path('cuentas-por-pagar/datos/', views.cuentas_por_pagar_datos, name='cuentas_por_pagar_datos'),
+    path('cuentas-por-pagar/procesar-pago/<int:cuenta_id>/', views.procesar_pago_cuenta, name='procesar_pago_cuenta'),
+    path('cuentas-por-pagar/detalle/<int:cuenta_id>/', views.obtener_detalle_cuenta, name='obtener_detalle_cuenta'),
+    path('cuentas-por-pagar/actualizar/<int:cuenta_id>/', views.actualizar_cuenta_por_pagar, name='actualizar_cuenta_por_pagar'),
+    path('cuentas-por-pagar/eliminar/<int:cuenta_id>/', views.eliminar_cuenta_por_pagar, name='eliminar_cuenta_por_pagar'),
+    path('cuentas-por-pagar/factura/<int:cuenta_id>/', views.generar_factura_pago, name='generar_factura_pago'),
+      path('cuentas-por-pagar/factura-pdf/<int:cuenta_id>/', views.generar_factura_pdf, name='generar_factura_pdf_real'),
+      # En tu urls.py
+     # En tu urls.py
+    path('dashboard/movimientos/', views.movimientos_stock, name='movimientos_stock'),
+    path('dashboard/movimientos/pdf/', views.movimientos_stock_pdf, name='movimientos_stock_pdf'),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
     

@@ -6,6 +6,8 @@ import random
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import Group, User, Permission
+from datetime import timedelta
+
 class Rol(models.Model):
     ESTADOS = (
         ('activo', 'Activo'),
@@ -862,3 +864,94 @@ class ComprobantePago(models.Model):
     
     def __str__(self):
         return f"Comprobante {self.numero_comprobante} - {self.cliente.full_name} - RD${self.pago.monto}"
+    
+
+
+
+class CuentaPorPagar(models.Model):
+    CONDICION_CHOICES = [
+        ('contado', 'Contado'),
+        ('credito', 'Crédito'),
+    ]
+    
+    ESTADO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('pagado', 'Pagado'),
+        ('vencido', 'Vencido'),
+    ]
+    
+    METODO_PAGO_CHOICES = [
+        ('efectivo', 'Efectivo'),
+        ('transferencia', 'Transferencia Bancaria'),
+        ('cheque', 'Cheque'),
+        ('tarjeta', 'Tarjeta de Crédito/Débito'),
+    ]
+
+    proveedor = models.ForeignKey('Proveedor', on_delete=models.CASCADE, verbose_name="Proveedor")
+    numero_factura = models.CharField(max_length=50, verbose_name="Número de Factura")
+    fecha_entrada = models.DateField(default=timezone.now, verbose_name="Fecha de Entrada")
+    condicion = models.CharField(max_length=20, choices=CONDICION_CHOICES, verbose_name="Condición de Pago")
+    rnc = models.CharField(max_length=13, verbose_name="RNC")
+    fecha_vencimiento = models.DateField(null=True, blank=True, verbose_name="Fecha de Vencimiento")
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', verbose_name="Estado")
+    descripcion = models.TextField(blank=True, null=True, verbose_name="Descripción Adicional")
+    
+    # Campos para el pago
+    fecha_pago = models.DateField(null=True, blank=True, verbose_name="Fecha de Pago")
+    metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO_CHOICES, blank=True, null=True, verbose_name="Método de Pago")
+    referencia_pago = models.CharField(max_length=100, blank=True, null=True, verbose_name="Referencia de Pago")
+    notas_pago = models.TextField(blank=True, null=True, verbose_name="Notas del Pago")
+    
+    # Auditoría
+    fecha_registro = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Registro")
+    fecha_actualizacion = models.DateTimeField(auto_now=True, verbose_name="Fecha de Actualización")
+
+    class Meta:
+        verbose_name = "Cuenta por Pagar"
+        verbose_name_plural = "Cuentas por Pagar"
+        ordering = ['estado', 'fecha_vencimiento', '-fecha_registro']
+        unique_together = ['numero_factura', 'proveedor']
+
+    def __str__(self):
+        return f"{self.numero_factura} - {self.proveedor.nombre_empresa}"
+
+    @property
+    def total(self):
+        return sum(detalle.subtotal for detalle in self.detalles.all())
+
+    @property
+    def total_productos(self):
+        return sum(detalle.cantidad for detalle in self.detalles.all())
+
+    def save(self, *args, **kwargs):
+        # Si es crédito, establecer fecha de vencimiento (30 días por defecto)
+        if self.condicion == 'credito' and not self.fecha_vencimiento:
+            self.fecha_vencimiento = self.fecha_entrada + timedelta(days=30)
+        
+        # Actualizar estado si está vencido
+        if (self.condicion == 'credito' and self.fecha_vencimiento and 
+            self.fecha_vencimiento < timezone.now().date() and self.estado == 'pendiente'):
+            self.estado = 'vencido'
+        
+        # Si se marca como pagado, establecer fecha de pago si no existe
+        if self.estado == 'pagado' and not self.fecha_pago:
+            self.fecha_pago = timezone.now().date()
+        
+        super().save(*args, **kwargs)
+
+class DetalleCuentaPorPagar(models.Model):
+    cuenta_por_pagar = models.ForeignKey('CuentaPorPagar', on_delete=models.CASCADE, related_name='detalles')
+    producto = models.ForeignKey('EntradaProducto', on_delete=models.CASCADE, verbose_name="Producto")
+    cantidad = models.PositiveIntegerField(default=1, verbose_name="Cantidad")
+    costo_unitario = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Unitario")
+    
+    class Meta:
+        verbose_name = "Detalle Cuenta por Pagar"
+        verbose_name_plural = "Detalles Cuentas por Pagar"
+
+    def __str__(self):
+        return f"{self.producto.descripcion} - {self.cantidad} x ${self.costo_unitario}"
+
+    @property
+    def subtotal(self):
+        return self.cantidad * self.costo_unitario

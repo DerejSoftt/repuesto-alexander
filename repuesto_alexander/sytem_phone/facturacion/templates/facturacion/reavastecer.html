@@ -1,16 +1,18 @@
+{% load static %}
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Reabastecimiento - Tienda de Teléfonos</title>
-    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}" type="image/x-icon">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
     <style>
-          * {
+        * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -348,6 +350,8 @@
             color: #667eea;
             display: block;
             margin-bottom: 5px;
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
         }
 
         .stat-label {
@@ -411,19 +415,28 @@
         .product-info {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
-        .phone-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        .product-image {
+            width: 50px;
+            height: 50px;
             border-radius: 8px;
+            object-fit: cover;
+            border: 2px solid #e1e8ed;
+        }
+
+        .product-image-placeholder {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 18px;
+            font-size: 20px;
+            border: 2px solid #e1e8ed;
         }
 
         .product-details h4 {
@@ -454,6 +467,8 @@
             font-weight: 500;
             font-size: 0.85rem;
             display: inline-block;
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
         }
 
         .stock-low {
@@ -474,6 +489,8 @@
         .price {
             font-weight: 600;
             color: #333;
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
         }
 
         .stock-controls {
@@ -522,6 +539,8 @@
             border-radius: 8px;
             font-weight: 500;
             transition: all 0.3s ease;
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
         }
 
         .stock-input:focus {
@@ -683,6 +702,11 @@
             body.sidebar-open {
                 overflow: hidden;
             }
+
+            .product-image, .product-image-placeholder {
+                width: 40px;
+                height: 40px;
+            }
         }
 
         /* Scrollbar personalizado */
@@ -815,16 +839,16 @@
                 <div class="stats-bar">
                     <div class="stat-item">
                         <div class="stat-label">Total Productos</div>
-                        <span class="stat-number" id="totalProducts">{{ total_productos }}</span>
+                        <span class="stat-number" id="totalProducts">{{ total_productos|floatformat:0 }}</span>
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Stock Bajo</div>
-                        <span class="stat-number" id="lowStockCount">{{ productos_stock_bajo }}</span>
+                        <span class="stat-number" id="lowStockCount">{{ productos_stock_bajo|floatformat:0 }}</span>
                     </div>
-                    <div class="stat-item">
+                    <!-- <div class="stat-item">
                         <div class="stat-label">Valor Total</div>
                         <span class="stat-number" id="totalValue">RD${{ valor_total|floatformat:2 }}</span>
-                    </div>
+                    </div> -->
                 </div>
 
                 <!-- Sección de búsqueda -->
@@ -854,7 +878,16 @@
                             <tr>
                                 <td>
                                     <div class="product-info">
-                                        <div class="phone-icon"><i class="bx bx-mobile-alt"></i></div>
+                                        {% if producto.imagen_url %}
+                                            <img src="{{ producto.imagen_url }}" alt="{{ producto.name }}" class="product-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                            <div class="product-image-placeholder" style="display: none;">
+                                                <i class="bx bx-mobile-alt"></i>
+                                            </div>
+                                        {% else %}
+                                            <div class="product-image-placeholder">
+                                                <i class="bx bx-mobile-alt"></i>
+                                            </div>
+                                        {% endif %}
                                         <div class="product-details">
                                             <h4>{{ producto.name }}</h4>
                                             <span>{{ producto.model }}</span>
@@ -864,7 +897,7 @@
                                 <td><span class="brand-badge">{{ producto.brand }}</span></td>
                                 <td>
                                     <div class="stock-badge {% if producto.stock < 10 %}stock-low{% elif producto.stock < 25 %}stock-medium{% else %}stock-high{% endif %}">
-                                        {{ producto.stock }}
+                                        {{ producto.stock|floatformat:0 }}
                                     </div>
                                 </td>
                                 <td><div class="price">RD${{ producto.price|floatformat:2 }}</div></td>
@@ -909,14 +942,18 @@
             return document.querySelector('[name=csrfmiddlewaretoken]').value;
         }
 
-        // Función para mostrar mensaje de éxito con toastr (dos colores)
+        // Función para formatear números con comas
+        function formatNumber(number) {
+            return new Intl.NumberFormat('es-DO').format(number);
+        }
+
+        // Función para mostrar mensaje de éxito con toastr
         function showSuccessMessage(productName, newStock, change) {
+            const formattedStock = formatNumber(newStock);
             if (change > 0) {
-                // Aumento - color verde
-                toastr.success('Stock aumentado: ' + productName + ' → ' + newStock + ' unidades', '¡Éxito!');
+                toastr.success('Stock aumentado: ' + productName + ' → ' + formattedStock + ' unidades', '¡Éxito!');
             } else {
-                // Disminución - color rojo
-                toastr.error('Stock disminuido: ' + productName + ' → ' + newStock + ' unidades', 'Atención');
+                toastr.error('Stock disminuido: ' + productName + ' → ' + formattedStock + ' unidades', 'Atención');
             }
         }
 
@@ -962,8 +999,13 @@
             .then(data => {
                 if (data.success) {
                     // Actualizar la interfaz
-                    const stockBadge = document.querySelector(`input[data-product-id="${productId}"]`).closest('tr').querySelector('.stock-badge');
-                    stockBadge.textContent = data.nuevo_stock;
+                    const row = document.querySelector(`input[data-product-id="${productId}"]`).closest('tr');
+                    const stockBadge = row.querySelector('.stock-badge');
+                    const stockInput = row.querySelector('.stock-input');
+                    
+                    // Actualizar badge de stock
+                    stockBadge.textContent = formatNumber(data.nuevo_stock);
+                    stockInput.value = data.nuevo_stock;
                     
                     // Actualizar clase según el nuevo stock
                     stockBadge.className = 'stock-badge ' + 
@@ -971,7 +1013,7 @@
                          data.nuevo_stock < 25 ? 'stock-medium' : 'stock-high');
                     
                     // Mostrar mensaje de éxito
-                    const productName = stockBadge.closest('tr').querySelector('h4').textContent;
+                    const productName = row.querySelector('h4').textContent;
                     showSuccessMessage(productName, data.nuevo_stock, change);
                     
                     // Actualizar estadísticas
@@ -991,15 +1033,82 @@
             });
         }
 
-        // Función para actualizar estadísticas (podrías implementar una llamada AJAX para esto)
+        // Función para actualizar estadísticas
         function updateStatistics() {
-            // Esta función podría hacer una llamada AJAX para obtener estadísticas actualizadas
-            // Por ahora, solo mostraremos un mensaje de que se necesita recargar
-            console.log("Las estadísticas necesitan ser actualizadas");
+            // Podrías implementar una llamada AJAX para obtener estadísticas actualizadas
+            // Por ahora, recargamos la página para ver los cambios
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
         }
 
-        // ... (el resto del código JavaScript para búsqueda y filtrado se mantiene) ...
-        
+        // Formatear números en la página al cargar
+        document.addEventListener('DOMContentLoaded', function() {
+            // Formatear precios
+            document.querySelectorAll('.price').forEach(element => {
+                const text = element.textContent;
+                const number = parseFloat(text.replace('RD$', '').replace(/,/g, ''));
+                if (!isNaN(number)) {
+                    element.textContent = 'RD$' + formatNumber(number);
+                }
+            });
+
+            // Formatear números en estadísticas
+            document.querySelectorAll('.stat-number').forEach(element => {
+                const text = element.textContent;
+                const number = parseFloat(text.replace('RD$', '').replace(/,/g, ''));
+                if (!isNaN(number)) {
+                    if (text.includes('RD$')) {
+                        element.textContent = 'RD$' + formatNumber(number);
+                    } else {
+                        element.textContent = formatNumber(number);
+                    }
+                }
+            });
+
+            // Formatear stock en badges
+            document.querySelectorAll('.stock-badge').forEach(element => {
+                const number = parseFloat(element.textContent.replace(/,/g, ''));
+                if (!isNaN(number)) {
+                    element.textContent = formatNumber(number);
+                }
+            });
+
+            // Configurar eventos de búsqueda
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', filterProducts);
+            }
+            
+            // Configurar evento de scroll para carga infinita
+            const tableContainer = document.getElementById('tableContainer');
+            if (tableContainer) {
+                tableContainer.addEventListener('scroll', handleScroll);
+            }
+        });
+
+        // Funciones para el sidebar
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.querySelector('.sidebar-overlay').classList.toggle('active');
+            document.body.classList.toggle('sidebar-open');
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('active');
+            document.querySelector('.sidebar-overlay').classList.remove('active');
+            document.body.classList.remove('sidebar-open');
+        }
+
+        // Funciones de búsqueda y scroll (placeholder)
+        function filterProducts() {
+            // Implementar búsqueda si es necesario
+        }
+
+        function handleScroll() {
+            // Implementar carga infinita si es necesario
+        }
+
         // Manejar el cierre de sesión con SweetAlert2
         document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
             e.preventDefault();
@@ -1019,21 +1128,6 @@
                     window.location.href = "{% url 'index' %}";
                 }
             });
-        });
-        
-        // Inicializar la aplicación
-        document.addEventListener('DOMContentLoaded', function() {
-            // Configurar eventos de búsqueda y filtrado
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.addEventListener('input', filterProducts);
-            }
-            
-            // Configurar evento de scroll para carga infinita
-            const tableContainer = document.getElementById('tableContainer');
-            if (tableContainer) {
-                tableContainer.addEventListener('scroll', handleScroll);
-            }
         });
     </script>
 </body>

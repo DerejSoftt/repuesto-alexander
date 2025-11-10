@@ -229,7 +229,7 @@
                 {% endif %}
                 <div><strong>NCF:</strong> {{ venta.ncf|default:"" }}</div>
                 <div><strong>Cliente:</strong> {{ venta.cliente_nombre }}</div>
-                <div><strong>RNC/Céd:</strong> {{ venta.cliente_documento|default:"B0140000000"  }}</div>
+                <div><strong>RNC/Céd:</strong> {{ venta.cliente_documento|default:""  }}</div>
                 <div><strong>Tipo:</strong> {{ venta.get_tipo_venta_display }}</div>
                 {% if venta.cliente.telefono %}
                 <div><strong>TEL:</strong> {{ venta.cliente.telefono }}</div>

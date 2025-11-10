@@ -1,4 +1,5 @@
 {% load static %}
+{% load custom_filters %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -531,113 +532,116 @@
     <div class="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- Sidebar Navigation -->
-<nav class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-        <h2>
-            <i class="fas fa-motorcycle"></i>
-            Super Bestia
-        </h2>
-        <p>Usuario: {{ user.username }}</p>
-        <p>{{ user.email }}</p>
-    </div>
-    <div class="sidebar-menu">
-        <a href="#" class="menu-item">
-            <i class='bx bx-home-alt'></i>
-            <span>Inicio</span>
-        </a>
-          {% if has_ventas_access or user.is_superuser %}
-        <a href="{% url 'ventas' %}" class="menu-item">
-            <i class='bx bx-receipt'></i>
-            <span>Facturación</span>
-        </a>
-        {% endif %}
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>
+                <i class="fas fa-motorcycle"></i>
+                Super Bestia
+            </h2>
+            <p>Usuario: {{ user.username }}</p>
+            <p>{{ user.email }}</p>
+        </div>
+     <div class="sidebar-menu">
+    <!-- Menú para todos los usuarios -->
+    <a href="#" class="menu-item">
+        <i class='bx bx-home-alt'></i>
+        <span>Inicio</span>
+    </a>
 
-          {% if has_cotizacion_access or user.is_superuser %}
-         <a href="{% url 'cotizacion' %}" class="menu-item">
-                <i class='bx bx-calculator'></i>
-                <span>Cotizacion</span>
-        </a>
-        {% endif %}
+    <!-- Menú para usuarios normales y superusuarios -->
+    {% if user.is_superuser or user|has_group:"Usuario Normal" %}
+    <a href="{% url 'ventas' %}" class="menu-item">
+        <i class='bx bx-receipt'></i>
+        <span>Facturación</span>
+    </a>
+    <a href="{% url 'cotizacion' %}" class="menu-item">
+        <i class='bx bx-calculator'></i>
+        <span>Cotización</span>
+    </a>
+    <a href="{% url 'registrodecliente' %}" class="menu-item">
+        <i class='bx bx-user-plus'></i>
+        <span>Registrar Cliente</span>
+    </a>
+    <a href="{% url 'listadecliente' %}" class="menu-item">
+        <i class='bx bx-group'></i>
+        <span>Clientes</span>
+    </a>
+    <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+        <i class='bx bx-money'></i>
+        <span>Cuenta por Cobrar</span>
+    </a>
+    <a href="{% url 'inventario' %}" class="menu-item">
+        <i class='bx bx-archive'></i>
+        <span>Inventario</span>
+    </a>
+    <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+        <i class='bx bx-printer'></i>
+        <span>Reimprimir</span>
+    </a>
+    {% endif %}
 
-          {% if has_registrodecliente_access or user.is_superuser %}
-        <a href="{% url 'registrodecliente' %}" class="menu-item">
-            <i class='bx bx-user-plus'></i>
-            <span>Registrar Cliente</span>
-        </a>
-        {% endif %}
-
-          {% if has_listadecliente_access or user.is_superuser %}
-        <a href="{% url 'listadecliente' %}" class="menu-item">
-            <i class='bx bx-group'></i>
-            <span>Clientes</span>
-        </a>
-        {% endif %}
-
-        <a href="{% url 'entrada' %}" class="menu-item">
-            <i class='bx bx-package'></i>
-            <span>Entrada Mercancía</span>
-        </a>
-          {% if has_cuentaporcobrar_access or user.is_superuser %}
-        <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
-            <i class='bx bx-money'></i>
-            <span>Cuenta por Cobrar</span>
-        </a>
-        {% endif %}
+    <!-- Menú para usuarios de Almacén y superusuarios -->
+    {% if user.is_superuser or user|has_group:"Almacén" %}
+    <a href="{% url 'entrada' %}" class="menu-item">
+        <i class='bx bx-package'></i>
+        <span>Entrada Mercancía</span>
+    </a>
+     <a href="{% url 'compras' %}" class="menu-item">
+        <i class='bx bx-cart-download'></i>
+        <span>Compras</span>
+    </a>
         <a href="{% url 'inventario' %}" class="menu-item">
-            <i class='bx bx-archive'></i>
-            <span>Inventario</span>
-        </a>
-        <a href="{% url 'registrosuplidores' %}" class="menu-item active">
-            <i class='bx bx-building'></i>
-            <span>Registrar Suplidores</span>
-        </a>
-        <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
-            <i class='bx bx-buildings'></i>
-            <span>Suplidores</span>
-        </a>
-         {% if has_devoluciones_access or user.is_superuser %}
-        <a href="{% url 'devoluciones' %}" class="menu-item">
-            <i class='bx bx-undo'></i>
-            <span>Devoluciones</span>
-        </a>
-        {% endif %}
+        <i class='bx bx-archive'></i>
+        <span>Inventario</span>
+    </a>
+    <a href="{% url 'registrosuplidores' %}" class="menu-item active">
+        <i class='bx bx-building'></i>
+        <span>Registrar Suplidores</span>
+    </a>
+    <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
+        <i class='bx bx-buildings'></i>
+        <span>Suplidores</span>
+    </a>
+    {% endif %}
 
-          {% if has_roles_access or user.is_superuser %}
-        <a href="{% url 'roles' %}" class="menu-item">
-            <i class='bx bx-user-check'></i>
-            <span>Roles</span>
-        </a>
-        {% endif %}
+    <!-- Menú solo para superusuarios -->
+    {% if user.is_superuser %}
+    <a href="{% url 'devoluciones' %}" class="menu-item">
+        <i class='bx bx-undo'></i>
+        <span>Devoluciones</span>
+    </a>
+    <a href="{% url 'roles' %}" class="menu-item">
+        <i class='bx bx-user-check'></i>
+        <span>Roles</span>
+    </a>
+    <a href="{% url 'cuentaporpagar' %}" class="menu-item">
+        <i class='bx bx-credit-card'></i>
+        <span>Cuenta Por Pagar</span>
+    </a>
+    <a href="{% url 'compras' %}" class="menu-item">
+        <i class='bx bx-cart-download'></i>
+        <span>Compras</span>
+    </a>
+    <a href="{% url 'anular' %}" class="menu-item">
+        <i class='bx bx-x-circle'></i>
+        <span>Anular Factura</span>
+    </a>
+    <a href="{% url 'dashboard' %}" class="menu-item">
+        <i class='bx bx-grid-alt'></i>
+        <span>Dashboard</span>
+    </a>
+    {% endif %}
 
-          {% if has_anular_access or user.is_superuser %}
-        <a href="{% url 'anular' %}" class="menu-item">
-            <i class='bx bx-x-circle'></i>
-            <span>Anular Factura</span>
-        </a>
-        {% endif %}
-
-          {% if has_reimprimirfactura_access or user.is_superuser %}
-        <a href="{% url 'reimprimirfactura' %}" class="menu-item">
-            <i class='bx bx-printer'></i>
-            <span>Reimprimir</span>
-        </a>
-        {% endif %}
-
-          {% if has_dashboard_access or user.is_superuser %}
-        <a href="{% url 'dashboard' %}" class="menu-item">
-            <i class='bx bx-grid-alt'></i>
-            <span>Dashboard</span>
-        </a>
-        {% endif %}
-        <a href="{% url 'index' %}" class="menu-item">
-            <i class='bx bx-log-out'></i>
-            <span>Cerrar Sesión</span>
-        </a>
-    </div>
-    <div class="sidebar-footer">
-        <p>Derejsoft v 1.2.2</p>
-    </div>
-</nav>
+    <!-- Cerrar sesión para todos -->
+    <a href="{% url 'index' %}" class="menu-item">
+        <i class='bx bx-log-out'></i>
+        <span>Cerrar Sesión</span>
+    </a>
+</div>
+        <div class="sidebar-footer">
+            <p>Derejsoft v 1.2.2</p>
+        </div>
+    </nav>
 
     <!-- Main Content -->
     <div class="main-content">

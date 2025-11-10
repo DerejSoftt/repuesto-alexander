@@ -584,6 +584,92 @@
             transform: translateX(26px);
         }
 
+        /* Estilos para el modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Estilos para resultados de búsqueda */
+        .search-result-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .search-result-item:hover {
+            background-color: #fff8e1 !important;
+            border-left-color: #ffc107;
+            transform: translateX(2px);
+        }
+
+        .search-result-item[style*="background-color: #e3f2fd"] {
+            border-left-color: #2196f3;
+        }
+
+        .search-result-item[style*="background-color: #f3e5f5"] {
+            border-left-color: #9c27b0;
+        }
+
+        .search-result-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .search-result-details {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .search-result-details div {
+            margin-bottom: 2px;
+        }
+
+        .search-result-details small {
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
+        .no-results {
+            padding: 15px;
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -669,6 +755,10 @@
             .percentage-item {
                 min-width: 100%;
             }
+            .modal-content {
+                width: 95%;
+                padding: 20px;
+            }
         }
         /* Scrollbar personalizado */
         .sidebar::-webkit-scrollbar {
@@ -708,100 +798,200 @@
         <div class="sidebar-header">
             <h2>
                 <i class="fas fa-motorcycle"></i>
-               Super Bestia
+                Super Bestia
             </h2>
             <p>Usuario: {{ user.username }}</p>
             <p>{{ user.email }}</p>
         </div>
-              <div class="sidebar-menu">
-            <a href="#" class="menu-item">
-                <i class='bx bx-home-alt'></i>
-                <span>Inicio</span>
-            </a>
-            
-            <!-- Menú para usuarios normales y superusuarios -->
-            {% if user.is_superuser or user|has_group:"Usuario Normal" %}
-            <a href="{% url 'ventas' %}" class="menu-item">
-                <i class='bx bx-receipt'></i>
-                <span>Facturación</span>
-            </a>
-            <a href="{% url 'cotizacion' %}" class="menu-item">
-                <i class='bx bx-calculator'></i>
-                <span>Cotización</span>
-            </a>
-            <a href="{% url 'registrodecliente' %}" class="menu-item">
-                <i class='bx bx-user-plus'></i>
-                <span>Registrar Cliente</span>
-            </a>
-            <a href="{% url 'listadecliente' %}" class="menu-item">
-                <i class='bx bx-group'></i>
-                <span>Clientes</span>
-            </a>
-            <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
-                <i class='bx bx-money'></i>
-                <span>Cuenta por Cobrar</span>
-            </a>
-            <a href="{% url 'inventario' %}" class="menu-item">
-                <i class='bx bx-archive'></i>
-                <span>Inventario</span>
-            </a>
-            <a href="{% url 'reimprimirfactura' %}" class="menu-item">
-                <i class='bx bx-printer'></i>
-                <span>Reimprimir</span>
-            </a>
-            {% endif %}
+     <div class="sidebar-menu">
+    <!-- Menú para todos los usuarios -->
+    <a href="#" class="menu-item">
+        <i class='bx bx-home-alt'></i>
+        <span>Inicio</span>
+    </a>
 
-            <!-- Menú para usuarios de Almacén y superusuarios -->
-            {% if user.is_superuser or user|has_group:"Almacén" %}
-            <a href="{% url 'entrada' %}" class="menu-item">
-                <i class='bx bx-package'></i>
-                <span>Entrada Mercancía</span>
-            </a>
-
-                <a href="{% url 'inventario' %}" class="menu-item">
+    <!-- Menú para Usuario Normal (excluye superusuarios de este bloque) -->
+    {% if user|has_group:"Usuario Normal" and not user.is_superuser %}
+    <a href="{% url 'ventas' %}" class="menu-item">
+        <i class='bx bx-receipt'></i>
+        <span>Facturación</span>
+    </a>
+    <a href="{% url 'cotizacion' %}" class="menu-item">
+        <i class='bx bx-calculator'></i>
+        <span>Cotización</span>
+    </a>
+    <a href="{% url 'registrodecliente' %}" class="menu-item">
+        <i class='bx bx-user-plus'></i>
+        <span>Registrar Cliente</span>
+    </a>
+    <a href="{% url 'listadecliente' %}" class="menu-item">
+        <i class='bx bx-group'></i>
+        <span>Clientes</span>
+    </a>
+    <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+        <i class='bx bx-money'></i>
+        <span>Cuenta por Cobrar</span>
+    </a>
+    <a href="{% url 'inventario' %}" class="menu-item active">
         <i class='bx bx-archive'></i>
         <span>Inventario</span>
     </a>
+    <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+        <i class='bx bx-printer'></i>
+        <span>Reimprimir</span>
+    </a>
+    {% endif %}
 
-            <a href="{% url 'registrosuplidores' %}" class="menu-item">
-                <i class='bx bx-building'></i>
-                <span>Registrar Suplidores</span>
-            </a>
-            <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
-                <i class='bx bx-buildings'></i>
-                <span>Suplidores</span>
-            </a>
-            {% endif %}
+    <!-- Menú para Almacén (excluye superusuarios de este bloque) -->
+    {% if user|has_group:"Almacén" and not user.is_superuser %}
+    <a href="{% url 'entrada' %}" class="menu-item active">
+        <i class='bx bx-package'></i>
+        <span>Entrada Mercancía</span>
+    </a>
+    <a href="{% url 'compras' %}" class="menu-item">
+        <i class='bx bx-cart-download'></i>
+        <span>Compras</span>
+    </a>
+    <a href="{% url 'inventario' %}" class="menu-item">
+        <i class='bx bx-archive'></i>
+        <span>Inventario</span>
+    </a>
+    <a href="{% url 'registrosuplidores' %}" class="menu-item">
+        <i class='bx bx-building'></i>
+        <span>Registrar Suplidores</span>
+    </a>
+    <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
+        <i class='bx bx-buildings'></i>
+        <span>Suplidores</span>
+    </a>
+    {% endif %}
 
-            <!-- Menú solo para superusuarios -->
-            {% if user.is_superuser %}
-            <a href="{% url 'devoluciones' %}" class="menu-item">
-                <i class='bx bx-undo'></i>
-                <span>Devoluciones</span>
-            </a>
-            <a href="{% url 'roles' %}" class="menu-item active">
-                <i class='bx bx-user-check'></i>
-                <span>Roles</span>
-            </a>
-            <a href="{% url 'anular' %}" class="menu-item">
-                <i class='bx bx-x-circle'></i>
-                <span>Anular Factura</span>
-            </a>
-            <a href="{% url 'dashboard' %}" class="menu-item">
-                <i class='bx bx-grid-alt'></i>
-                <span>Dashboard</span>
-            </a>
-            {% endif %}
-            
-            <a href="{% url 'index' %}" class="menu-item">
-                <i class='bx bx-log-out'></i>
-                <span>Cerrar Sesión</span>
-            </a>
-        </div>
+    <!-- Menú EXCLUSIVO para superusuarios -->
+    {% if user.is_superuser %}
+    <a href="{% url 'ventas' %}" class="menu-item">
+        <i class='bx bx-receipt'></i>
+        <span>Facturación</span>
+    </a>
+    <a href="{% url 'cotizacion' %}" class="menu-item">
+        <i class='bx bx-calculator'></i>
+        <span>Cotización</span>
+    </a>
+    <a href="{% url 'registrodecliente' %}" class="menu-item">
+        <i class='bx bx-user-plus'></i>
+        <span>Registrar Cliente</span>
+    </a>
+    <a href="{% url 'listadecliente' %}" class="menu-item">
+        <i class='bx bx-group'></i>
+        <span>Clientes</span>
+    </a>
+    <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+        <i class='bx bx-money'></i>
+        <span>Cuenta por Cobrar</span>
+    </a>
+    <a href="{% url 'inventario' %}" class="menu-item ">
+        <i class='bx bx-archive'></i>
+        <span>Inventario</span>
+    </a>
+    <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+        <i class='bx bx-printer'></i>
+        <span>Reimprimir</span>
+    </a>
+    <a href="{% url 'entrada' %}" class="menu-item active">
+        <i class='bx bx-package'></i>
+        <span>Entrada Mercancía</span>
+    </a>
+    <a href="{% url 'compras' %}" class="menu-item">
+        <i class='bx bx-cart-download'></i>
+        <span>Compras</span>
+    </a>
+    <a href="{% url 'registrosuplidores' %}" class="menu-item">
+        <i class='bx bx-building'></i>
+        <span>Registrar Suplidores</span>
+    </a>
+    <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
+        <i class='bx bx-buildings'></i>
+        <span>Suplidores</span>
+    </a>
+    <a href="{% url 'devoluciones' %}" class="menu-item">
+        <i class='bx bx-undo'></i>
+        <span>Devoluciones</span>
+    </a>
+    <a href="{% url 'roles' %}" class="menu-item">
+        <i class='bx bx-user-check'></i>
+        <span>Roles</span>
+    </a>
+    <a href="{% url 'cuentaporpagar' %}" class="menu-item">
+        <i class='bx bx-credit-card'></i>
+        <span>Cuenta Por Pagar</span>
+    </a>
+    <a href="{% url 'anular' %}" class="menu-item">
+        <i class='bx bx-x-circle'></i>
+        <span>Anular Factura</span>
+    </a>
+    <a href="{% url 'dashboard' %}" class="menu-item">
+        <i class='bx bx-grid-alt'></i>
+        <span>Dashboard</span>
+    </a>
+    {% endif %}
+
+    <!-- Cerrar sesión para todos -->
+    <a href="{% url 'index' %}" class="menu-item">
+        <i class='bx bx-log-out'></i>
+        <span>Cerrar Sesión</span>
+    </a>
+</div>>
         <div class="sidebar-footer">
             <p>Derejsoft v 1.2.2</p>
         </div>
     </nav>
+
+    <!-- Modal para Nuevo Producto -->
+    <div id="newProductModal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 20px; color: #333; display: flex; align-items: center; gap: 10px;">
+                <i class='bx bx-plus-circle'></i>
+                Agregar Nuevo Producto Base
+            </h3>
+            <form id="newProductForm">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label class="form-label" for="newProductName">Nombre del Producto *</label>
+                    <input type="text" id="newProductName" class="form-input" required 
+                           placeholder="Ingrese el nombre del nuevo producto">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="newProductBrand">Marca *</label>
+                    <select id="newProductBrand" class="form-input form-select" required>
+                        <option value="">Seleccionar marca</option>
+                        <option value="honda">Honda</option>
+                        <option value="yamaha">Yamaha</option>
+                        <option value="suzuki">Suzuki</option>
+                        <option value="kawasaki">Kawasaki</option>
+                        <option value="tvs">TVS</option>
+                        <option value="hero">Hero</option>
+                        <option value="loncin">Loncin</option>
+                        <option value="kove">Kove</option>
+                        <option value="x1000">X1000</option>
+                        <option value="ktm">KTM</option>
+                        <option value="bajaj">Bajaj</option>
+                        <option value="super Bestia">Super Bestia</option>
+                        <option value="otros">Otros</option>
+                    </select>
+                </div>
+                <div class="button-group" style="margin-top: 25px;">
+                    <button type="submit" class="btn btn-primary">
+                        <i class='bx bx-save'></i>
+                        Crear Producto Base
+                    </button>
+                    <button type="button" class="btn btn-outline" onclick="closeNewProductModal()">
+                        <i class='bx bx-x'></i>
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Main Content -->
     <div class="main-content">
         <div class="container">
@@ -826,64 +1016,62 @@
                 <div class="info-card">
                     <h3>
                         <i class='bx bx-info-circle'></i>
-                        Información Importante
+                        Sistema de Gestión de Productos
                     </h3>
                     <p>
-                        Complete todos los campos requeridos para registrar correctamente la entrada de productos al inventario.
-                        Los cálculos de precios se realizarán automáticamente al ingresar el costo base y los porcentajes.
-                        <strong>Los porcentajes se calculan de forma segura en el servidor.</strong>
+                        <strong>Para evitar duplicación:</strong> 
+                        <br>🔍 <strong>Busque productos existentes</strong> - El sistema identificará productos por código único
+                        <br>🔄 <strong>Actualización automática</strong> - Si el producto existe, se actualizarán los datos
+                        <br>🆕 <strong>Productos nuevos</strong> - Solo cree productos base si no existen en el sistema
+                        <br>💡 <strong>Recomendación</strong> - Siempre busque primero para evitar duplicados
                     </p>
                 </div>
                 <form id="productEntryForm" method="POST" action="{% url 'entrada' %}" enctype="multipart/form-data">
                     {% csrf_token %}
-                    <!-- Sección de Facturación -->
-                    <div class="form-section">
-                        <h3 class="section-title">
-                            <i class='bx bx-receipt'></i>
-                            Información de Facturación
-                        </h3>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label class="form-label" for="invoiceNumber">Número de Factura *</label>
-                                <input type="text" id="invoiceNumber" name="numero_factura" class="form-input" required
-                                       placeholder="Ej: FAC-001-2024">
-                                <div class="error-message" id="numero_facturaError"></div>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="entryDate">Fecha de Entrada *</label>
-                                <input type="date" id="entryDate" name="fecha_entrada" class="form-input" required>
-                                <div class="error-message" id="fecha_entradaError"></div>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="supplier">Proveedor Asociado *</label>
-                                <select id="supplier" name="proveedor" class="form-input form-select" required>
-                                    <option value="">Seleccionar proveedor</option>
-                                    {% for proveedor in proveedores %}
-                                        <option value="{{ proveedor.id }}">{{ proveedor.nombre_empresa }}</option>
-                                    {% endfor %}
-                                </select>
-                                <div class="error-message" id="proveedorError"></div>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="ncf">NCF</label>
-                                <input type="text" id="ncf" name="ncf" class="form-input"
-                                       placeholder="Ej: B0100000001" maxlength="11">
-                            </div>
-                        </div>
-                    </div>
+                    
+                    <!-- Campos ocultos para facturación (requeridos por el backend) -->
+                    <input type="hidden" id="hiddenNumeroFactura" name="numero_factura" value="SIN-FACTURA-{{ timestamp }}">
+                    <input type="hidden" id="hiddenFechaEntrada" name="fecha_entrada" value="{{ fecha_actual }}">
+                    <input type="hidden" id="hiddenProveedor" name="proveedor" value="{% if proveedores %}{{ proveedores.0.id }}{% endif %}">
+                    <input type="hidden" id="hiddenNCF" name="ncf" value="">
+                    <input type="hidden" id="producto_existente_id" name="producto_existente_id" value="">
+
                     <!-- Sección de Producto -->
                     <div class="form-section">
                         <h3 class="section-title">
                             <i class='bx bx-mobile-alt'></i>
                             Información del Producto
                         </h3>
+                        
+                        <!-- Botón para agregar nuevo producto -->
+                        <div style="margin-bottom: 20px;">
+                            <button type="button" class="btn btn-secondary" onclick="openNewProductModal()">
+                                <i class='bx bx-plus'></i>
+                                Agregar Nuevo Producto Base
+                            </button>
+                            <small style="display: block; margin-top: 8px; color: #666;">
+                                Use este botón solo si el producto no existe en la base de datos
+                            </small>
+                        </div>
+
                         <div class="form-grid">
                             <div class="form-group full-width">
-                                <label class="form-label" for="descripcion">Descripción *</label>
-                                <textarea id="descripcion" name="descripcion" class="form-input form-textarea" required
-                                          placeholder="Descripción detallada del producto..."></textarea>
+                                <label class="form-label" for="descripcion">Buscar Producto Existente *</label>
+                                <div style="position: relative;">
+                                    <input type="text" id="descripcion" name="descripcion" class="form-input" required
+                                          placeholder="Escriba para buscar productos existentes..." autocomplete="off">
+                                    <div id="searchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+                                </div>
                                 <div class="error-message" id="descripcionError"></div>
                             </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="codigo_producto">Código del Producto</label>
+                                <input type="text" id="codigo_producto" name="codigo_producto" class="form-input" readonly
+                                       placeholder="Se generará automáticamente">
+                                <small style="color: #666; font-size: 0.8rem;">Este código identifica únicamente al producto</small>
+                            </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="brand">Marca *</label>
                                 <select id="brand" name="marca" class="form-input form-select" required>
@@ -904,11 +1092,13 @@
                                 </select>
                                 <div class="error-message" id="marcaError"></div>
                             </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="compatibilidad">Compatibilidad</label>
                                 <input type="text" id="compatibilidad" name="compatibilidad" class="form-input" 
                                        placeholder="Ej: Modelo de moto o vehículo">
                             </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="color">Color *</label>
                                 <select id="color" name="color" class="form-input form-select" required>
@@ -927,17 +1117,20 @@
                                 </select>
                                 <div class="error-message" id="colorError"></div>
                             </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="cantidad">Cantidad *</label>
                                 <input type="number" id="cantidad" name="cantidad" class="form-input" required min="1" value="1" placeholder="1">
                                 <div class="error-message" id="cantidadError"></div>
                             </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="imagen">Imagen</label>
                                 <input type="file" id="imagen" name="imagen" class="form-input" accept="image/*">
                             </div>
                         </div>
                     </div>
+                    
                     <!-- Sección de Costos e ITBIS -->
                     <div class="form-section">
                         <h3 class="section-title">
@@ -1029,6 +1222,7 @@
                                     <input type="number" id="porcentaje_itbis" name="porcentaje_itbis" class="form-input" value="18.00" min="0" step="0.01" placeholder="18.00">
                                 </div>
                             </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="precio">Precio de Venta Minorista *</label>
                                 <div class="currency-input">
@@ -1036,18 +1230,21 @@
                                 </div>
                                 <div class="error-message" id="precioError"></div>
                             </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="precio_por_mayor">Precio por Mayor</label>
                                 <div class="currency-input">
                                     <input type="number" id="precio_por_mayor" name="precio_por_mayor" class="form-input calculated-field" min="0" step="0.01" placeholder="0.00" readonly>
                                 </div>
                             </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="precio_con_itbis">Precio con ITBIS</label>
                                 <div class="currency-input">
                                     <input type="text" id="precio_con_itbis" name="precio_con_itbis" class="form-input calculated-field" readonly>
                                 </div>
                             </div>
+                            
                             <div class="form-group">
                                 <label class="form-label" for="precio_por_mayor_con_itbis">Precio por Mayor con ITBIS</label>
                                 <div class="currency-input">
@@ -1056,6 +1253,7 @@
                             </div>
                         </div>
                     </div>
+                    
                     <!-- Sección de Observaciones -->
                     <div class="form-section">
                         <h3 class="section-title">
@@ -1070,12 +1268,13 @@
                             </div>
                         </div>
                     </div>
+                    
                     <div class="button-group">
                         <button type="submit" class="btn btn-primary" id="submitBtn">
                             <i class='bx bx-save'></i>
-                            Registrar Producto
+                            <span id="submitBtnText">Registrar Entrada de Inventario</span>
                         </button>
-                        <a href="#" class="btn btn-secondary">
+                        <a href="{% url 'inventario' %}" class="btn btn-secondary">
                             <i class='bx bx-list-ul'></i>
                             Ver Inventario
                         </a>
@@ -1095,280 +1294,511 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
     <!-- JavaScript -->
     <script>
-        // Configuración de Toastr para mensajes
-        toastr.options = {
-            "closeButton": true,
-            "debug": false,
-            "newestOnTop": false,
-            "progressBar": true,
-            "positionClass": "toast-top-right",
-            "preventDuplicates": false,
-            "onclick": null,
-            "showDuration": "300",
-            "hideDuration": "1000",
-            "timeOut": "5000",
-            "extendedTimeOut": "1000",
-            "showEasing": "swing",
-            "hideEasing": "linear",
-            "showMethod": "fadeIn",
-            "hideMethod": "fadeOut"
-        };
+   // Configuración de Toastr para mensajes
+toastr.options = {
+    "closeButton": true,
+    "debug": false,
+    "newestOnTop": false,
+    "progressBar": true,
+    "positionClass": "toast-top-right",
+    "preventDuplicates": false,
+    "onclick": null,
+    "showDuration": "300",
+    "hideDuration": "1000",
+    "timeOut": "5000",
+    "extendedTimeOut": "1000",
+    "showEasing": "swing",
+    "hideEasing": "linear",
+    "showMethod": "fadeIn",
+    "hideMethod": "fadeOut"
+};
 
-        // Estado de edición manual
-        let manualEditEnabled = false;
+// Estado de edición manual
+let manualEditEnabled = false;
+let productoExistenteSeleccionado = null;
+let esActualizacion = false;
 
-        // Función para habilitar/deshabilitar edición manual
-        function toggleManualEdit() {
-            manualEditEnabled = !manualEditEnabled;
-            const precioInput = document.getElementById('precio');
-            const precioMayorInput = document.getElementById('precio_por_mayor');
-            
-            if (manualEditEnabled) {
-                precioInput.readOnly = false;
-                precioInput.classList.remove('calculated-field');
-                precioInput.classList.add('readonly-field');
-                
-                precioMayorInput.readOnly = false;
-                precioMayorInput.classList.remove('calculated-field');
-                precioMayorInput.classList.add('readonly-field');
-                
-                toastr.info('Edición manual habilitada. Puedes modificar los precios directamente.');
-            } else {
-                precioInput.readOnly = true;
-                precioInput.classList.remove('readonly-field');
-                precioInput.classList.add('calculated-field');
-                
-                precioMayorInput.readOnly = true;
-                precioMayorInput.classList.remove('readonly-field');
-                precioMayorInput.classList.add('calculated-field');
-                
-                // Recalcular precios automáticamente
-                calcularPreciosAutomaticos();
-                toastr.info('Edición manual deshabilitada. Precios calculados automáticamente.');
-            }
-        }
+// Funciones para el modal de nuevo producto
+function openNewProductModal() {
+    document.getElementById('newProductModal').style.display = 'flex';
+}
 
-        // Función para limpiar el formulario
-        function limpiarFormulario() {
-            document.getElementById('productEntryForm').reset();
-            document.getElementById('porcentaje_itbis').value = '18.00';
-            document.getElementById('porcentaje_minorista').value = '30';
-            document.getElementById('porcentaje_mayor').value = '20';
-            document.getElementById('cantidad').value = '1';
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('entryDate').value = today;
-            manualEditEnabled = false;
-            document.getElementById('editToggle').checked = false;
-            toggleManualEdit();
-            calcularPreciosAutomaticos();
-            toastr.success('Formulario listo para un nuevo producto');
-        }
+function closeNewProductModal() {
+    document.getElementById('newProductModal').style.display = 'none';
+    document.getElementById('newProductForm').reset();
+}
 
-        // Función para calcular precios automáticamente
-        function calcularPreciosAutomaticos() {
-            if (manualEditEnabled) return; // No calcular si la edición manual está habilitada
+// Función para buscar productos
+function buscarProductos(query) {
+    if (query.length < 2) {
+        document.getElementById('searchResults').style.display = 'none';
+        return;
+    }
 
-            // Leer valores de los campos
-            const costoBase = parseFloat(document.getElementById('costo_base').value) || 0;
-            const porcentajeMinorista = parseFloat(document.getElementById('porcentaje_minorista').value) || 30;
-            const porcentajeMayor = parseFloat(document.getElementById('porcentaje_mayor').value) || 20;
-            const itbisRate = parseFloat(document.getElementById('porcentaje_itbis').value) || 18;
+    fetch(`/buscar-productos-similares/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            const resultsContainer = document.getElementById('searchResults');
+            resultsContainer.innerHTML = '';
 
-            // Validar que el costo base sea mayor que 0
-            if (costoBase <= 0) {
-                document.getElementById('precio').value = '';
-                document.getElementById('precio_por_mayor').value = '';
-                document.getElementById('precio_con_itbis').value = '';
-                document.getElementById('precio_por_mayor_con_itbis').value = '';
-
-                document.getElementById('precioCalculado').textContent = 'RD$ 0.00';
-                document.getElementById('precioMayorCalculado').textContent = 'RD$ 0.00';
-                document.getElementById('precioItbisCalculado').textContent = 'RD$ 0.00';
-                document.getElementById('precioMayorItbisCalculado').textContent = 'RD$ 0.00';
-                return;
-            }
-
-            // Calcular precios sin ITBIS
-            const precioMinorista = costoBase * (1 + (porcentajeMinorista / 100));
-            const precioMayor = costoBase * (1 + (porcentajeMayor / 100));
-
-            // Calcular precios con ITBIS
-            const precioMinoristaItbis = precioMinorista * (1 + (itbisRate / 100));
-            const precioMayorItbis = precioMayor * (1 + (itbisRate / 100));
-
-            // Actualizar campos del formulario
-            document.getElementById('precio').value = precioMinorista.toFixed(2);
-            document.getElementById('precio_por_mayor').value = precioMayor.toFixed(2);
-            document.getElementById('precio_con_itbis').value = precioMinoristaItbis.toFixed(2);
-            document.getElementById('precio_por_mayor_con_itbis').value = precioMayorItbis.toFixed(2);
-
-            // Actualizar display de resultados
-            document.getElementById('precioCalculado').textContent = `RD$ ${precioMinorista.toFixed(2)}`;
-            document.getElementById('precioMayorCalculado').textContent = `RD$ ${precioMayor.toFixed(2)}`;
-            document.getElementById('precioItbisCalculado').textContent = `RD$ ${precioMinoristaItbis.toFixed(2)}`;
-            document.getElementById('precioMayorItbisCalculado').textContent = `RD$ ${precioMayorItbis.toFixed(2)}`;
-        }
-
-        // Inicializar event listeners para cálculos automáticos
-        document.addEventListener('DOMContentLoaded', function() {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('entryDate').value = today;
-
-            // Asignar event listeners para cálculos automáticos
-            document.getElementById('costo_base').addEventListener('input', calcularPreciosAutomaticos);
-            document.getElementById('porcentaje_minorista').addEventListener('input', calcularPreciosAutomaticos);
-            document.getElementById('porcentaje_mayor').addEventListener('input', calcularPreciosAutomaticos);
-            document.getElementById('porcentaje_itbis').addEventListener('input', calcularPreciosAutomaticos);
-
-            // Inicializar cálculo
-            calcularPreciosAutomaticos();
-        });
-
-        // Validación del formulario
-        function validateForm() {
-            let isValid = true;
-            const requiredFields = [
-                {id: 'invoiceNumber', name: 'numero_factura', errorId: 'numero_facturaError'},
-                {id: 'entryDate', name: 'fecha_entrada', errorId: 'fecha_entradaError'},
-                {id: 'supplier', name: 'proveedor', errorId: 'proveedorError'},
-                {id: 'descripcion', name: 'descripcion', errorId: 'descripcionError'},
-                {id: 'brand', name: 'marca', errorId: 'marcaError'},
-                {id: 'color', name: 'color', errorId: 'colorError'},
-                {id: 'cantidad', name: 'cantidad', errorId: 'cantidadError'},
-                {id: 'costo_base', name: 'costo_base', errorId: 'costoBaseError'},
-                {id: 'precio', name: 'precio', errorId: 'precioError'},
-            ];
-
-            document.querySelectorAll('.error-message').forEach(el => {
-                el.style.display = 'none';
-                el.textContent = '';
-            });
-
-            requiredFields.forEach(field => {
-                const fieldElement = document.getElementById(field.id);
-                const errorElement = document.getElementById(field.errorId);
-                if (!fieldElement || !fieldElement.value.trim()) {
-                    if (errorElement) {
-                        errorElement.textContent = 'Este campo es requerido';
-                        errorElement.style.display = 'block';
-                    }
-                    if (fieldElement) {
-                        fieldElement.style.borderColor = '#dc3545';
-                    }
-                    isValid = false;
-                } else {
-                    if (fieldElement) {
-                        fieldElement.style.borderColor = '#e1e8ed';
-                    }
-                }
-            });
-
-            const costoBaseValue = parseFloat(document.getElementById('costo_base').value) || 0;
-            if (costoBaseValue <= 0) {
-                const errorElement = document.getElementById('costoBaseError');
-                if (errorElement) {
-                    errorElement.textContent = 'El costo base debe ser mayor a 0';
-                    errorElement.style.display = 'block';
-                }
-                isValid = false;
-            }
-
-            const precioValue = parseFloat(document.getElementById('precio').value) || 0;
-            if (precioValue <= 0) {
-                const errorElement = document.getElementById('precioError');
-                if (errorElement) {
-                    errorElement.textContent = 'El precio debe ser mayor a 0';
-                    errorElement.style.display = 'block';
-                }
-                isValid = false;
-            }
-
-            return isValid;
-        }
-
-        // Manejo del envío del formulario
-        document.getElementById('productEntryForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const isValid = validateForm();
-            
-            if (isValid) {
-                const submitBtn = document.getElementById('submitBtn');
-                const originalText = submitBtn.innerHTML;
-                
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<div class="loading-spinner"></div> Procesando...';
-
-                // Crear FormData
-                const formData = new FormData(this);
-                
-                // Enviar datos al servidor usando fetch
-                fetch(this.action, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                    },
-                    body: formData
-                })
-                .then(response => {
-                    console.log('Respuesta del servidor:', response);
-                    if (!response.ok) {
-                        throw new Error(`Error HTTP: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Datos recibidos:', data);
-                    if (data.success) {
-                        toastr.success(data.message || 'Producto registrado exitosamente');
-                        if (data.porcentajes_calculados) {
-                            console.log('Porcentajes calculados en backend:', data.porcentajes_calculados);
-                        }
-                        limpiarFormulario();
-                    } else {
-                        toastr.error(data.error || 'Error al registrar el producto');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error completo:', error);
-                    toastr.error(`Error en la conexión: ${error.message}`);
-                })
-                .finally(() => {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalText;
+            if (data.success && data.productos && data.productos.length > 0) {
+                data.productos.forEach(producto => {
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'search-result-item';
+                    
+                    // Determinar color de fondo según el tipo
+                    const tipoColor = producto.es_producto_base ? '#e3f2fd' : '#f3e5f5';
+                    resultItem.style.backgroundColor = tipoColor;
+                    
+                    resultItem.innerHTML = `
+                        <div class="search-result-name">
+                            <strong>${producto.descripcion}</strong>
+                            <span style="float: right; font-size: 0.8rem; background: ${producto.es_producto_base ? '#2196f3' : '#9c27b0'}; color: white; padding: 2px 6px; border-radius: 10px;">
+                                ${producto.tipo}
+                            </span>
+                        </div>
+                        <div class="search-result-details">
+                            <div>Código: ${producto.codigo_producto || 'N/A'}</div>
+                            <div>Marca: ${producto.marca_display}</div>
+                            <div>Compatibilidad: ${producto.compatibilidad || 'N/A'}</div>
+                            <div>Color: ${producto.color || 'N/A'}</div>
+                            ${!producto.es_producto_base ? `
+                            <div style="margin-top: 5px;">
+                                <small><strong>Costos:</strong> 
+                                C: RD$${producto.costo ? producto.costo.toFixed(2) : '0.00'} | 
+                                P: RD$${producto.precio ? producto.precio.toFixed(2) : '0.00'} | 
+                                PM: RD$${producto.precio_por_mayor ? producto.precio_por_mayor.toFixed(2) : '0.00'}
+                                </small>
+                            </div>
+                            ` : ''}
+                            ${producto.fecha_actualizacion ? `<div><small>Actualizado: ${producto.fecha_actualizacion}</small></div>` : ''}
+                        </div>
+                    `;
+                    resultItem.addEventListener('click', () => {
+                        seleccionarProducto(producto);
+                    });
+                    resultsContainer.appendChild(resultItem);
                 });
+                resultsContainer.style.display = 'block';
+            } else {
+                const noResults = document.createElement('div');
+                noResults.className = 'no-results';
+                noResults.textContent = 'No se encontraron productos. Use el botón "Agregar Nuevo Producto Base" para crear uno.';
+                resultsContainer.appendChild(noResults);
+                resultsContainer.style.display = 'block';
             }
+        })
+        .catch(error => {
+            console.error('Error en la búsqueda:', error);
         });
+}
 
-        // Funciones para el sidebar
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('active');
-            document.querySelector('.sidebar-overlay').classList.toggle('active');
-            if (window.innerWidth <= 768) {
-                document.body.classList.toggle('sidebar-open');
+// Función para seleccionar producto de la búsqueda
+function seleccionarProducto(producto) {
+    console.log('Producto seleccionado:', producto);
+    
+    // Guardar referencia al producto seleccionado
+    productoExistenteSeleccionado = producto;
+    esActualizacion = true;
+    
+    // Actualizar el texto del botón de envío
+    document.getElementById('submitBtnText').textContent = 'Actualizar Producto Existente';
+    
+    // Llenar campos del formulario con TODOS los datos disponibles
+    document.getElementById('descripcion').value = producto.descripcion;
+    document.getElementById('brand').value = producto.marca;
+    document.getElementById('compatibilidad').value = producto.compatibilidad || '';
+    document.getElementById('color').value = producto.color || 'negro';
+    document.getElementById('codigo_producto').value = producto.codigo_producto || '';
+    document.getElementById('producto_existente_id').value = producto.id;
+    
+    // Llenar costos y precios si existen
+    if (producto.costo && producto.costo > 0) {
+        document.getElementById('costo_base').value = producto.costo;
+    }
+    if (producto.precio && producto.precio > 0) {
+        document.getElementById('precio').value = producto.precio;
+    }
+    if (producto.precio_por_mayor && producto.precio_por_mayor > 0) {
+        document.getElementById('precio_por_mayor').value = producto.precio_por_mayor;
+    }
+    if (producto.porcentaje_itbis && producto.porcentaje_itbis > 0) {
+        document.getElementById('porcentaje_itbis').value = producto.porcentaje_itbis;
+    }
+    
+    // Calcular porcentajes aproximados basados en costos y precios
+    if (producto.costo > 0 && producto.precio > 0) {
+        const porcentajeMinorista = ((producto.precio - producto.costo) / producto.costo * 100).toFixed(2);
+        document.getElementById('porcentaje_minorista').value = porcentajeMinorista;
+    }
+    
+    if (producto.costo > 0 && producto.precio_por_mayor > 0) {
+        const porcentajeMayor = ((producto.precio_por_mayor - producto.costo) / producto.costo * 100).toFixed(2);
+        document.getElementById('porcentaje_mayor').value = porcentajeMayor;
+    }
+    
+    // Recalcular precios automáticamente
+    calcularPreciosAutomaticos();
+    
+    // Limpiar y ocultar resultados
+    document.getElementById('searchResults').style.display = 'none';
+    document.getElementById('searchResults').innerHTML = '';
+
+    toastr.success('Producto existente seleccionado. Puede actualizar los datos y guardar los cambios.');
+}
+
+// Manejar el formulario de nuevo producto base
+document.getElementById('newProductForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const productName = document.getElementById('newProductName').value.trim();
+    const productBrand = document.getElementById('newProductBrand').value;
+
+    if (!productName || !productBrand) {
+        toastr.error('Por favor, complete todos los campos requeridos');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('newProductName', productName);
+    formData.append('newProductBrand', productBrand);
+
+    fetch('/agregar-nuevo-producto/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            toastr.success(data.mensaje);
+            closeNewProductModal();
+            
+            // CORRECCIÓN: Establecer que estamos actualizando el producto base recién creado
+            esActualizacion = true;
+            document.getElementById('submitBtnText').textContent = 'Actualizar Producto Base';
+            document.getElementById('producto_existente_id').value = data.plantilla_id;
+            
+            // Actualizar el campo de búsqueda con el nuevo producto base
+            document.getElementById('descripcion').value = data.nombre_producto;
+            document.getElementById('brand').value = data.marca_valor;
+            
+            // Limpiar campos de costos para que el usuario los complete
+            document.getElementById('costo_base').value = '';
+            document.getElementById('precio').value = '';
+            document.getElementById('precio_por_mayor').value = '';
+            
+            // Recalcular precios (que se resetearán a 0)
+            calcularPreciosAutomaticos();
+            
+            toastr.info('Producto base creado. Complete los datos de costos y cantidad para actualizar el producto base.');
+        } else {
+            toastr.error(data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        toastr.error('Error al agregar el producto base');
+    });
+});
+
+// Función para habilitar/deshabilitar edición manual
+function toggleManualEdit() {
+    manualEditEnabled = !manualEditEnabled;
+    const precioInput = document.getElementById('precio');
+    const precioMayorInput = document.getElementById('precio_por_mayor');
+    
+    if (manualEditEnabled) {
+        precioInput.readOnly = false;
+        precioInput.classList.remove('calculated-field');
+        precioInput.classList.add('readonly-field');
+        
+        precioMayorInput.readOnly = false;
+        precioMayorInput.classList.remove('calculated-field');
+        precioMayorInput.classList.add('readonly-field');
+        
+        toastr.info('Edición manual habilitada. Puedes modificar los precios directamente.');
+    } else {
+        precioInput.readOnly = true;
+        precioInput.classList.remove('readonly-field');
+        precioInput.classList.add('calculated-field');
+        
+        precioMayorInput.readOnly = true;
+        precioMayorInput.classList.remove('readonly-field');
+        precioMayorInput.classList.add('calculated-field');
+        
+        // Recalcular precios automáticamente
+        calcularPreciosAutomaticos();
+        toastr.info('Edición manual deshabilitada. Precios calculados automáticamente.');
+    }
+}
+
+// Función para limpiar el formulario
+function limpiarFormulario() {
+    document.getElementById('productEntryForm').reset();
+    document.getElementById('porcentaje_itbis').value = '18.00';
+    document.getElementById('porcentaje_minorista').value = '30';
+    document.getElementById('porcentaje_mayor').value = '20';
+    document.getElementById('cantidad').value = '1';
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('hiddenFechaEntrada').value = today;
+    // Generar nuevo número de factura
+    const timestamp = Date.now();
+    document.getElementById('hiddenNumeroFactura').value = `SIN-FACTURA-${timestamp}`;
+    manualEditEnabled = false;
+    document.getElementById('editToggle').checked = false;
+    productoExistenteSeleccionado = null;
+    esActualizacion = false;
+    document.getElementById('submitBtnText').textContent = 'Registrar Entrada de Inventario';
+    document.getElementById('producto_existente_id').value = '';
+    document.getElementById('codigo_producto').value = '';
+    toggleManualEdit();
+    calcularPreciosAutomaticos();
+    toastr.success('Formulario listo para una nueva entrada de inventario');
+}
+
+// Función para calcular precios automáticamente
+function calcularPreciosAutomaticos() {
+    if (manualEditEnabled) return; // No calcular si la edición manual está habilitada
+
+    // Leer valores de los campos
+    const costoBase = parseFloat(document.getElementById('costo_base').value) || 0;
+    const porcentajeMinorista = parseFloat(document.getElementById('porcentaje_minorista').value) || 30;
+    const porcentajeMayor = parseFloat(document.getElementById('porcentaje_mayor').value) || 20;
+    const itbisRate = parseFloat(document.getElementById('porcentaje_itbis').value) || 18;
+
+    // Validar que el costo base sea mayor que 0
+    if (costoBase <= 0) {
+        document.getElementById('precio').value = '';
+        document.getElementById('precio_por_mayor').value = '';
+        document.getElementById('precio_con_itbis').value = '';
+        document.getElementById('precio_por_mayor_con_itbis').value = '';
+
+        document.getElementById('precioCalculado').textContent = 'RD$ 0.00';
+        document.getElementById('precioMayorCalculado').textContent = 'RD$ 0.00';
+        document.getElementById('precioItbisCalculado').textContent = 'RD$ 0.00';
+        document.getElementById('precioMayorItbisCalculado').textContent = 'RD$ 0.00';
+        return;
+    }
+
+    // Calcular precios sin ITBIS
+    const precioMinorista = costoBase * (1 + (porcentajeMinorista / 100));
+    const precioMayor = costoBase * (1 + (porcentajeMayor / 100));
+
+    // Calcular precios con ITBIS
+    const precioMinoristaItbis = precioMinorista * (1 + (itbisRate / 100));
+    const precioMayorItbis = precioMayor * (1 + (itbisRate / 100));
+
+    // Actualizar campos del formulario
+    document.getElementById('precio').value = precioMinorista.toFixed(2);
+    document.getElementById('precio_por_mayor').value = precioMayor.toFixed(2);
+    document.getElementById('precio_con_itbis').value = precioMinoristaItbis.toFixed(2);
+    document.getElementById('precio_por_mayor_con_itbis').value = precioMayorItbis.toFixed(2);
+
+    // Actualizar display de resultados
+    document.getElementById('precioCalculado').textContent = `RD$ ${precioMinorista.toFixed(2)}`;
+    document.getElementById('precioMayorCalculado').textContent = `RD$ ${precioMayor.toFixed(2)}`;
+    document.getElementById('precioItbisCalculado').textContent = `RD$ ${precioMinoristaItbis.toFixed(2)}`;
+    document.getElementById('precioMayorItbisCalculado').textContent = `RD$ ${precioMayorItbis.toFixed(2)}`;
+}
+
+// Inicializar event listeners para cálculos automáticos
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('hiddenFechaEntrada').value = today;
+    
+    // Generar número de factura único
+    const timestamp = Date.now();
+    document.getElementById('hiddenNumeroFactura').value = `SIN-FACTURA-${timestamp}`;
+
+    // Asignar event listeners para cálculos automáticos
+    document.getElementById('costo_base').addEventListener('input', calcularPreciosAutomaticos);
+    document.getElementById('porcentaje_minorista').addEventListener('input', calcularPreciosAutomaticos);
+    document.getElementById('porcentaje_mayor').addEventListener('input', calcularPreciosAutomaticos);
+    document.getElementById('porcentaje_itbis').addEventListener('input', calcularPreciosAutomaticos);
+
+    // Event listeners para la búsqueda
+    const descripcionInput = document.getElementById('descripcion');
+    let searchTimeout;
+
+    descripcionInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            buscarProductos(this.value);
+        }, 300);
+    });
+
+    // Cerrar resultados al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#descripcion') && !e.target.closest('#searchResults')) {
+            document.getElementById('searchResults').style.display = 'none';
+        }
+    });
+
+    // Cerrar modal con ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeNewProductModal();
+        }
+    });
+
+    // Inicializar cálculo
+    calcularPreciosAutomaticos();
+});
+
+// Validación del formulario
+function validateForm() {
+    let isValid = true;
+    const requiredFields = [
+        {id: 'descripcion', name: 'descripcion', errorId: 'descripcionError'},
+        {id: 'brand', name: 'marca', errorId: 'marcaError'},
+        {id: 'color', name: 'color', errorId: 'colorError'},
+        {id: 'cantidad', name: 'cantidad', errorId: 'cantidadError'},
+        {id: 'costo_base', name: 'costo_base', errorId: 'costoBaseError'},
+        {id: 'precio', name: 'precio', errorId: 'precioError'},
+    ];
+
+    document.querySelectorAll('.error-message').forEach(el => {
+        el.style.display = 'none';
+        el.textContent = '';
+    });
+
+    requiredFields.forEach(field => {
+        const fieldElement = document.getElementById(field.id);
+        const errorElement = document.getElementById(field.errorId);
+        if (!fieldElement || !fieldElement.value.trim()) {
+            if (errorElement) {
+                errorElement.textContent = 'Este campo es requerido';
+                errorElement.style.display = 'block';
+            }
+            if (fieldElement) {
+                fieldElement.style.borderColor = '#dc3545';
+            }
+            isValid = false;
+        } else {
+            if (fieldElement) {
+                fieldElement.style.borderColor = '#e1e8ed';
             }
         }
+    });
 
-        function closeSidebar() {
-            document.getElementById('sidebar').classList.remove('active');
-            document.querySelector('.sidebar-overlay').classList.remove('active');
-            document.body.classList.remove('sidebar-open');
+    const costoBaseValue = parseFloat(document.getElementById('costo_base').value) || 0;
+    if (costoBaseValue <= 0) {
+        const errorElement = document.getElementById('costoBaseError');
+        if (errorElement) {
+            errorElement.textContent = 'El costo base debe ser mayor a 0';
+            errorElement.style.display = 'block';
+        }
+        isValid = false;
+    }
+
+    const precioValue = parseFloat(document.getElementById('precio').value) || 0;
+    if (precioValue <= 0) {
+        const errorElement = document.getElementById('precioError');
+        if (errorElement) {
+            errorElement.textContent = 'El precio debe ser mayor a 0';
+            errorElement.style.display = 'block';
+        }
+        isValid = false;
+    }
+
+    return isValid;
+}
+
+// Manejo del envío del formulario
+document.getElementById('productEntryForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const isValid = validateForm();
+    
+    if (isValid) {
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.innerHTML;
+        
+        submitBtn.disabled = true;
+        
+        if (esActualizacion) {
+            submitBtn.innerHTML = '<div class="loading-spinner"></div> Actualizando producto...';
+        } else {
+            submitBtn.innerHTML = '<div class="loading-spinner"></div> Registrando producto...';
         }
 
-        // Cerrar sidebar al hacer clic en un enlace (móvil)
-        document.querySelectorAll('.menu-item').forEach(item => {
-            item.addEventListener('click', () => {
-                if (window.innerWidth <= 768) {
-                    closeSidebar();
+        // Crear FormData
+        const formData = new FormData(this);
+        
+        // Enviar datos al servidor usando fetch
+        fetch(this.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: formData
+        })
+        .then(response => {
+            console.log('Respuesta del servidor:', response);
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Datos recibidos:', data);
+            if (data.success) {
+                if (esActualizacion) {
+                    toastr.success(data.message || 'Producto actualizado exitosamente');
+                } else {
+                    toastr.success(data.message || 'Producto registrado exitosamente');
                 }
-            });
-        });
-
-        // Cerrar sidebar al redimensionar ventana
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 768) {
-                closeSidebar();
+                if (data.porcentajes_calculados) {
+                    console.log('Porcentajes calculados en backend:', data.porcentajes_calculados);
+                }
+                limpiarFormulario();
+            } else {
+                toastr.error(data.error || 'Error al procesar el producto');
             }
+        })
+        .catch(error => {
+            console.error('Error completo:', error);
+            toastr.error(`Error en la conexión: ${error.message}`);
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
         });
+    }
+});
+
+// Funciones para el sidebar
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('active');
+    document.querySelector('.sidebar-overlay').classList.toggle('active');
+    if (window.innerWidth <= 768) {
+        document.body.classList.toggle('sidebar-open');
+    }
+}
+
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('active');
+    document.querySelector('.sidebar-overlay').classList.remove('active');
+    document.body.classList.remove('sidebar-open');
+}
+
+// Cerrar sidebar al hacer clic en un enlace (móvil)
+document.querySelectorAll('.menu-item').forEach(item => {
+    item.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+            closeSidebar();
+        }
+    });
+});
+
+// Cerrar sidebar al redimensionar ventana
+window.addEventListener('resize', function() {
+    if (window.innerWidth > 768) {
+        closeSidebar();
+    }
+});
     </script>
 </body>
 </html>
