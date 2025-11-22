@@ -72,6 +72,8 @@ urlpatterns = [
      path('dashboard/usuarios/', views.get_usuarios, name='get_usuarios'),
     path('dashboard/cuadres/', views.get_cuadres, name='get_cuadres'),
     path('dashboard/cuadre/<int:cuadre_id>/pdf/', views.generar_pdf_cuadre, name='generar_pdf_cuadre'),
+     path('dashboard/cuadres/pdf-todos/', views.generar_pdf_todos_cuadres, name='pdf_todos_cuadres'),
+    path('dashboard/cuadre/<int:cuadre_id>/pdf/', views.generar_pdf_cuadre, name='pdf_cuadre_individual'),
 
     path('compras', views.compras, name='compras'),
       path('buscar-productos-cuentas-pagar/', views.buscar_productos_cuentas_pagar, name='buscar_productos_cuentas_pagar'),

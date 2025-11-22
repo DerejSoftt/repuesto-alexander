@@ -984,18 +984,23 @@ def get_usuarios(request):
     usuarios = User.objects.all().values('id', 'username')
     return JsonResponse({'usuarios': list(usuarios)})
 
+
+
 @login_required
 def get_cuadres(request):
-    """Obtener cuadres de caja con filtros"""
+    """Obtener cuadres de caja con filtros por rango de fechas"""
     try:
         cuadres = CierreCaja.objects.select_related('caja__usuario').all().order_by('-fecha_cierre')
         
         # Aplicar filtros
-        fecha = request.GET.get('fecha')
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
         usuario_id = request.GET.get('usuario')
         
-        if fecha:
-            cuadres = cuadres.filter(fecha_cierre__date=fecha)
+        if fecha_desde:
+            cuadres = cuadres.filter(fecha_cierre__date__gte=fecha_desde)
+        if fecha_hasta:
+            cuadres = cuadres.filter(fecha_cierre__date__lte=fecha_hasta)
         if usuario_id:
             cuadres = cuadres.filter(caja__usuario_id=usuario_id)
         
@@ -1020,6 +1025,125 @@ def get_cuadres(request):
     except Exception as e:
         print(f"Error en get_cuadres: {e}")
         return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def generar_pdf_todos_cuadres(request):
+    """Generar PDF con todos los cuadres del rango seleccionado"""
+    try:
+        cuadres = CierreCaja.objects.select_related('caja__usuario').all().order_by('fecha_cierre')
+        
+        # Aplicar filtros
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        usuario_id = request.GET.get('usuario')
+        
+        if fecha_desde:
+            cuadres = cuadres.filter(fecha_cierre__date__gte=fecha_desde)
+        if fecha_hasta:
+            cuadres = cuadres.filter(fecha_cierre__date__lte=fecha_hasta)
+        if usuario_id:
+            cuadres = cuadres.filter(caja__usuario_id=usuario_id)
+        
+        # Crear el PDF
+        from django.http import HttpResponse
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from io import BytesIO
+        
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+        
+        # Encabezado
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(1 * inch, height - 1 * inch, "Reporte de Cuadres de Caja")
+        
+        # Información del rango de fechas
+        p.setFont("Helvetica", 10)
+        fecha_reporte = f"Fecha del reporte: {timezone.now().strftime('%d/%m/%Y %H:%M')}"
+        p.drawString(1 * inch, height - 1.25 * inch, fecha_reporte)
+        
+        if fecha_desde and fecha_hasta:
+            rango_fechas = f"Rango: {fecha_desde} al {fecha_hasta}"
+            p.drawString(1 * inch, height - 1.5 * inch, rango_fechas)
+        
+        # Tabla de cuadres
+        y_position = height - 2 * inch
+        p.setFont("Helvetica-Bold", 10)
+        
+        # Encabezados de tabla
+        headers = ['Fecha', 'Usuario', 'Monto Inicial', 'Monto Final', 'Efectivo Real', 'Tarjeta Real', 'Total Esperado', 'Diferencia']
+        col_widths = [1.2, 1, 0.8, 0.8, 0.8, 0.8, 0.9, 0.8]
+        x_positions = [1 * inch]
+        
+        for i in range(1, len(headers)):
+            x_positions.append(x_positions[i-1] + col_widths[i-1] * inch)
+        
+        for i, header in enumerate(headers):
+            p.drawString(x_positions[i], y_position, header)
+        
+        # Línea separadora
+        p.line(1 * inch, y_position - 0.1 * inch, sum(col_widths) * inch, y_position - 0.1 * inch)
+        
+        # Datos de cuadres
+        p.setFont("Helvetica", 8)
+        y_position -= 0.25 * inch
+        
+        total_cuadres = 0
+        total_diferencia = 0
+        
+        for cuadre in cuadres:
+            if y_position < 1 * inch:
+                p.showPage()
+                y_position = height - 1 * inch
+                # Redibujar encabezados en nueva página
+                p.setFont("Helvetica-Bold", 10)
+                for i, header in enumerate(headers):
+                    p.drawString(x_positions[i], y_position, header)
+                p.line(1 * inch, y_position - 0.1 * inch, sum(col_widths) * inch, y_position - 0.1 * inch)
+                p.setFont("Helvetica", 8)
+                y_position -= 0.25 * inch
+            
+            # Datos del cuadre
+            p.drawString(x_positions[0], y_position, cuadre.fecha_cierre.strftime('%d/%m/%Y'))
+            p.drawString(x_positions[1], y_position, cuadre.caja.usuario.username[:10])
+            p.drawString(x_positions[2], y_position, f"${cuadre.caja.monto_inicial:,.2f}")
+            p.drawString(x_positions[3], y_position, f"${cuadre.caja.monto_final or 0:,.2f}")
+            p.drawString(x_positions[4], y_position, f"${cuadre.monto_efectivo_real:,.2f}")
+            p.drawString(x_positions[5], y_position, f"${cuadre.monto_tarjeta_real:,.2f}")
+            p.drawString(x_positions[6], y_position, f"${cuadre.total_esperado:,.2f}")
+            
+            # Diferencia (rojo si es negativa, verde si es positiva)
+            if cuadre.diferencia >= 0:
+                p.drawString(x_positions[7], y_position, f"${cuadre.diferencia:,.2f}")
+            else:
+                p.drawString(x_positions[7], y_position, f"-${abs(cuadre.diferencia):,.2f}")
+            
+            total_cuadres += 1
+            total_diferencia += cuadre.diferencia
+            y_position -= 0.2 * inch
+        
+        # Totales
+        y_position -= 0.3 * inch
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(1 * inch, y_position, f"Total de cuadres: {total_cuadres}")
+        p.drawString(4 * inch, y_position, f"Diferencia total: ${total_diferencia:,.2f}")
+        
+        p.showPage()
+        p.save()
+        
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="cuadres_completos.pdf"'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error en generar_pdf_todos_cuadres: {e}")
+        return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
+
+
 
 @login_required
 def generar_pdf_cuadre(request, cuadre_id):
@@ -1971,7 +2095,9 @@ def procesar_venta(request):
         # Datos de la venta
         payment_type = data.get('payment_type', 'contado')
         payment_method = data.get('payment_method', 'efectivo')
-        subtotal_con_itbis = Decimal(data.get('subtotal', 0))
+        subtotal_sin_itbis = Decimal(data.get('subtotal', 0))  # Subtotal SIN ITBIS
+        itbis_monto = Decimal(data.get('itbis_monto', 0))  # Monto del ITBIS
+        itbis_porcentaje = Decimal(data.get('itbis_porcentaje', 18.00))  # Porcentaje del ITBIS
         discount_percentage = Decimal(data.get('discount_percentage', 0))
         discount_amount = Decimal(data.get('discount_amount', 0))
         total = Decimal(data.get('total', 0))
@@ -1979,56 +2105,77 @@ def procesar_venta(request):
         cash_received = Decimal(data.get('cash_received', 0))
         change_amount = Decimal(data.get('change_amount', 0))
 
-        # Validaciones
+        # Validaciones básicas
         if payment_type not in ['contado', 'credito']:
             return JsonResponse({'success': False, 'message': 'Tipo de pago inválido'})
         if payment_method not in ['efectivo', 'tarjeta', 'transferencia']:
             return JsonResponse({'success': False, 'message': 'Método de pago inválido'})
-        if subtotal_con_itbis <= 0:
-            return JsonResponse({'success': False, 'message': 'El subtotal debe ser mayor a 0'})
+        if subtotal_sin_itbis < 0:
+            return JsonResponse({'success': False, 'message': 'El subtotal debe ser mayor o igual a 0'})
         if total <= 0:
             return JsonResponse({'success': False, 'message': 'El total debe ser mayor a 0'})
         if discount_percentage < 0 or discount_percentage > 100:
             return JsonResponse({'success': False, 'message': 'El porcentaje de descuento debe estar entre 0 y 100'})
 
-        # Calcular ITBIS y subtotal SIN ITBIS
-        itbis_porcentaje = Decimal('18.00')
-        subtotal_sin_itbis = subtotal_con_itbis / (1 + (itbis_porcentaje / 100))
-        itbis_monto = subtotal_con_itbis - subtotal_sin_itbis
+        # Calcular subtotal con ITBIS para validaciones
+        subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
+
+        # Validar que el ITBIS sea consistente
+        itbis_calculado = subtotal_sin_itbis * (itbis_porcentaje / 100)
+        if abs(itbis_monto - itbis_calculado) > Decimal('0.01'):
+            print(f"Advertencia: ITBIS inconsistente. Recibido: {itbis_monto}, Calculado: {itbis_calculado}")
+            # Usar el calculado para consistencia
+            itbis_monto = itbis_calculado
+            subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
 
         # Validar descuento
         discount_amount_calculado = (subtotal_con_itbis * discount_percentage) / Decimal('100.00')
         total_calculado = subtotal_con_itbis - discount_amount_calculado
+        
         if abs(discount_amount - discount_amount_calculado) > Decimal('0.01'):
+            print(f"Advertencia: Descuento inconsistente. Recibido: {discount_amount}, Calculado: {discount_amount_calculado}")
             discount_amount = discount_amount_calculado
+        
         if abs(total - total_calculado) > Decimal('0.01'):
+            print(f"Advertencia: Total inconsistente. Recibido: {total}, Calculado: {total_calculado}")
             total = total_calculado
+
+        # Si el total cambió, actualizar total_a_pagar
+        if total_a_pagar != total:
+            total_a_pagar = total
 
         # Procesar cliente
         client_id = data.get('client_id')
         client_name = data.get('client_name', '').strip()
         client_document = data.get('client_document', '').strip()
         cliente = None
+        
         if payment_type == 'credito':
             if not client_id:
                 return JsonResponse({'success': False, 'message': 'Debe seleccionar un cliente para ventas a crédito'})
             try:
                 from .models import Cliente, CuentaPorCobrar
                 cliente = Cliente.objects.get(id=client_id, status=True)
+                
+                # Validar límite de crédito
                 cuentas_pendientes = CuentaPorCobrar.objects.filter(
                     cliente=cliente,
                     anulada=False,
                     eliminada=False
                 ).exclude(estado='pagada')
+                
+                # Usar la propiedad saldo_pendiente (calculada automáticamente)
                 total_deuda = sum(cuenta.saldo_pendiente for cuenta in cuentas_pendientes)
                 total_con_nueva_venta = total_deuda + total
+                
                 if total_con_nueva_venta > cliente.credit_limit:
                     return JsonResponse({
                         'success': False,
-                        'message': f'El cliente {cliente.full_name} ha excedido su límite de crédito.'
+                        'message': f'El cliente {cliente.full_name} ha excedido su límite de crédito. Límite: RD${cliente.credit_limit:.2f}, Deuda actual: RD${total_deuda:.2f}, Nueva deuda: RD${total_con_nueva_venta:.2f}'
                     })
+                    
             except Cliente.DoesNotExist:
-                return JsonResponse({'success': False, 'message': 'Cliente no válido'})
+                return JsonResponse({'success': False, 'message': 'Cliente no válido o no encontrado'})
         else:
             if not client_name:
                 return JsonResponse({'success': False, 'message': 'Debe ingresar el nombre del cliente'})
@@ -2037,29 +2184,53 @@ def procesar_venta(request):
         sale_items_json = data.get('sale_items')
         if not sale_items_json:
             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
+        
         try:
             sale_items = json.loads(sale_items_json)
-        except json.JSONDecodeError:
-            return JsonResponse({'success': False, 'message': 'Formato de productos no válido'})
+        except json.JSONDecodeError as e:
+            return JsonResponse({'success': False, 'message': f'Formato de productos no válido: {str(e)}'})
+        
         if not sale_items:
             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
 
-        # Verificar stock
+        # Verificar stock y validar productos
         from .models import EntradaProducto
+        productos_validados = []
+        
         for item in sale_items:
             try:
-                producto = EntradaProducto.objects.get(id=item['id'], activo=True)
-                cantidad_solicitada = int(item['quantity'])
+                producto_id = item.get('id')
+                producto_nombre = item.get('name', 'Producto Desconocido')
+                cantidad_solicitada = int(item.get('quantity', 0))
+                precio_unitario = Decimal(item.get('price', 0))
+                
+                if not producto_id:
+                    return JsonResponse({'success': False, 'message': f'Producto sin ID: {producto_nombre}'})
+                
+                if cantidad_solicitada <= 0:
+                    return JsonResponse({'success': False, 'message': f'Cantidad inválida para {producto_nombre}'})
+                
+                producto = EntradaProducto.objects.get(id=producto_id, activo=True)
+                
                 if producto.cantidad < cantidad_solicitada:
                     nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
                     return JsonResponse({
                         'success': False,
-                        'message': f'Stock insuficiente para {nombre_producto}. Disponible: {producto.cantidad}'
+                        'message': f'Stock insuficiente para {nombre_producto}. Disponible: {producto.cantidad}, Solicitado: {cantidad_solicitada}'
                     })
+                
+                productos_validados.append({
+                    'producto': producto,
+                    'cantidad': cantidad_solicitada,
+                    'precio_unitario': precio_unitario,
+                    'subtotal': Decimal(item.get('subtotal', 0)),
+                    'nombre': producto_nombre
+                })
+                
             except EntradaProducto.DoesNotExist:
                 return JsonResponse({'success': False, 'message': f'Producto no encontrado: {item.get("name", "Desconocido")}'})
-            except (ValueError, KeyError):
-                return JsonResponse({'success': False, 'message': f'Cantidad inválida para producto: {item.get("name", "Desconocido")}'})
+            except (ValueError, KeyError) as e:
+                return JsonResponse({'success': False, 'message': f'Datos inválidos para producto: {item.get("name", "Desconocido")}. Error: {str(e)}'})
 
         # Crear la venta
         from .models import Venta, DetalleVenta
@@ -2070,7 +2241,7 @@ def procesar_venta(request):
             cliente_documento=client_document,
             tipo_venta=payment_type,
             metodo_pago=payment_method,
-            subtotal=subtotal_sin_itbis,
+            subtotal=subtotal_sin_itbis,  # Subtotal SIN ITBIS
             itbis_porcentaje=itbis_porcentaje,
             itbis_monto=itbis_monto,
             descuento_porcentaje=discount_percentage,
@@ -2085,60 +2256,65 @@ def procesar_venta(request):
         )
         venta.save()
 
-        # Log de la venta
+        # Log de la venta para debugging
         print(f"=== VENTA CREADA ===")
         print(f"Factura: {venta.numero_factura}")
-        print(f"Subtotal (sin ITBIS): RD${venta.subtotal}")
-        print(f"ITBIS ({venta.itbis_porcentaje}%): RD${venta.itbis_monto}")
-        print(f"Subtotal (con ITBIS): RD${venta.subtotal + venta.itbis_monto}")
+        print(f"Subtotal (sin ITBIS): RD${venta.subtotal:.2f}")
+        print(f"ITBIS ({venta.itbis_porcentaje}%): RD${venta.itbis_monto:.2f}")
+        print(f"Subtotal (con ITBIS): RD${venta.subtotal + venta.itbis_monto:.2f}")
         print(f"Descuento %: {venta.descuento_porcentaje}%")
-        print(f"Descuento monto: RD${venta.descuento_monto}")
-        print(f"Total: RD${venta.total}")
-        print(f"Total a pagar: RD${venta.total_a_pagar}")
+        print(f"Descuento monto: RD${venta.descuento_monto:.2f}")
+        print(f"Total: RD${venta.total:.2f}")
+        print(f"Total a pagar: RD${venta.total_a_pagar:.2f}")
+        print(f"Efectivo recibido: RD${venta.efectivo_recibido:.2f}")
+        print(f"Cambio: RD${venta.cambio:.2f}")
 
         # Procesar detalles de venta y descontar stock
         productos_para_cuenta = []
-        for item in sale_items:
-            try:
-                producto = EntradaProducto.objects.get(id=item['id'])
-                cantidad = int(item['quantity'])
-                precio_unitario = Decimal(item['price'])
-                subtotal_item = Decimal(item['subtotal'])
-                calculated_subtotal = precio_unitario * cantidad
-                if abs(calculated_subtotal - subtotal_item) > Decimal('0.01'):
-                    nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
-                    print(f"Advertencia: Subtotal inconsistente para {nombre_producto}")
-                    subtotal_item = calculated_subtotal
-                producto.cantidad -= cantidad
-                producto.save(update_fields=['cantidad'])
-                nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
-                print(f"Stock actualizado: {nombre_producto} -{cantidad} unidades")
-                detalle = DetalleVenta(
-                    venta=venta,
-                    producto=producto,
-                    cantidad=cantidad,
-                    precio_unitario=precio_unitario,
-                    subtotal=subtotal_item
-                )
-                detalle.save()
-                productos_para_cuenta.append(f"{nombre_producto} x{cantidad} - RD${precio_unitario:.2f}")
-            except EntradaProducto.DoesNotExist:
-                transaction.set_rollback(True)
-                return JsonResponse({'success': False, 'message': f'Producto no encontrado: ID {item.get("id", "Desconocido")}'})
-            except Exception as e:
-                transaction.set_rollback(True)
-                return JsonResponse({'success': False, 'message': f'Error al procesar producto: {str(e)}'})
+        for item_data in productos_validados:
+            producto = item_data['producto']
+            cantidad = item_data['cantidad']
+            precio_unitario = item_data['precio_unitario']
+            subtotal_item = item_data['subtotal']
+            
+            # Validar subtotal
+            calculated_subtotal = precio_unitario * cantidad
+            if abs(calculated_subtotal - subtotal_item) > Decimal('0.01'):
+                print(f"Advertencia: Subtotal inconsistente para {item_data['nombre']}. Usando: {calculated_subtotal}")
+                subtotal_item = calculated_subtotal
+            
+            # Actualizar stock
+            producto.cantidad -= cantidad
+            producto.save(update_fields=['cantidad'])
+            
+            nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
+            print(f"Stock actualizado: {nombre_producto} -{cantidad} unidades (Nuevo stock: {producto.cantidad})")
+            
+            # Crear detalle de venta
+            detalle = DetalleVenta(
+                venta=venta,
+                producto=producto,
+                cantidad=cantidad,
+                precio_unitario=precio_unitario,
+                subtotal=subtotal_item
+            )
+            detalle.save()
+            
+            productos_para_cuenta.append(f"{nombre_producto} x{cantidad} - RD${precio_unitario:.2f}")
 
-        # Crear cuenta por cobrar si es venta a crédito
+        # Crear cuenta por cobrar si es venta a crédito (CORREGIDO)
         if payment_type == 'credito' and cliente:
             try:
+                from .models import CuentaPorCobrar
                 fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
                 productos_str = "\n".join(productos_para_cuenta)
+                
+                # NO intentar asignar saldo_pendiente ya que es una propiedad de solo lectura
                 cuenta_por_cobrar = CuentaPorCobrar(
                     venta=venta,
                     cliente=cliente,
                     monto_total=total,
-                    monto_pagado=0,
+                    monto_pagado=0,  # Inicialmente no se ha pagado nada
                     fecha_vencimiento=fecha_vencimiento,
                     productos=productos_str,
                     estado='pendiente',
@@ -2148,7 +2324,11 @@ Productos:
 {productos_str}"""
                 )
                 cuenta_por_cobrar.save()
+                
                 print(f"Cuenta por cobrar creada: {cuenta_por_cobrar.id}")
+                print(f"Monto total: RD${total:.2f}")
+                print(f"Saldo pendiente (calculado automáticamente): RD${cuenta_por_cobrar.saldo_pendiente:.2f}")
+                
             except Exception as e:
                 transaction.set_rollback(True)
                 return JsonResponse({'success': False, 'message': f'Error al crear cuenta por cobrar: {str(e)}'})
@@ -2169,6 +2349,9 @@ Productos:
             - Documento: {client_document if client_document else cliente.identification_number if cliente else "N/A"}
             - Tipo de Venta: {payment_type.title()}
             - Método de Pago: {payment_method.title()}
+            - Subtotal: RD${subtotal_sin_itbis:.2f}
+            - ITBIS ({itbis_porcentaje}%): RD${itbis_monto:.2f}
+            - Descuento: {discount_percentage}% (RD${discount_amount:.2f})
             - Total: RD${total:.2f}
             - Fecha: {venta.fecha_venta.strftime("%d/%m/%Y %H:%M")}
             - Vendedor: {user.get_full_name() or user.username}
@@ -2184,9 +2367,7 @@ Productos:
                 subject=subject,
                 body=message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                to=['superbestiard16@gmail.com'],
-                # También puedes agregar cc o bcc si lo deseas
-                # cc=['otro_email@example.com'],
+                to=['superbestiard16@gmail.com'],  # Agrega aquí los destinatarios
             )
             
             # Adjuntar el PDF
@@ -2212,9 +2393,10 @@ Productos:
             'venta_id': venta.id,
             'numero_factura': venta.numero_factura,
             'detalles': {
-                'subtotal': float(venta.subtotal),
+                'subtotal_sin_itbis': float(venta.subtotal),
                 'itbis_porcentaje': float(venta.itbis_porcentaje),
                 'itbis_monto': float(venta.itbis_monto),
+                'subtotal_con_itbis': float(venta.subtotal + venta.itbis_monto),
                 'descuento_porcentaje': float(venta.descuento_porcentaje),
                 'descuento_monto': float(venta.descuento_monto),
                 'total': float(venta.total),
@@ -2228,8 +2410,13 @@ Productos:
     except Exception as e:
         transaction.set_rollback(True)
         import traceback
-        print(f"Error completo: {traceback.format_exc()}")
-        return JsonResponse({'success': False, 'message': f'Error al procesar la venta: {str(e)}'})
+        error_traceback = traceback.format_exc()
+        print(f"Error completo: {error_traceback}")
+        return JsonResponse({
+            'success': False, 
+            'message': f'Error al procesar la venta: {str(e)}',
+            'debug': error_traceback.split('\n')[-2] if 'debug' in request.GET else None
+        })
 
 def generar_pdf_venta(venta):
     """Genera un PDF con los detalles de la venta"""
@@ -2405,18 +2592,36 @@ def generar_pdf_venta(venta):
     return BytesIO(pdf)
 
 
-
 @login_required
 def comprobante_venta(request, venta_id):
     venta = get_object_or_404(Venta, id=venta_id)
     detalles = venta.detalles.all()
     total_articulos = sum(detalle.cantidad for detalle in detalles)
-    subtotal_con_itbis = venta.subtotal + venta.itbis_monto  # Subtotal con ITBIS
+    
+    # Calcular los totales correctamente
+    subtotal_sin_itbis = venta.subtotal  # Esto ya viene sin ITBIS de la venta
+    itbis_monto = venta.itbis_monto
+    subtotal_con_itbis = subtotal_sin_itbis + itbis_monto  # Subtotal con ITBIS
+    descuento_monto = venta.descuento_monto
+    total_final = venta.total  # Este es el total final después de descuentos
+    
+    print(f"=== DEBUG COMPROBANTE ===")
+    print(f"Subtotal sin ITBIS: {subtotal_sin_itbis}")
+    print(f"ITBIS monto: {itbis_monto}")
+    print(f"Subtotal con ITBIS: {subtotal_con_itbis}")
+    print(f"Descuento monto: {descuento_monto}")
+    print(f"Total final: {total_final}")
+    print(f"Total a pagar: {venta.total_a_pagar}")
+    
     return render(request, 'facturacion/comprobante_venta.html', {
         'venta': venta,
         'detalles': detalles,
         'total_articulos': total_articulos,
+        'subtotal_sin_itbis': subtotal_sin_itbis,
         'subtotal_con_itbis': subtotal_con_itbis,
+        'itbis_monto': itbis_monto,
+        'descuento_monto': descuento_monto,
+        'total_final': total_final,
         'now': timezone.now().strftime('%d/%m/%Y')
     })
 

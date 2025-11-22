@@ -1315,12 +1315,16 @@
                         <h3 class="card-title">Reimpresión de Cuadres de Caja</h3>
                     </div>
                     <div class="card-body">
-                        <!-- Filtros de Búsqueda -->
+                        <!-- Filtros de Búsqueda Mejorados -->
                         <div class="filtros-cuadre" style="margin-bottom: 2rem;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 1rem; align-items: end;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
                                 <div>
-                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Fecha</label>
-                                    <input type="date" id="fechaCuadre" class="form-control">
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Fecha Desde</label>
+                                    <input type="date" id="fechaDesdeCuadre" class="form-control">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Fecha Hasta</label>
+                                    <input type="date" id="fechaHastaCuadre" class="form-control">
                                 </div>
                                 <div>
                                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Usuario</label>
@@ -1328,12 +1332,15 @@
                                         <option value="">Todos los usuarios</option>
                                     </select>
                                 </div>
-                                <div style="display: flex; gap: 0.5rem;">
+                                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                                     <button class="btn-buscar" onclick="buscarCuadres()">
                                         <i class='bx bx-search'></i> Buscar
                                     </button>
                                     <button class="btn-limpiar" onclick="limpiarFiltrosCuadre()">
                                         <i class='bx bx-reset'></i> Limpiar
+                                    </button>
+                                    <button class="btn-imprimir" onclick="imprimirTodosCuadres()" id="btnImprimirTodos" style="display: none;">
+                                        <i class='bx bx-printer'></i> Imprimir Todos
                                     </button>
                                 </div>
                             </div>
@@ -2009,8 +2016,20 @@ function updateInventoryValueView() {
     }
 }
 
-// NUEVA FUNCIÓN: Actualizar vista de cuadres
+// =============================================
+// FUNCIONES PARA CUADRES DE CAJA
+// =============================================
+
+// Función para actualizar vista de cuadres
 function updateCuadreView() {
+    // Establecer fechas por defecto (últimos 30 días)
+    const fechaHasta = new Date();
+    const fechaDesde = new Date();
+    fechaDesde.setDate(fechaHasta.getDate() - 30);
+    
+    document.getElementById('fechaDesdeCuadre').value = fechaDesde.toISOString().split('T')[0];
+    document.getElementById('fechaHastaCuadre').value = fechaHasta.toISOString().split('T')[0];
+    
     cargarUsuariosCuadre();
     buscarCuadres();
 }
@@ -2035,35 +2054,44 @@ function cargarUsuariosCuadre() {
         });
 }
 
-// Función para buscar cuadres
+// Función para buscar cuadres con rango de fechas
 function buscarCuadres() {
-    const fecha = document.getElementById('fechaCuadre').value;
+    const fechaDesde = document.getElementById('fechaDesdeCuadre').value;
+    const fechaHasta = document.getElementById('fechaHastaCuadre').value;
     const usuario = document.getElementById('usuarioCuadre').value;
     
     let url = '/dashboard/cuadres/';
     const params = new URLSearchParams();
     
-    if (fecha) params.append('fecha', fecha);
+    if (fechaDesde) params.append('fecha_desde', fechaDesde);
+    if (fechaHasta) params.append('fecha_hasta', fechaHasta);
     if (usuario) params.append('usuario', usuario);
     
     if (params.toString()) {
         url += '?' + params.toString();
     }
     
+    // Mostrar loading
+    const tbody = document.querySelector('#tablaCuadres tbody');
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem;"><i class="bx bx-loader bx-spin"></i> Cargando...</td></tr>';
+    
     fetch(url)
         .then(response => response.json())
         .then(data => {
             const tbody = document.querySelector('#tablaCuadres tbody');
             const mensajeVacio = document.getElementById('mensajeVacio');
+            const btnImprimirTodos = document.getElementById('btnImprimirTodos');
             
             tbody.innerHTML = '';
             
             if (data.cuadres.length === 0) {
                 mensajeVacio.style.display = 'block';
+                btnImprimirTodos.style.display = 'none';
                 return;
             }
             
             mensajeVacio.style.display = 'none';
+            btnImprimirTodos.style.display = 'inline-flex';
             
             data.cuadres.forEach(cuadre => {
                 const row = document.createElement('tr');
@@ -2081,12 +2109,12 @@ function buscarCuadres() {
                     <td>${formatCurrency(cuadre.total_esperado)}</td>
                     <td>
                         <span style="color: ${cuadre.diferencia >= 0 ? '#28a745' : '#dc3545'}; font-weight: bold;">
-                            ${formatCurrency(cuadre.diferencia)}
+                            ${formatCurrency(Math.abs(cuadre.diferencia))}
                         </span>
                     </td>
                     <td>${estadoBadge}</td>
                     <td>
-                        <button class="btn-imprimir" onclick="reimprimirCuadre(${cuadre.id})">
+                        <button class="btn-imprimir" onclick="reimprimirCuadre(${cuadre.id})" style="margin-bottom: 0.25rem;">
                             <i class='bx bx-printer'></i> Imprimir
                         </button>
                     </td>
@@ -2100,17 +2128,62 @@ function buscarCuadres() {
         });
 }
 
-// Función para limpiar filtros
+// Función para limpiar filtros de cuadre
 function limpiarFiltrosCuadre() {
-    document.getElementById('fechaCuadre').value = '';
+    document.getElementById('fechaDesdeCuadre').value = '';
+    document.getElementById('fechaHastaCuadre').value = '';
     document.getElementById('usuarioCuadre').value = '';
+    document.getElementById('btnImprimirTodos').style.display = 'none';
     buscarCuadres();
 }
 
-// Función para reimprimir cuadre
+// Función para reimprimir cuadre individual
 function reimprimirCuadre(cuadreId) {
     // Abrir en nueva pestaña el reporte del cuadre
     window.open(`/dashboard/cuadre/${cuadreId}/pdf/`, '_blank');
+}
+
+// Función para imprimir todos los cuadres del rango
+function imprimirTodosCuadres() {
+    const fechaDesde = document.getElementById('fechaDesdeCuadre').value;
+    const fechaHasta = document.getElementById('fechaHastaCuadre').value;
+    const usuario = document.getElementById('usuarioCuadre').value;
+    
+    if (!fechaDesde || !fechaHasta) {
+        Swal.fire('Advertencia', 'Debe seleccionar un rango de fechas para imprimir todos los cuadres', 'warning');
+        return;
+    }
+    
+    let url = '/dashboard/cuadres/pdf-todos/';
+    const params = new URLSearchParams();
+    
+    if (fechaDesde) params.append('fecha_desde', fechaDesde);
+    if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+    if (usuario) params.append('usuario', usuario);
+    
+    if (params.toString()) {
+        url += '?' + params.toString();
+    }
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Generando Reporte',
+        text: 'Preparando PDF con todos los cuadres...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Abrir en nueva pestaña el reporte PDF
+    const newWindow = window.open(url, '_blank');
+    
+    // Verificar si la ventana se abrió correctamente
+    if (newWindow) {
+        Swal.close();
+    } else {
+        Swal.fire('Error', 'No se pudo abrir el PDF. Verifica los bloqueadores de ventanas emergentes.', 'error');
+    }
 }
 
 // =============================================

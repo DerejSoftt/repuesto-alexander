@@ -1397,6 +1397,11 @@
         <input type="hidden" name="client_name" id="client-name">
         <input type="hidden" name="client_document" id="client-document">
         <input type="hidden" name="subtotal" id="subtotal">
+
+ <!-- AGREGAR ESTOS CAMPOS PARA EL ITBIS -->
+    <input type="hidden" name="itbis_monto" id="itbis-monto">
+    <input type="hidden" name="itbis_porcentaje" id="itbis-porcentaje">
+
         <input type="hidden" name="discount_percentage" id="discount-percentage">
         <input type="hidden" name="discount_amount" id="discount-amount">
         <input type="hidden" name="total" id="total">
@@ -1406,601 +1411,732 @@
         <!-- Campos adicionales para crédito -->
         <input type="hidden" name="total_a_pagar" id="total-a-pagar-field">
     </form>
-    <script>
-        // Funciones para el sidebar
-document.addEventListener("DOMContentLoaded", () => {
-    // Estado de la aplicación
-    const state = {
-        paymentType: 'contado', // 'contado' o 'credito'
-        paymentMethod: 'efectivo', // 'efectivo', 'tarjeta', 'transferencia'
-        selectedClient: null,
-        selectedProduct: null,
-        saleItems: [],
-        totalSales: 0, // Subtotal CON ITBIS
-        subtotalSinITBIS: 0, // Subtotal SIN ITBIS
-        itbisAmount: 0,
-        discountPercentage: 0,
-        discountAmount: 0,
-        finalTotal: 0,
-        cashReceived: 0,
-        changeAmount: 0,
-        saleType: 'unitaria', // 'unitaria' o 'mayor'
-    };
+   <script>
+    // Funciones para el sidebar
+    document.addEventListener("DOMContentLoaded", () => {
+        // Estado de la aplicación
+        const state = {
+            paymentType: 'contado', // 'contado' o 'credito'
+            paymentMethod: 'efectivo', // 'efectivo', 'tarjeta', 'transferencia'
+            selectedClient: null,
+            selectedProduct: null,
+            saleItems: [],
+            totalSales: 0, // Subtotal CON ITBIS
+            subtotalSinITBIS: 0, // Subtotal SIN ITBIS
+            itbisAmount: 0,
+            discountPercentage: 0,
+            discountAmount: 0,
+            finalTotal: 0,
+            cashReceived: 0,
+            changeAmount: 0,
+            saleType: 'unitaria', // 'unitaria' o 'mayor'
+        };
 
-    // Elementos del DOM
-    const DOM = {
-        salesInterface: document.getElementById('sales-interface'),
-        cashPaymentBtn: document.getElementById('cash-payment-btn'),
-        creditPaymentBtn: document.getElementById('credit-payment-btn'),
-        clientInfoContainer: document.getElementById('client-info-container'),
-        clientSearch: document.getElementById('client-search'),
-        clientResults: document.getElementById('client-results'),
-        cashInfoContainer: document.getElementById('cash-info-container'),
-        cashClientName: document.getElementById('cash-client-name'),
-        cashClientDocument: document.getElementById('cash-client-document'),
-        cashMethodBtn: document.getElementById('cash-method-btn'),
-        cardMethodBtn: document.getElementById('card-method-btn'),
-        transferMethodBtn: document.getElementById('transfer-method-btn'),
-        productSearch: document.getElementById('product-search'),
-        productResults: document.getElementById('product-results'),
-        productQuantity: document.getElementById('product-quantity'),
-        addProductButton: document.getElementById('add-product-button'),
-        saleItemsTable: document.getElementById('sale-items'),
-        subtotalAmount: document.getElementById('subtotal-amount'),
-        itbisAmount: document.getElementById('itbis-amount'),
-        totalWithITBIS: document.getElementById('total-with-itbis'),
-        discountInput: document.getElementById('discount-input'),
-        discountAmountDisplay: document.getElementById('discount-amount'),
-        finalTotalAmount: document.getElementById('final-total-amount'),
-        completeSaleButton: document.getElementById('complete-sale-button'),
-        cashPaymentFields: document.getElementById('cash-payment-fields'),
-        cashReceivedInput: document.getElementById('cash-received'),
-        changeAmountDisplay: document.getElementById('change-amount'),
-        closeRegisterButton: document.getElementById('close-register-button'),
-        closeRegisterModal: document.getElementById('close-register-modal'),
-        cancelCloseRegister: document.getElementById('cancel-close-register'),
-        confirmCloseRegister: document.getElementById('confirm-close-register'),
-        alertModal: document.getElementById('alert-modal'),
-        alertIcon: document.getElementById('alert-icon'),
-        alertMessage: document.getElementById('alert-message'),
-        alertOkButton: document.getElementById('alert-ok-button'),
-        saleForm: document.getElementById('sale-form'),
-        paymentTypeField: document.getElementById('payment-type'),
-        paymentMethodField: document.getElementById('payment-method'),
-        clientIdField: document.getElementById('client-id'),
-        clientNameField: document.getElementById('client-name'),
-        clientDocumentField: document.getElementById('client-document'),
-        subtotalField: document.getElementById('subtotal'),
-        discountPercentageField: document.getElementById('discount-percentage'),
-        discountAmountField: document.getElementById('discount-amount'),
-        totalField: document.getElementById('total'),
-        cashReceivedField: document.getElementById('cash-received-field'),
-        changeAmountField: document.getElementById('change-amount-field'),
-        saleItemsField: document.getElementById('sale-items-field'),
-        totalAPagarField: document.getElementById('total-a-pagar-field'),
-        priceModal: document.getElementById('price-modal'),
-        priceModalMessage: document.getElementById('price-modal-message'),
-        unitPriceDisplay: document.getElementById('unit-price'),
-        wholesalePriceDisplay: document.getElementById('wholesale-price'),
-        priceModalOkButton: document.getElementById('price-modal-ok-button'),
-        unitSaleBtn: document.getElementById('unit-sale-btn'),
-        wholesaleSaleBtn: document.getElementById('wholesale-sale-btn'),
-    };
+        // Elementos del DOM
+        const DOM = {
+            salesInterface: document.getElementById('sales-interface'),
+            cashPaymentBtn: document.getElementById('cash-payment-btn'),
+            creditPaymentBtn: document.getElementById('credit-payment-btn'),
+            clientInfoContainer: document.getElementById('client-info-container'),
+            clientSearch: document.getElementById('client-search'),
+            clientResults: document.getElementById('client-results'),
+            cashInfoContainer: document.getElementById('cash-info-container'),
+            cashClientName: document.getElementById('cash-client-name'),
+            cashClientDocument: document.getElementById('cash-client-document'),
+            cashMethodBtn: document.getElementById('cash-method-btn'),
+            cardMethodBtn: document.getElementById('card-method-btn'),
+            transferMethodBtn: document.getElementById('transfer-method-btn'),
+            productSearch: document.getElementById('product-search'),
+            productResults: document.getElementById('product-results'),
+            productQuantity: document.getElementById('product-quantity'),
+            addProductButton: document.getElementById('add-product-button'),
+            saleItemsTable: document.getElementById('sale-items'),
+            subtotalAmount: document.getElementById('subtotal-amount'),
+            itbisAmount: document.getElementById('itbis-amount'),
+            totalWithITBIS: document.getElementById('total-with-itbis'),
+            discountInput: document.getElementById('discount-input'),
+            discountAmountDisplay: document.getElementById('discount-amount'),
+            finalTotalAmount: document.getElementById('final-total-amount'),
+            completeSaleButton: document.getElementById('complete-sale-button'),
+            cashPaymentFields: document.getElementById('cash-payment-fields'),
+            cashReceivedInput: document.getElementById('cash-received'),
+            changeAmountDisplay: document.getElementById('change-amount'),
+            closeRegisterButton: document.getElementById('close-register-button'),
+            closeRegisterModal: document.getElementById('close-register-modal'),
+            cancelCloseRegister: document.getElementById('cancel-close-register'),
+            confirmCloseRegister: document.getElementById('confirm-close-register'),
+            alertModal: document.getElementById('alert-modal'),
+            alertIcon: document.getElementById('alert-icon'),
+            alertMessage: document.getElementById('alert-message'),
+            alertOkButton: document.getElementById('alert-ok-button'),
+            saleForm: document.getElementById('sale-form'),
+            paymentTypeField: document.getElementById('payment-type'),
+            paymentMethodField: document.getElementById('payment-method'),
+            clientIdField: document.getElementById('client-id'),
+            clientNameField: document.getElementById('client-name'),
+            clientDocumentField: document.getElementById('client-document'),
+            subtotalField: document.getElementById('subtotal'),
+            discountPercentageField: document.getElementById('discount-percentage'),
+            discountAmountField: document.getElementById('discount-amount'),
+            totalField: document.getElementById('total'),
+            cashReceivedField: document.getElementById('cash-received-field'),
+            changeAmountField: document.getElementById('change-amount-field'),
+            saleItemsField: document.getElementById('sale-items-field'),
+            totalAPagarField: document.getElementById('total-a-pagar-field'),
+            itbisMontoField: document.getElementById('itbis-monto'),
+            itbisPorcentajeField: document.getElementById('itbis-porcentaje'),
+            priceModal: document.getElementById('price-modal'),
+            priceModalMessage: document.getElementById('price-modal-message'),
+            unitPriceDisplay: document.getElementById('unit-price'),
+            wholesalePriceDisplay: document.getElementById('wholesale-price'),
+            priceModalOkButton: document.getElementById('price-modal-ok-button'),
+            unitSaleBtn: document.getElementById('unit-sale-btn'),
+            wholesaleSaleBtn: document.getElementById('wholesale-sale-btn'),
+        };
 
-    // Formatear moneda en pesos dominicanos
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('es-DO', {
-            style: 'currency',
-            currency: 'DOP',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(amount).replace('DOP', 'RD$');
-    };
+        // Formatear moneda en pesos dominicanos
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('es-DO', {
+                style: 'currency',
+                currency: 'DOP',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(amount).replace('DOP', 'RD$');
+        };
 
-    // Mostrar alerta personalizada
-    const showAlert = (message, type = 'info') => {
-        let iconClass = 'bx-info-circle';
-        let alertClass = '';
-        if (type === 'error') {
-            iconClass = 'bx-error';
-            alertClass = 'error';
-        } else if (type === 'warning') {
-            iconClass = 'bx-error-circle';
-            alertClass = 'warning';
-        } else if (type === 'success') {
-            iconClass = 'bx-check-circle';
-            alertClass = 'success';
-        }
-        DOM.alertIcon.innerHTML = `<i class='bx ${iconClass}'></i>`;
-        DOM.alertIcon.className = `alert-icon ${alertClass}`;
-        DOM.alertMessage.textContent = message;
-        DOM.alertModal.classList.add('active');
-    };
-
-    // Cerrar alerta personalizada
-    const closeAlert = () => {
-        DOM.alertModal.classList.remove('active');
-    };
-
-    // Función para mostrar el modal de precio
-    const showPriceModal = (product) => {
-        DOM.unitPriceDisplay.textContent = formatCurrency(product.priceWithITBIS);
-        DOM.wholesalePriceDisplay.textContent = formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS);
-        if (state.saleType === 'mayor') {
-            DOM.priceModalMessage.innerHTML = `
-                <strong>Precio seleccionado (Venta por Mayor):</strong> ${formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS)}<br>
-                Precio unitario: ${formatCurrency(product.priceWithITBIS)}
-            `;
-        } else {
-            DOM.priceModalMessage.innerHTML = `
-                <strong>Precio seleccionado (Venta Unitaria):</strong> ${formatCurrency(product.priceWithITBIS)}<br>
-                Precio por mayor: ${formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS)}
-            `;
-        }
-        DOM.priceModal.classList.add('active');
-        return new Promise((resolve) => {
-            DOM.priceModalOkButton.onclick = () => {
-                DOM.priceModal.classList.remove('active');
-                resolve();
-            };
-        });
-    };
-
-    // Función para buscar productos via AJAX
-    const searchProducts = async (searchTerm) => {
-        if (searchTerm.length < 2) {
-            DOM.productResults.innerHTML = `
-                <div class="empty-search-state" style="padding: 15px; text-align: center; color: #888;">
-                    <p style="margin: 0; font-size: 2rem;"><i class='bx bx-search-alt'></i></p>
-                    <p style="margin: 5px 0;">Ingrese al menos 2 caracteres</p>
-                </div>
-            `;
-            return;
-        }
-        try {
-            DOM.productResults.innerHTML = `
-                <div style="padding: 20px; text-align: center; color: #888;">
-                    <i class='bx bx-loader bx-spin' style="font-size: 2rem;"></i>
-                    <p>Buscando productos...</p>
-                </div>
-            `;
-            const response = await fetch(`/buscar-productos/?q=${encodeURIComponent(searchTerm)}`);
-            if (!response.ok) {
-                throw new Error(`Error HTTP: ${response.status}`);
+        // Mostrar alerta personalizada
+        const showAlert = (message, type = 'info') => {
+            let iconClass = 'bx-info-circle';
+            let alertClass = '';
+            if (type === 'error') {
+                iconClass = 'bx-error';
+                alertClass = 'error';
+            } else if (type === 'warning') {
+                iconClass = 'bx-error-circle';
+                alertClass = 'warning';
+            } else if (type === 'success') {
+                iconClass = 'bx-check-circle';
+                alertClass = 'success';
             }
-            const data = await response.json();
-            if (data.success && data.productos && data.productos.length > 0) {
-                let html = '';
-                data.productos.forEach(producto => {
-                    const imagenUrl = producto.imagen ? producto.imagen : '/static/image/default-product.png';
-                    html += `
-                        <div class="product-item"
-                             data-id="${producto.id}"
-                             data-name="${producto.descripcion}"
-                             data-price="${producto.precio}"
-                             data-price-with-itbis="${producto.precio_con_itbis}"
-                             data-wholesale-price="${producto.precio_por_mayor}"
-                             data-wholesale-price-with-itbis="${producto.precio_por_mayor_con_itbis}"
-                             data-stock="${producto.cantidad}">
-                            <div style="display: flex; align-items: center;">
-                                <img src="${imagenUrl}"
-                                     class="product-image"
-                                     alt="${producto.descripcion}"
-                                     onclick="openImageModal('${imagenUrl}')"
-                                     style="cursor: pointer;">
-                                <div>
-                                    <div class="product-name">${producto.descripcion}</div>
-                                    <div class="product-details">
-                                        Código: ${producto.codigo_producto} |
-                                        Compatibilidad: ${producto.compatibilidad} |
-                                        Marca: ${producto.marca} |
-                                        Color: ${producto.color}
-                                    </div>
-                                    <div class="product-details">Stock: ${producto.cantidad}</div>
-                                </div>
-                            </div>
-                            <div class="product-price">${formatCurrency(producto.precio_con_itbis)}</div>
-                        </div>
-                    `;
-                });
-                DOM.productResults.innerHTML = html;
+            DOM.alertIcon.innerHTML = `<i class='bx ${iconClass}'></i>`;
+            DOM.alertIcon.className = `alert-icon ${alertClass}`;
+            DOM.alertMessage.textContent = message;
+            DOM.alertModal.classList.add('active');
+        };
+
+        // Cerrar alerta personalizada
+        const closeAlert = () => {
+            DOM.alertModal.classList.remove('active');
+        };
+
+        // Función para mostrar el modal de precio
+        const showPriceModal = (product) => {
+            DOM.unitPriceDisplay.textContent = formatCurrency(product.priceWithITBIS);
+            DOM.wholesalePriceDisplay.textContent = formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS);
+            if (state.saleType === 'mayor') {
+                DOM.priceModalMessage.innerHTML = `
+                    <strong>Precio seleccionado (Venta por Mayor):</strong> ${formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS)}<br>
+                    Precio unitario: ${formatCurrency(product.priceWithITBIS)}
+                `;
             } else {
+                DOM.priceModalMessage.innerHTML = `
+                    <strong>Precio seleccionado (Venta Unitaria):</strong> ${formatCurrency(product.priceWithITBIS)}<br>
+                    Precio por mayor: ${formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS)}
+                `;
+            }
+            DOM.priceModal.classList.add('active');
+            return new Promise((resolve) => {
+                DOM.priceModalOkButton.onclick = () => {
+                    DOM.priceModal.classList.remove('active');
+                    resolve();
+                };
+            });
+        };
+
+        // Función para buscar productos via AJAX
+        const searchProducts = async (searchTerm) => {
+            if (searchTerm.length < 2) {
                 DOM.productResults.innerHTML = `
                     <div class="empty-search-state" style="padding: 15px; text-align: center; color: #888;">
                         <p style="margin: 0; font-size: 2rem;"><i class='bx bx-search-alt'></i></p>
-                        <p style="margin: 5px 0;">No se encontraron productos</p>
-                        <p style="margin: 0; font-size: 0.9rem; opacity: 0.7;">Buscar: "${searchTerm}"</p>
+                        <p style="margin: 5px 0;">Ingrese al menos 2 caracteres</p>
+                    </div>
+                `;
+                return;
+            }
+            try {
+                DOM.productResults.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #888;">
+                        <i class='bx bx-loader bx-spin' style="font-size: 2rem;"></i>
+                        <p>Buscando productos...</p>
+                    </div>
+                `;
+                const response = await fetch(`/buscar-productos/?q=${encodeURIComponent(searchTerm)}`);
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+                const data = await response.json();
+                if (data.success && data.productos && data.productos.length > 0) {
+                    let html = '';
+                    data.productos.forEach(producto => {
+                        const imagenUrl = producto.imagen ? producto.imagen : '/static/image/default-product.png';
+                        html += `
+                            <div class="product-item"
+                                 data-id="${producto.id}"
+                                 data-name="${producto.descripcion}"
+                                 data-price="${producto.precio}"
+                                 data-price-with-itbis="${producto.precio_con_itbis}"
+                                 data-wholesale-price="${producto.precio_por_mayor}"
+                                 data-wholesale-price-with-itbis="${producto.precio_por_mayor_con_itbis}"
+                                 data-stock="${producto.cantidad}">
+                                <div style="display: flex; align-items: center;">
+                                    <img src="${imagenUrl}"
+                                         class="product-image"
+                                         alt="${producto.descripcion}"
+                                         onclick="openImageModal('${imagenUrl}')"
+                                         style="cursor: pointer;">
+                                    <div>
+                                        <div class="product-name">${producto.descripcion}</div>
+                                        <div class="product-details">
+                                            Código: ${producto.codigo_producto} |
+                                            Compatibilidad: ${producto.compatibilidad} |
+                                            Marca: ${producto.marca} |
+                                            Color: ${producto.color}
+                                        </div>
+                                        <div class="product-details">Stock: ${producto.cantidad}</div>
+                                    </div>
+                                </div>
+                                <div class="product-price">${formatCurrency(producto.precio_con_itbis)}</div>
+                            </div>
+                        `;
+                    });
+                    DOM.productResults.innerHTML = html;
+                } else {
+                    DOM.productResults.innerHTML = `
+                        <div class="empty-search-state" style="padding: 15px; text-align: center; color: #888;">
+                            <p style="margin: 0; font-size: 2rem;"><i class='bx bx-search-alt'></i></p>
+                            <p style="margin: 5px 0;">No se encontraron productos</p>
+                            <p style="margin: 0; font-size: 0.9rem; opacity: 0.7;">Buscar: "${searchTerm}"</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error en búsqueda:', error);
+                DOM.productResults.innerHTML = `
+                    <div class="empty-search-state" style="padding: 15px; text-align: center; color: #f72585;">
+                        <p style="margin: 0; font-size: 2rem;"><i class='bx bx-error'></i></p>
+                        <p style="margin: 5px 0;">Error al buscar productos</p>
+                        <p style="margin: 0; font-size: 0.8rem;">Intente nuevamente</p>
                     </div>
                 `;
             }
-        } catch (error) {
-            console.error('Error en búsqueda:', error);
-            DOM.productResults.innerHTML = `
-                <div class="empty-search-state" style="padding: 15px; text-align: center; color: #f72585;">
-                    <p style="margin: 0; font-size: 2rem;"><i class='bx bx-error'></i></p>
-                    <p style="margin: 5px 0;">Error al buscar productos</p>
-                    <p style="margin: 0; font-size: 0.8rem;">Intente nuevamente</p>
-                </div>
-            `;
-        }
-    };
+        };
 
-    // Función debounce para evitar muchas peticiones
-    const debounce = (func, wait) => {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
+        // Función debounce para evitar muchas peticiones
+        const debounce = (func, wait) => {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
                 clearTimeout(timeout);
-                func(...args);
+                timeout = setTimeout(later, wait);
             };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
         };
-    };
 
-    // Búsqueda de productos con debounce
-    const debouncedSearch = debounce(searchProducts, 300);
+        // Búsqueda de productos con debounce
+        const debouncedSearch = debounce(searchProducts, 300);
 
-    // Renderizar resultados de búsqueda de clientes
-    const renderClientResults = (searchTerm = '') => {
-        const allClients = Array.from(DOM.clientResults.querySelectorAll('.client-item'));
-        if (!searchTerm.trim()) {
-            allClients.forEach(client => client.style.display = 'block');
-            const emptyState = DOM.clientResults.querySelector('.empty-search-state');
-            if (emptyState) emptyState.remove();
-            return;
-        }
-        let hasResults = false;
-        allClients.forEach(client => {
-            const clientName = (client.getAttribute('data-name') || '').toLowerCase();
-            const clientDocument = (client.getAttribute('data-document') || '').toLowerCase();
-            const clientPhone = (client.getAttribute('data-phone') || '').toLowerCase();
-            const search = searchTerm.toLowerCase();
-            if (clientName.includes(search) || clientDocument.includes(search) || clientPhone.includes(search)) {
-                client.style.display = 'block';
-                hasResults = true;
-            } else {
-                client.style.display = 'none';
-            }
-        });
-        const existingEmptyState = DOM.clientResults.querySelector('.empty-search-state');
-        if (existingEmptyState) existingEmptyState.remove();
-        if (!hasResults) {
-            const emptyDiv = document.createElement('div');
-            emptyDiv.className = 'empty-search-state';
-            emptyDiv.style.cssText = 'padding: 15px; text-align: center; color: #888;';
-            emptyDiv.innerHTML = `
-                <p><i class='bx bx-search'></i></p>
-                <p>No se encontraron clientes con "${searchTerm}"</p>
-            `;
-            DOM.clientResults.appendChild(emptyDiv);
-        }
-    };
-
-    // Renderizar items de la venta
-    const renderSaleItems = () => {
-        DOM.saleItemsTable.innerHTML = '';
-        if (state.saleItems.length === 0) {
-            DOM.saleItemsTable.innerHTML = `
-                <tr>
-                    <td colspan="5" class="empty-state">
-                        <div class="empty-state-icon">🛒</div>
-                        <p>No hay productos agregados</p>
-                        <p class="text-muted">Busque y agregue productos a la venta</p>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        state.saleItems.forEach(item => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${item.name}</td>
-                <td>${item.quantity}</td>
-                <td>${formatCurrency(item.price)}</td>
-                <td>${formatCurrency(item.subtotal)}</td>
-                <td style="text-align: right;">
-                    <button class="btn btn-icon btn-outline btn-sm delete-item" data-id="${item.id}">
-                        <i class='bx bx-trash'></i>
-                    </button>
-                </td>
-            `;
-            DOM.saleItemsTable.appendChild(row);
-        });
-        document.querySelectorAll('.delete-item').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const itemId = e.target.closest('button').dataset.id;
-                const item = state.saleItems.find(item => item.id === itemId);
-                state.saleItems = state.saleItems.filter(item => item.id !== itemId);
-                updateTotal();
-                renderSaleItems();
-                if (item) {
-                    showAlert(`Producto eliminado: ${item.name}`, 'success');
-                }
-            });
-        });
-    };
-
-    // Actualizar total de la venta
-    const updateTotal = () => {
-        state.totalSales = state.saleItems.reduce((total, item) => total + item.subtotal, 0); // Subtotal CON ITBIS
-        const itbisPercentage = 18;
-        state.subtotalSinITBIS = state.totalSales / (1 + (itbisPercentage / 100));
-        state.itbisAmount = state.totalSales - state.subtotalSinITBIS;
-        updateDiscount();
-        DOM.subtotalAmount.textContent = formatCurrency(state.subtotalSinITBIS); // Mostrar subtotal SIN ITBIS
-        DOM.itbisAmount.textContent = formatCurrency(state.itbisAmount);
-        DOM.totalWithITBIS.textContent = formatCurrency(state.totalSales); // Total CON ITBIS
-    };
-
-    // Actualizar descuento y total final
-    const updateDiscount = () => {
-        const discountPercentage = parseFloat(DOM.discountInput.value) || 0;
-        state.discountPercentage = Math.max(0, Math.min(discountPercentage, 100));
-        state.discountAmount = (state.totalSales * state.discountPercentage) / 100;
-        state.finalTotal = state.totalSales - state.discountAmount;
-        DOM.discountAmountDisplay.textContent = `${state.discountPercentage.toFixed(2)}% (${formatCurrency(state.discountAmount)})`;
-        DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
-        DOM.totalAPagarField.value = state.finalTotal;
-        calculateChange();
-    };
-
-    // Calcular cambio para pago en efectivo
-    const calculateChange = () => {
-        if (state.paymentType !== 'contado' || state.paymentMethod !== 'efectivo') return;
-        state.cashReceived = parseFloat(DOM.cashReceivedInput.value) || 0;
-        state.changeAmount = Math.max(0, state.cashReceived - state.finalTotal);
-        DOM.changeAmountDisplay.textContent = formatCurrency(state.changeAmount);
-    };
-
-    // Cambiar tipo de pago (contado/crédito)
-    const setPaymentType = (type) => {
-        state.paymentType = type;
-        DOM.cashPaymentBtn.classList.toggle('active', type === 'contado');
-        DOM.creditPaymentBtn.classList.toggle('active', type === 'credito');
-        DOM.clientInfoContainer.classList.toggle('hidden', type === 'contado');
-        DOM.cashInfoContainer.classList.toggle('hidden', type === 'credito');
-        DOM.cashPaymentFields.classList.toggle('hidden', type !== 'contado' || state.paymentMethod !== 'efectivo');
-        DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
-        DOM.totalAPagarField.value = state.finalTotal;
-    };
-
-    // Cambiar método de pago (efectivo/tarjeta/transferencia)
-    const setPaymentMethod = (method) => {
-        state.paymentMethod = method;
-        DOM.cashMethodBtn.classList.toggle('active', method === 'efectivo');
-        DOM.cardMethodBtn.classList.toggle('active', method === 'tarjeta');
-        DOM.transferMethodBtn.classList.toggle('active', method === 'transferencia');
-        DOM.cashPaymentFields.classList.toggle('hidden', method !== 'efectivo');
-        if (method === 'efectivo') {
-            calculateChange();
-        }
-    };
-
-    // Cambiar tipo de venta (unitaria/mayor)
-    const setSaleType = (type) => {
-        state.saleType = type;
-        DOM.unitSaleBtn.classList.toggle('active', type === 'unitaria');
-        DOM.wholesaleSaleBtn.classList.toggle('active', type === 'mayor');
-    };
-
-    // Seleccionar cliente
-    const selectClient = (clientElement) => {
-        const clientId = clientElement.getAttribute('data-id');
-        const clientName = clientElement.getAttribute('data-name');
-        const clientDocument = clientElement.getAttribute('data-document');
-        state.selectedClient = {
-            id: clientId,
-            name: clientName,
-            document: clientDocument,
-        };
-        DOM.clientSearch.value = `${clientName} (${clientDocument})`;
-        DOM.clientResults.querySelectorAll('.client-item').forEach(item => {
-            item.style.display = 'none';
-        });
-    };
-
-    // Seleccionar producto
-    const selectProduct = async (productElement) => {
-        const productId = productElement.getAttribute('data-id');
-        const productName = productElement.getAttribute('data-name');
-        const productPrice = parseFloat(productElement.getAttribute('data-price'));
-        const productPriceWithITBIS = parseFloat(productElement.getAttribute('data-price-with-itbis'));
-        const productWholesalePrice = parseFloat(productElement.getAttribute('data-wholesale-price'));
-        const productWholesalePriceWithITBIS = parseFloat(productElement.getAttribute('data-wholesale-price-with-itbis'));
-        const productStock = parseInt(productElement.getAttribute('data-stock'));
-        state.selectedProduct = {
-            id: productId,
-            name: productName,
-            price: productPrice,
-            priceWithITBIS: productPriceWithITBIS,
-            wholesalePrice: productWholesalePrice,
-            wholesalePriceWithITBIS: productWholesalePriceWithITBIS,
-            stock: productStock
-        };
-        DOM.productSearch.value = productName;
-        DOM.productQuantity.max = productStock;
-        if (DOM.productQuantity.value > productStock) {
-            DOM.productQuantity.value = productStock;
-        }
-        await showPriceModal(state.selectedProduct);
-    };
-
-    // Agregar producto a la venta
-    const addProductToSale = () => {
-        if (!state.selectedProduct) {
-            showAlert('Debe seleccionar un producto primero', 'error');
-            return;
-        }
-        const quantity = parseInt(DOM.productQuantity.value) || 1;
-        if (quantity <= 0) {
-            showAlert('La cantidad debe ser mayor a cero', 'error');
-            return;
-        }
-        if (quantity > state.selectedProduct.stock) {
-            showAlert(`No hay suficiente stock. Disponible: ${state.selectedProduct.stock}`, 'error');
-            return;
-        }
-        const currentPrice = state.saleType === 'mayor'
-            ? state.selectedProduct.wholesalePriceWithITBIS
-            : state.selectedProduct.priceWithITBIS;
-        const existingItemIndex = state.saleItems.findIndex(item => item.id === state.selectedProduct.id);
-        if (existingItemIndex !== -1) {
-            state.saleItems[existingItemIndex].quantity += quantity;
-            state.saleItems[existingItemIndex].price = currentPrice;
-            state.saleItems[existingItemIndex].subtotal = state.saleItems[existingItemIndex].quantity * currentPrice;
-        } else {
-            state.saleItems.push({
-                id: state.selectedProduct.id,
-                name: state.selectedProduct.name,
-                price: currentPrice,
-                quantity: quantity,
-                subtotal: quantity * currentPrice
-            });
-        }
-        updateTotal();
-        renderSaleItems();
-        state.selectedProduct = null;
-        DOM.productSearch.value = '';
-        DOM.productQuantity.value = '1';
-        showAlert(`Producto agregado: ${state.selectedProduct.name}`, 'success');
-    };
-
-    // Preparar campos del formulario antes de enviar
-    const prepareFormFields = () => {
-        DOM.paymentTypeField.value = state.paymentType;
-        DOM.paymentMethodField.value = state.paymentMethod;
-        if (state.paymentType === 'credito') {
-            DOM.clientIdField.value = state.selectedClient ? state.selectedClient.id : '';
-            DOM.clientNameField.value = state.selectedClient ? state.selectedClient.name : '';
-            DOM.clientDocumentField.value = state.selectedClient ? state.selectedClient.document : '';
-        } else {
-            DOM.clientNameField.value = DOM.cashClientName.value.trim();
-            DOM.clientDocumentField.value = DOM.cashClientDocument.value.trim();
-        }
-        DOM.subtotalField.value = state.subtotalSinITBIS; // Subtotal SIN ITBIS
-        DOM.discountPercentageField.value = state.discountPercentage;
-        DOM.discountAmountField.value = state.discountAmount;
-        DOM.totalField.value = state.finalTotal;
-        DOM.cashReceivedField.value = state.cashReceived;
-        DOM.changeAmountField.value = state.changeAmount;
-        DOM.saleItemsField.value = JSON.stringify(state.saleItems);
-        DOM.totalAPagarField.value = state.finalTotal;
-    };
-
-    // Validar y completar la venta
-    const completeSale = async () => {
-        if (state.saleItems.length === 0) {
-            showAlert('Debe agregar al menos un producto a la venta', 'error');
-            return;
-        }
-        if (state.paymentType === 'credito') {
-            if (!state.selectedClient) {
-                showAlert('Debe seleccionar un cliente para venta a crédito', 'error');
+        // Renderizar resultados de búsqueda de clientes
+        const renderClientResults = (searchTerm = '') => {
+            const allClients = Array.from(DOM.clientResults.querySelectorAll('.client-item'));
+            if (!searchTerm.trim()) {
+                allClients.forEach(client => client.style.display = 'block');
+                const emptyState = DOM.clientResults.querySelector('.empty-search-state');
+                if (emptyState) emptyState.remove();
                 return;
             }
-        } else {
-            if (state.paymentMethod === 'efectivo') {
-                if (state.cashReceived < state.finalTotal) {
-                    showAlert(`El monto recibido (${formatCurrency(state.cashReceived)}) es menor que el total a pagar (${formatCurrency(state.finalTotal)})`, 'error');
+            let hasResults = false;
+            allClients.forEach(client => {
+                const clientName = (client.getAttribute('data-name') || '').toLowerCase();
+                const clientDocument = (client.getAttribute('data-document') || '').toLowerCase();
+                const clientPhone = (client.getAttribute('data-phone') || '').toLowerCase();
+                const search = searchTerm.toLowerCase();
+                if (clientName.includes(search) || clientDocument.includes(search) || clientPhone.includes(search)) {
+                    client.style.display = 'block';
+                    hasResults = true;
+                } else {
+                    client.style.display = 'none';
+                }
+            });
+            const existingEmptyState = DOM.clientResults.querySelector('.empty-search-state');
+            if (existingEmptyState) existingEmptyState.remove();
+            if (!hasResults) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'empty-search-state';
+                emptyDiv.style.cssText = 'padding: 15px; text-align: center; color: #888;';
+                emptyDiv.innerHTML = `
+                    <p><i class='bx bx-search'></i></p>
+                    <p>No se encontraron clientes con "${searchTerm}"</p>
+                `;
+                DOM.clientResults.appendChild(emptyDiv);
+            }
+        };
+
+        // Renderizar items de la venta
+        const renderSaleItems = () => {
+            DOM.saleItemsTable.innerHTML = '';
+            if (state.saleItems.length === 0) {
+                DOM.saleItemsTable.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="empty-state">
+                            <div class="empty-state-icon">🛒</div>
+                            <p>No hay productos agregados</p>
+                            <p class="text-muted">Busque y agregue productos a la venta</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            state.saleItems.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.name}</td>
+                    <td>${item.quantity}</td>
+                    <td>${formatCurrency(item.price)}</td>
+                    <td>${formatCurrency(item.subtotal)}</td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-icon btn-outline btn-sm delete-item" data-id="${item.id}">
+                            <i class='bx bx-trash'></i>
+                        </button>
+                    </td>
+                `;
+                DOM.saleItemsTable.appendChild(row);
+            });
+            document.querySelectorAll('.delete-item').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const itemId = e.target.closest('button').dataset.id;
+                    const item = state.saleItems.find(item => item.id === itemId);
+                    state.saleItems = state.saleItems.filter(item => item.id !== itemId);
+                    updateTotal();
+                    renderSaleItems();
+                    if (item) {
+                        showAlert(`Producto eliminado: ${item.name}`, 'success');
+                    }
+                });
+            });
+        };
+
+        // Actualizar total de la venta
+        const updateTotal = () => {
+            state.totalSales = state.saleItems.reduce((total, item) => total + item.subtotal, 0); // Subtotal CON ITBIS
+            const itbisPercentage = 18; // 18% de ITBIS
+            state.subtotalSinITBIS = state.totalSales / (1 + (itbisPercentage / 100));
+            state.itbisAmount = state.totalSales - state.subtotalSinITBIS;
+            updateDiscount();
+            DOM.subtotalAmount.textContent = formatCurrency(state.subtotalSinITBIS); // Mostrar subtotal SIN ITBIS
+            DOM.itbisAmount.textContent = formatCurrency(state.itbisAmount);
+            DOM.totalWithITBIS.textContent = formatCurrency(state.totalSales); // Total CON ITBIS
+            
+            console.log('Actualizando totales:', {
+                subtotalSinITBIS: state.subtotalSinITBIS,
+                itbisAmount: state.itbisAmount,
+                totalSales: state.totalSales
+            });
+        };
+
+        // Actualizar descuento y total final
+        const updateDiscount = () => {
+            const discountPercentage = parseFloat(DOM.discountInput.value) || 0;
+            state.discountPercentage = Math.max(0, Math.min(discountPercentage, 100));
+            state.discountAmount = (state.totalSales * state.discountPercentage) / 100;
+            state.finalTotal = state.totalSales - state.discountAmount;
+            DOM.discountAmountDisplay.textContent = `${state.discountPercentage.toFixed(2)}% (${formatCurrency(state.discountAmount)})`;
+            DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
+            DOM.totalAPagarField.value = state.finalTotal;
+            calculateChange();
+        };
+
+        // Calcular cambio para pago en efectivo
+        const calculateChange = () => {
+            if (state.paymentType !== 'contado' || state.paymentMethod !== 'efectivo') return;
+            state.cashReceived = parseFloat(DOM.cashReceivedInput.value) || 0;
+            state.changeAmount = Math.max(0, state.cashReceived - state.finalTotal);
+            DOM.changeAmountDisplay.textContent = formatCurrency(state.changeAmount);
+        };
+
+        // Cambiar tipo de pago (contado/crédito)
+        const setPaymentType = (type) => {
+            state.paymentType = type;
+            DOM.cashPaymentBtn.classList.toggle('active', type === 'contado');
+            DOM.creditPaymentBtn.classList.toggle('active', type === 'credito');
+            DOM.clientInfoContainer.classList.toggle('hidden', type === 'contado');
+            DOM.cashInfoContainer.classList.toggle('hidden', type === 'credito');
+            DOM.cashPaymentFields.classList.toggle('hidden', type !== 'contado' || state.paymentMethod !== 'efectivo');
+            DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
+            DOM.totalAPagarField.value = state.finalTotal;
+        };
+
+        // Cambiar método de pago (efectivo/tarjeta/transferencia)
+        const setPaymentMethod = (method) => {
+            state.paymentMethod = method;
+            DOM.cashMethodBtn.classList.toggle('active', method === 'efectivo');
+            DOM.cardMethodBtn.classList.toggle('active', method === 'tarjeta');
+            DOM.transferMethodBtn.classList.toggle('active', method === 'transferencia');
+            DOM.cashPaymentFields.classList.toggle('hidden', method !== 'efectivo');
+            if (method === 'efectivo') {
+                calculateChange();
+            }
+        };
+
+        // Cambiar tipo de venta (unitaria/mayor)
+        const setSaleType = (type) => {
+            state.saleType = type;
+            DOM.unitSaleBtn.classList.toggle('active', type === 'unitaria');
+            DOM.wholesaleSaleBtn.classList.toggle('active', type === 'mayor');
+        };
+
+        // Seleccionar cliente
+        const selectClient = (clientElement) => {
+            const clientId = clientElement.getAttribute('data-id');
+            const clientName = clientElement.getAttribute('data-name');
+            const clientDocument = clientElement.getAttribute('data-document');
+            const creditLimit = clientElement.getAttribute('data-credit-limit');
+            state.selectedClient = {
+                id: clientId,
+                name: clientName,
+                document: clientDocument,
+                creditLimit: creditLimit
+            };
+            DOM.clientSearch.value = `${clientName} (${clientDocument})`;
+            DOM.clientResults.querySelectorAll('.client-item').forEach(item => {
+                item.style.display = 'none';
+            });
+            showAlert(`Cliente seleccionado: ${clientName}`, 'success');
+        };
+
+        // Seleccionar producto
+        const selectProduct = async (productElement) => {
+            const productId = productElement.getAttribute('data-id');
+            const productName = productElement.getAttribute('data-name');
+            const productPrice = parseFloat(productElement.getAttribute('data-price'));
+            const productPriceWithITBIS = parseFloat(productElement.getAttribute('data-price-with-itbis'));
+            const productWholesalePrice = parseFloat(productElement.getAttribute('data-wholesale-price'));
+            const productWholesalePriceWithITBIS = parseFloat(productElement.getAttribute('data-wholesale-price-with-itbis'));
+            const productStock = parseInt(productElement.getAttribute('data-stock'));
+            state.selectedProduct = {
+                id: productId,
+                name: productName,
+                price: productPrice,
+                priceWithITBIS: productPriceWithITBIS,
+                wholesalePrice: productWholesalePrice,
+                wholesalePriceWithITBIS: productWholesalePriceWithITBIS,
+                stock: productStock
+            };
+            DOM.productSearch.value = productName;
+            DOM.productQuantity.max = productStock;
+            if (DOM.productQuantity.value > productStock) {
+                DOM.productQuantity.value = productStock;
+                showAlert(`Cantidad ajustada al stock disponible: ${productStock}`, 'warning');
+            }
+            await showPriceModal(state.selectedProduct);
+        };
+
+        // Agregar producto a la venta
+        const addProductToSale = () => {
+            if (!state.selectedProduct) {
+                showAlert('Debe seleccionar un producto primero', 'error');
+                return;
+            }
+            const quantity = parseInt(DOM.productQuantity.value) || 1;
+            if (quantity <= 0) {
+                showAlert('La cantidad debe ser mayor a cero', 'error');
+                return;
+            }
+            if (quantity > state.selectedProduct.stock) {
+                showAlert(`No hay suficiente stock. Disponible: ${state.selectedProduct.stock}`, 'error');
+                return;
+            }
+            const currentPrice = state.saleType === 'mayor'
+                ? state.selectedProduct.wholesalePriceWithITBIS
+                : state.selectedProduct.priceWithITBIS;
+            const existingItemIndex = state.saleItems.findIndex(item => item.id === state.selectedProduct.id);
+            if (existingItemIndex !== -1) {
+                state.saleItems[existingItemIndex].quantity += quantity;
+                state.saleItems[existingItemIndex].price = currentPrice;
+                state.saleItems[existingItemIndex].subtotal = state.saleItems[existingItemIndex].quantity * currentPrice;
+            } else {
+                state.saleItems.push({
+                    id: state.selectedProduct.id,
+                    name: state.selectedProduct.name,
+                    price: currentPrice,
+                    quantity: quantity,
+                    subtotal: quantity * currentPrice
+                });
+            }
+            updateTotal();
+            renderSaleItems();
+            showAlert(`Producto agregado: ${state.selectedProduct.name} x${quantity}`, 'success');
+            state.selectedProduct = null;
+            DOM.productSearch.value = '';
+            DOM.productQuantity.value = '1';
+        };
+
+        // Preparar campos del formulario antes de enviar
+        const prepareFormFields = () => {
+            DOM.paymentTypeField.value = state.paymentType;
+            DOM.paymentMethodField.value = state.paymentMethod;
+            
+            if (state.paymentType === 'credito') {
+                DOM.clientIdField.value = state.selectedClient ? state.selectedClient.id : '';
+                DOM.clientNameField.value = state.selectedClient ? state.selectedClient.name : '';
+                DOM.clientDocumentField.value = state.selectedClient ? state.selectedClient.document : '';
+            } else {
+                DOM.clientNameField.value = DOM.cashClientName.value.trim();
+                DOM.clientDocumentField.value = DOM.cashClientDocument.value.trim();
+            }
+            
+            // Campos para ITBIS - IMPORTANTE
+            DOM.subtotalField.value = state.subtotalSinITBIS.toFixed(2); // Subtotal SIN ITBIS
+            DOM.itbisMontoField.value = state.itbisAmount.toFixed(2); // Monto del ITBIS
+            DOM.itbisPorcentajeField.value = '18.00'; // Porcentaje fijo del 18%
+            
+            DOM.discountPercentageField.value = state.discountPercentage.toFixed(2);
+            DOM.discountAmountField.value = state.discountAmount.toFixed(2);
+            DOM.totalField.value = state.finalTotal.toFixed(2);
+            DOM.cashReceivedField.value = state.cashReceived.toFixed(2);
+            DOM.changeAmountField.value = state.changeAmount.toFixed(2);
+            DOM.saleItemsField.value = JSON.stringify(state.saleItems);
+            DOM.totalAPagarField.value = state.finalTotal.toFixed(2);
+
+            console.log('Preparando datos para enviar:', {
+                subtotal: state.subtotalSinITBIS,
+                itbis_monto: state.itbisAmount,
+                itbis_porcentaje: 18.00,
+                total: state.finalTotal,
+                items: state.saleItems
+            });
+        };
+
+        // Validar y completar la venta
+        const completeSale = async () => {
+            if (state.saleItems.length === 0) {
+                showAlert('Debe agregar al menos un producto a la venta', 'error');
+                return;
+            }
+            if (state.paymentType === 'credito') {
+                if (!state.selectedClient) {
+                    showAlert('Debe seleccionar un cliente para venta a crédito', 'error');
+                    return;
+                }
+            } else {
+                if (state.paymentMethod === 'efectivo') {
+                    if (state.cashReceived < state.finalTotal) {
+                        showAlert(`El monto recibido (${formatCurrency(state.cashReceived)}) es menor que el total a pagar (${formatCurrency(state.finalTotal)})`, 'error');
+                        return;
+                    }
+                }
+                if (!DOM.cashClientName.value.trim()) {
+                    showAlert('Debe ingresar el nombre del cliente', 'error');
                     return;
                 }
             }
-            if (!DOM.cashClientName.value.trim()) {
-                showAlert('Debe ingresar el nombre del cliente', 'error');
+
+            // Validar datos del ITBIS
+            if (state.itbisAmount <= 0 && state.totalSales > 0) {
+                showAlert('Error en el cálculo del ITBIS. Por favor, recargue la página.', 'error');
                 return;
             }
-        }
-        try {
-            prepareFormFields();
-            const formData = new FormData(DOM.saleForm);
-            const response = await fetch(DOM.saleForm.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
+
+            try {
+                prepareFormFields();
+                const formData = new FormData(DOM.saleForm);
+                
+                // Mostrar loading
+                DOM.completeSaleButton.innerHTML = '<i class="bx bx-loader bx-spin"></i> Procesando...';
+                DOM.completeSaleButton.disabled = true;
+
+                const response = await fetch(DOM.saleForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('Venta procesada correctamente. Redirigiendo al comprobante...', 'success');
+                    setTimeout(() => {
+                        window.location.href = `/comprobante-venta/${result.venta_id}/`;
+                    }, 2000);
+                } else {
+                    showAlert(result.message || 'Error al procesar la venta', 'error');
                 }
-            });
-            const result = await response.json();
-            if (result.success) {
-                showAlert('Venta procesada correctamente. Redirigiendo al comprobante...', 'success');
-                setTimeout(() => {
-                    window.location.href = `/comprobante-venta/${result.venta_id}/`;
-                }, 2000);
-            } else {
-                showAlert(result.message, 'error');
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error de conexión al procesar la venta', 'error');
+            } finally {
+                // Restaurar botón
+                DOM.completeSaleButton.innerHTML = '<i class="bx bx-check"></i> Finalizar Venta';
+                DOM.completeSaleButton.disabled = false;
             }
-        } catch (error) {
-            console.error('Error:', error);
-            showAlert('Error al procesar la venta', 'error');
-        }
-    };
+        };
 
-    // Event Listeners
-    DOM.cashPaymentBtn.addEventListener('click', () => setPaymentType('contado'));
-    DOM.creditPaymentBtn.addEventListener('click', () => setPaymentType('credito'));
-    DOM.cashMethodBtn.addEventListener('click', () => setPaymentMethod('efectivo'));
-    DOM.cardMethodBtn.addEventListener('click', () => setPaymentMethod('tarjeta'));
-    DOM.transferMethodBtn.addEventListener('click', () => setPaymentMethod('transferencia'));
-    DOM.unitSaleBtn.addEventListener('click', () => setSaleType('unitaria'));
-    DOM.wholesaleSaleBtn.addEventListener('click', () => setSaleType('mayor'));
-    DOM.clientSearch.addEventListener('input', (e) => {
-        renderClientResults(e.target.value);
-    });
-    DOM.clientResults.addEventListener('click', (e) => {
-        const clientItem = e.target.closest('.client-item');
-        if (clientItem) {
-            selectClient(clientItem);
-        }
-    });
-    DOM.productSearch.addEventListener('input', (e) => {
-        debouncedSearch(e.target.value);
-    });
-    DOM.productResults.addEventListener('click', (e) => {
-        const productItem = e.target.closest('.product-item');
-        if (productItem) {
-            selectProduct(productItem);
-        }
-    });
-    DOM.addProductButton.addEventListener('click', addProductToSale);
-    DOM.discountInput.addEventListener('input', updateDiscount);
-    DOM.cashReceivedInput.addEventListener('input', calculateChange);
-    DOM.completeSaleButton.addEventListener('click', completeSale);
-    DOM.closeRegisterButton.addEventListener('click', () => {
-        DOM.closeRegisterModal.classList.add('active');
-    });
-    DOM.cancelCloseRegister.addEventListener('click', () => {
-        DOM.closeRegisterModal.classList.remove('active');
-    });
-    DOM.confirmCloseRegister.addEventListener('click', () => {
-        window.location.href = "{% url 'cierredecaja' %}";
-    });
-    DOM.alertOkButton.addEventListener('click', closeAlert);
-    DOM.priceModalOkButton.addEventListener('click', () => {
-        DOM.priceModal.classList.remove('active');
+        // Event Listeners
+        DOM.cashPaymentBtn.addEventListener('click', () => setPaymentType('contado'));
+        DOM.creditPaymentBtn.addEventListener('click', () => setPaymentType('credito'));
+        DOM.cashMethodBtn.addEventListener('click', () => setPaymentMethod('efectivo'));
+        DOM.cardMethodBtn.addEventListener('click', () => setPaymentMethod('tarjeta'));
+        DOM.transferMethodBtn.addEventListener('click', () => setPaymentMethod('transferencia'));
+        DOM.unitSaleBtn.addEventListener('click', () => setSaleType('unitaria'));
+        DOM.wholesaleSaleBtn.addEventListener('click', () => setSaleType('mayor'));
+        
+        DOM.clientSearch.addEventListener('input', (e) => {
+            renderClientResults(e.target.value);
+        });
+        
+        DOM.clientResults.addEventListener('click', (e) => {
+            const clientItem = e.target.closest('.client-item');
+            if (clientItem) {
+                selectClient(clientItem);
+            }
+        });
+        
+        DOM.productSearch.addEventListener('input', (e) => {
+            debouncedSearch(e.target.value);
+        });
+        
+        DOM.productResults.addEventListener('click', (e) => {
+            const productItem = e.target.closest('.product-item');
+            if (productItem) {
+                selectProduct(productItem);
+            }
+        });
+        
+        DOM.addProductButton.addEventListener('click', addProductToSale);
+        DOM.discountInput.addEventListener('input', updateDiscount);
+        DOM.cashReceivedInput.addEventListener('input', calculateChange);
+        DOM.completeSaleButton.addEventListener('click', completeSale);
+        
+        DOM.closeRegisterButton.addEventListener('click', () => {
+            DOM.closeRegisterModal.classList.add('active');
+        });
+        
+        DOM.cancelCloseRegister.addEventListener('click', () => {
+            DOM.closeRegisterModal.classList.remove('active');
+        });
+        
+        DOM.confirmCloseRegister.addEventListener('click', () => {
+            window.location.href = "{% url 'cierredecaja' %}";
+        });
+        
+        DOM.alertOkButton.addEventListener('click', closeAlert);
+        DOM.priceModalOkButton.addEventListener('click', () => {
+            DOM.priceModal.classList.remove('active');
+        });
+
+        // Inicializar la interfaz
+        setPaymentType('contado');
+        setPaymentMethod('efectivo');
+        setSaleType('unitaria');
+        renderSaleItems();
+        updateTotal();
+
+        // Permitir agregar producto con Enter
+        DOM.productSearch.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addProductToSale();
+            }
+        });
+        
+        DOM.productQuantity.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addProductToSale();
+            }
+        });
+
+        // Permitir buscar clientes con Enter
+        DOM.clientSearch.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+
+        // Inicializar búsqueda de productos vacía
+        searchProducts('');
     });
 
-    // Inicializar la interfaz
-    setPaymentType('contado');
-    setPaymentMethod('efectivo');
-    setSaleType('unitaria');
-    renderSaleItems();
-    updateTotal();
+    // Funciones globales para el modal de imagen
+    function openImageModal(imageUrl) {
+        const modal = document.getElementById('image-modal');
+        const modalImage = document.getElementById('modal-image');
+        modalImage.src = imageUrl;
+        modal.classList.add('active');
+    }
 
-    // Permitir agregar producto con Enter
-    DOM.productSearch.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            addProductToSale();
+    function closeImageModal() {
+        const modal = document.getElementById('image-modal');
+        modal.classList.remove('active');
+    }
+
+    // Funciones para el sidebar (mantener las existentes)
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+        sidebar.classList.toggle('active');
+        overlay.classList.toggle('active');
+        document.body.classList.toggle('sidebar-open');
+    }
+
+    function closeSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+        sidebar.classList.remove('active');
+        overlay.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+    }
+
+    // Cerrar sidebar al hacer clic fuera de él en móviles
+    document.addEventListener('click', (e) => {
+        const sidebar = document.getElementById('sidebar');
+        const menuToggle = document.querySelector('.menu-toggle');
+        if (window.innerWidth <= 768 && 
+            !sidebar.contains(e.target) && 
+            !menuToggle.contains(e.target) && 
+            sidebar.classList.contains('active')) {
+            closeSidebar();
         }
     });
-    DOM.productQuantity.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            addProductToSale();
+
+    // Cerrar modales al hacer clic fuera
+    document.addEventListener('click', (e) => {
+        // Modal de imagen
+        const imageModal = document.getElementById('image-modal');
+        if (e.target === imageModal) {
+            closeImageModal();
+        }
+        
+        // Modal de precio
+        const priceModal = document.getElementById('price-modal');
+        if (e.target === priceModal) {
+            priceModal.classList.remove('active');
+        }
+        
+        // Modal de alerta
+        const alertModal = document.getElementById('alert-modal');
+        if (e.target === alertModal) {
+            alertModal.classList.remove('active');
+        }
+        
+        // Modal de cerrar caja
+        const closeRegisterModal = document.getElementById('close-register-modal');
+        if (e.target === closeRegisterModal) {
+            closeRegisterModal.classList.remove('active');
         }
     });
-});
-
-
-    </script>
+</script>
 </body>
 </html>
