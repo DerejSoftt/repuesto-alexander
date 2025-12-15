@@ -800,6 +800,29 @@
             font-size: 1.1rem;
             height: 50px;
         }
+        /* Estilos para campos deshabilitados */
+        .form-control:disabled {
+            background-color: #f8f9fa !important;
+            color: #888 !important;
+            cursor: not-allowed !important;
+            border-color: #ddd !important;
+        }
+        
+        .discount-input-disabled {
+            background-color: #f8f9fa !important;
+            color: #888 !important;
+            cursor: not-allowed !important;
+            border-color: #ddd !important;
+        }
+        
+        .discount-disabled-message {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
         /* Responsive */
         @media (max-width: 768px) {
             .main-content {
@@ -1250,18 +1273,37 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Descuento en porcentaje -->
+                            
+                            <!-- DESCUENTO - CONDICIONAL PARA SUPERUSUARIOS -->
+                            {% if user.is_superuser %}
+                            <!-- Para superusuarios: campo editable -->
                             <div class="form-group">
                                 <label for="discount-input" class="form-label">Descuento(%)</label>
                                 <div class="input-group">
-                                    <input type="number" id="discount-input" class="form-control" placeholder="RD$0.00" step="0.01" min="0" max="" >
+                                    <input type="number" id="discount-input" class="form-control" placeholder="0" step="0.01" min="0" max="100">
                                 </div>
                             </div>
-                            <!-- Mostrar descuento aplicado y total final -->
-                            <!-- <div class="discount-display">
+                            <div class="discount-display">
                                 <span class="discount-label">Descuento aplicado</span>
-                                <span id="discount-amount" class="discount-value">RD$0.00</span>
-                            </div> -->
+                                <span id="discount-amount" class="discount-value">0% (RD$0.00)</span>
+                            </div>
+                            {% else %}
+                            <!-- Para usuarios normales: campo deshabilitado -->
+                            <div class="form-group">
+                                <label for="discount-input" class="form-label">Descuento(%)</label>
+                                <div class="input-group">
+                                    <input type="number" id="discount-input" class="form-control discount-input-disabled" value="0" step="0.01" min="0" max="100" readonly disabled>
+                                </div>
+                                <div class="discount-disabled-message">
+                                    <i class='bx bx-info-circle'></i> Solo el administrador puede aplicar descuentos
+                                </div>
+                            </div>
+                            <div class="discount-display">
+                                <span class="discount-label">Descuento aplicado</span>
+                                <span id="discount-amount" class="discount-value">0% (RD$0.00)</span>
+                            </div>
+                            {% endif %}
+                            
                             <!-- Total a pagar general -->
                             <div class="final-total-display">
                                 <span class="final-total-label">Total a Pagar</span>
@@ -1398,9 +1440,9 @@
         <input type="hidden" name="client_document" id="client-document">
         <input type="hidden" name="subtotal" id="subtotal">
 
- <!-- AGREGAR ESTOS CAMPOS PARA EL ITBIS -->
-    <input type="hidden" name="itbis_monto" id="itbis-monto">
-    <input type="hidden" name="itbis_porcentaje" id="itbis-porcentaje">
+        <!-- AGREGAR ESTOS CAMPOS PARA EL ITBIS -->
+        <input type="hidden" name="itbis_monto" id="itbis-monto">
+        <input type="hidden" name="itbis_porcentaje" id="itbis-porcentaje">
 
         <input type="hidden" name="discount_percentage" id="discount-percentage">
         <input type="hidden" name="discount_amount" id="discount-amount">
@@ -1430,6 +1472,7 @@
             cashReceived: 0,
             changeAmount: 0,
             saleType: 'unitaria', // 'unitaria' o 'mayor'
+            isSuperuser: {{ user.is_superuser|yesno:"true,false" }}, // Determinar si es superusuario
         };
 
         // Elementos del DOM
@@ -1748,11 +1791,30 @@
 
         // Actualizar descuento y total final
         const updateDiscount = () => {
-            const discountPercentage = parseFloat(DOM.discountInput.value) || 0;
-            state.discountPercentage = Math.max(0, Math.min(discountPercentage, 100));
+            let discountPercentage;
+            
+            if (state.isSuperuser) {
+                // Para superusuarios, usar el valor del campo
+                discountPercentage = parseFloat(DOM.discountInput.value) || 0;
+                state.discountPercentage = Math.max(0, Math.min(discountPercentage, 100));
+            } else {
+                // Para usuarios normales, siempre 0
+                state.discountPercentage = 0;
+                if (DOM.discountInput) {
+                    DOM.discountInput.value = 0;
+                }
+            }
+            
             state.discountAmount = (state.totalSales * state.discountPercentage) / 100;
             state.finalTotal = state.totalSales - state.discountAmount;
-            DOM.discountAmountDisplay.textContent = `${state.discountPercentage.toFixed(2)}% (${formatCurrency(state.discountAmount)})`;
+            
+            // Actualizar display
+            if (state.isSuperuser) {
+                DOM.discountAmountDisplay.textContent = `${state.discountPercentage.toFixed(2)}% (${formatCurrency(state.discountAmount)})`;
+            } else {
+                DOM.discountAmountDisplay.textContent = `0% (${formatCurrency(state.discountAmount)})`;
+            }
+            
             DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
             DOM.totalAPagarField.value = state.finalTotal;
             calculateChange();
@@ -1915,7 +1977,8 @@
                 itbis_monto: state.itbisAmount,
                 itbis_porcentaje: 18.00,
                 total: state.finalTotal,
-                items: state.saleItems
+                items: state.saleItems,
+                is_superuser: state.isSuperuser
             });
         };
 
@@ -2037,6 +2100,25 @@
         DOM.priceModalOkButton.addEventListener('click', () => {
             DOM.priceModal.classList.remove('active');
         });
+
+        // Prevenir cambios en el descuento si el usuario no es superusuario
+        if (!state.isSuperuser && DOM.discountInput) {
+            DOM.discountInput.addEventListener('input', (e) => {
+                e.preventDefault();
+                DOM.discountInput.value = 0;
+                showAlert('El descuento solo puede ser aplicado por el administrador', 'warning');
+            });
+            
+            DOM.discountInput.addEventListener('keydown', (e) => {
+                if (e.key !== 'Tab' && e.key !== 'Enter') {
+                    e.preventDefault();
+                    showAlert('El descuento solo puede ser aplicado por el administrador', 'warning');
+                }
+            });
+            
+            // Establecer estilo de solo lectura
+            DOM.discountInput.classList.add('discount-input-disabled');
+        }
 
         // Inicializar la interfaz
         setPaymentType('contado');

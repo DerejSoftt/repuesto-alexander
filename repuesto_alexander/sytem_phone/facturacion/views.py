@@ -14,12 +14,12 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import json
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
-
+from datetime import datetime, time as datetime_time
 from django.utils import timezone
 from datetime import date, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, portrait
 from reportlab.pdfgen import canvas
 from django.http import HttpResponse
 from io import BytesIO
@@ -31,10 +31,11 @@ import os
 from django.conf import settings
 import random
 import string
-import time
+# import time
 from django.db.models import Max
-from django.db.models import Sum, Q, F
-from datetime import datetime, timedelta
+from django.db.models import Sum, Q, F, Avg, Count
+from django.db.models.functions import TruncDate
+from datetime import datetime, timedelta, time
 import pandas as pd
 from decimal import Decimal, InvalidOperation
 import logging
@@ -57,7 +58,7 @@ from xhtml2pdf import pisa
 from decimal import Decimal
 from datetime import date
 
-
+from reportlab.lib.units import cm
 
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.units import inch, mm
@@ -67,6 +68,10 @@ from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import io
+
+from django.views.decorators.clickjacking import xframe_options_exempt
+from django.core.management.base import BaseCommand
+from celery import shared_task
 
 def is_superuser(user):
     return user.is_superuser
@@ -977,53 +982,102 @@ def movimientos_stock_pdf(request):
 
 
 
-
 @login_required
 def get_usuarios(request):
     """Obtener lista de usuarios para filtros"""
-    usuarios = User.objects.all().values('id', 'username')
-    return JsonResponse({'usuarios': list(usuarios)})
-
+    print("=== LLAMANDO GET_USUARIOS ===")  # Debug
+    try:
+        usuarios = User.objects.all().values('id', 'username')
+        print(f"Usuarios encontrados: {list(usuarios)}")  # Debug
+        return JsonResponse({'usuarios': list(usuarios)})
+    except Exception as e:
+        print(f"Error en get_usuarios: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @login_required
 def get_cuadres(request):
     """Obtener cuadres de caja con filtros por rango de fechas"""
     try:
-        cuadres = CierreCaja.objects.select_related('caja__usuario').all().order_by('-fecha_cierre')
+        print("=== GET_CUADRES LLAMADO ===")
+        
+        # Iniciar con todos los cuadres
+        cuadres = CierreCaja.objects.all().order_by('-fecha_cierre')
         
         # Aplicar filtros
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         usuario_id = request.GET.get('usuario')
         
+        print(f"Filtros recibidos: desde={fecha_desde}, hasta={fecha_hasta}, usuario={usuario_id}")
+        
         if fecha_desde:
-            cuadres = cuadres.filter(fecha_cierre__date__gte=fecha_desde)
+            try:
+                cuadres = cuadres.filter(fecha_cierre__date__gte=fecha_desde)
+                print(f"Filtrando desde: {fecha_desde}")
+            except Exception as e:
+                print(f"Error filtrando fecha_desde: {e}")
+        
         if fecha_hasta:
-            cuadres = cuadres.filter(fecha_cierre__date__lte=fecha_hasta)
+            try:
+                cuadres = cuadres.filter(fecha_cierre__date__lte=fecha_hasta)
+                print(f"Filtrando hasta: {fecha_hasta}")
+            except Exception as e:
+                print(f"Error filtrando fecha_hasta: {e}")
+        
         if usuario_id:
-            cuadres = cuadres.filter(caja__usuario_id=usuario_id)
+            try:
+                # Ajusta según cómo está relacionado el usuario con el cierre de caja
+                # Si hay un campo usuario directo en CierreCaja, usa:
+                # cuadres = cuadres.filter(usuario_id=usuario_id)
+                
+                # Si está a través de Caja:
+                cuadres = cuadres.filter(caja__usuario_id=usuario_id)
+                print(f"Filtrando por usuario: {usuario_id}")
+            except Exception as e:
+                print(f"Error filtrando usuario: {e}")
+        
+        print(f"Total cuadres encontrados: {cuadres.count()}")
         
         data = []
         for cuadre in cuadres:
-            data.append({
-                'id': cuadre.id,
-                'fecha_cierre': cuadre.fecha_cierre.strftime('%d/%m/%Y %H:%M'),
-                'usuario': cuadre.caja.usuario.username,
-                'monto_inicial': float(cuadre.caja.monto_inicial),
-                'monto_final': float(cuadre.caja.monto_final) if cuadre.caja.monto_final else 0,
-                'monto_efectivo_real': float(cuadre.monto_efectivo_real),
-                'monto_tarjeta_real': float(cuadre.monto_tarjeta_real),
-                'total_esperado': float(cuadre.total_esperado),
-                'diferencia': float(cuadre.diferencia),
-                'estado': cuadre.caja.estado,
-                'observaciones': cuadre.observaciones,
-            })
+            try:
+                # Obtener el nombre de usuario según tu estructura
+                username = "Sistema"
+                if cuadre.caja and cuadre.caja.usuario:
+                    username = cuadre.caja.usuario.username
+                elif hasattr(cuadre, 'usuario') and cuadre.usuario:
+                    username = cuadre.usuario.username
+                
+                # Crear diccionario con los datos
+                cuadre_data = {
+                    'id': cuadre.id,
+                    'fecha_cierre': cuadre.fecha_cierre.strftime('%d/%m/%Y %H:%M'),
+                    'usuario': username,
+                    'monto_inicial': float(getattr(cuadre, 'monto_inicial', 0)),
+                    'monto_final': float(getattr(cuadre, 'monto_final', 0)),
+                    'monto_efectivo_real': float(cuadre.monto_efectivo_real),
+                    'monto_tarjeta_real': float(cuadre.monto_tarjeta_real),
+                    'total_esperado': float(cuadre.total_esperado),
+                    'diferencia': float(cuadre.diferencia),
+                    'estado': getattr(cuadre, 'estado', 'cerrada'),
+                    'observaciones': cuadre.observaciones or '',
+                }
+                data.append(cuadre_data)
+                
+            except Exception as e:
+                print(f"Error procesando cuadre {cuadre.id}: {e}")
+                continue
         
+        print(f"Datos preparados: {len(data)} registros")
         return JsonResponse({'cuadres': data})
         
     except Exception as e:
         print(f"Error en get_cuadres: {e}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
 
 @login_required
@@ -1365,46 +1419,136 @@ def inventario_eliminar(request, id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+# @login_required
+# def iniciocaja(request):
+#     if request.method == 'POST':
+#         # Obtener datos del formulario
+#         monto_inicial = request.POST.get('monto_inicial')
+        
+#         # Validar el monto
+#         try:
+#             monto_inicial = float(monto_inicial)
+#             if monto_inicial < 0:
+#                 messages.error(request, 'El monto inicial debe ser mayor o igual a cero.')
+#                 return render(request, "facturacion/iniciocaja.html")
+#         except (ValueError, TypeError):
+#             messages.error(request, 'Por favor ingrese un monto válido.')
+#             return render(request, "facturacion/iniciocaja.html")
+        
+#         # Verificar si el usuario ya tiene una caja abierta
+#         caja_abierta = Caja.objects.filter(usuario=request.user, estado='abierta').first()
+#         if caja_abierta:
+#             messages.error(request, 'Ya tienes una caja abierta. Debes cerrarla antes de abrir una nueva.')
+#             return render(request, "facturacion/iniciocaja.html")
+        
+#         # Crear nueva caja
+#         try:
+#             nueva_caja = Caja(
+#                 usuario=request.user,
+#                 monto_inicial=monto_inicial,
+#                 estado='abierta'
+#             )
+#             nueva_caja.save()
+            
+#             messages.success(request, 'Caja iniciada correctamente. Redirigiendo a ventas...')
+#             # Redirigir a ventas después de un breve retraso para mostrar el mensaje
+#             return redirect('ventas')  # Asegúrate de tener una URL llamada 'ventas'
+            
+#         except Exception as e:
+#             messages.error(request, f'Error al iniciar la caja: {str(e)}')
+    
+#     return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+
+
 @login_required
 def iniciocaja(request):
+    now = timezone.localtime(timezone.now())
+    today = now.date()
+    
+    # 1. Primero verificar si hay caja abierta HOY
+    caja_abierta_hoy = Caja.objects.filter(
+        usuario=request.user, 
+        estado='abierta',
+        fecha_apertura__date=today
+    ).first()
+    
+    if caja_abierta_hoy:
+        messages.info(request, f'Ya tienes una caja abierta desde {caja_abierta_hoy.fecha_apertura.strftime("%H:%M")}.')
+        return redirect('ventas')
+    
+    # 2. Verificar si hay caja cerrada HOY (usando fecha_cierre)
+    caja_cerrada_hoy = Caja.objects.filter(
+        usuario=request.user,
+        estado='cerrada',
+        fecha_cierre__date=today  # ← CORREGIDO: usar fecha_cierre
+    ).first()
+    
+    if caja_cerrada_hoy:
+        messages.info(request, 'Ya cerraste la caja de hoy. Puedes abrir una nueva mañana.')
+        return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+    
+    # 3. Verificar si hay cajas abiertas de días anteriores
+    cajas_abiertas_anteriores = Caja.objects.filter(
+        usuario=request.user,
+        estado='abierta'
+    ).exclude(fecha_apertura__date=today)
+    
+    if cajas_abiertas_anteriores.exists():
+        # Si es después de las 5:30 PM, cerrar automáticamente
+        cutoff_time = timezone.localtime(timezone.now()).replace(hour=17, minute=30, second=0, microsecond=0)
+        
+        if now >= cutoff_time:
+            for caja in cajas_abiertas_anteriores:
+                caja.estado = 'cerrada'
+                caja.fecha_cierre = now
+                caja.observaciones = f'Cierre automático a las {cutoff_time.strftime("%H:%M")}'
+                caja.save()
+            
+            messages.info(request, f'Caja(s) anterior(es) cerrada(s) automáticamente.')
+        else:
+            # Si es antes de las 5:30 PM, mostrar error
+            messages.error(request, 'Tienes una caja abierta de un día anterior. Debes cerrarla primero.')
+            return redirect('ventas')  # O redirigir a una página de cierre de caja
+    
+    # 4. Procesar apertura de caja
     if request.method == 'POST':
-        # Obtener datos del formulario
         monto_inicial = request.POST.get('monto_inicial')
         
-        # Validar el monto
+        if not monto_inicial:
+            messages.error(request, 'Debe ingresar un monto inicial.')
+            return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+        
         try:
-            monto_inicial = float(monto_inicial)
+            monto_inicial = Decimal(monto_inicial)
             if monto_inicial < 0:
                 messages.error(request, 'El monto inicial debe ser mayor o igual a cero.')
-                return render(request, "facturacion/iniciocaja.html")
-        except (ValueError, TypeError):
+                return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+        except (ValueError, InvalidOperation, TypeError):
             messages.error(request, 'Por favor ingrese un monto válido.')
-            return render(request, "facturacion/iniciocaja.html")
+            return render(request, "facturacion/iniciocaja.html", {'user': request.user})
         
-        # Verificar si el usuario ya tiene una caja abierta
-        caja_abierta = Caja.objects.filter(usuario=request.user, estado='abierta').first()
-        if caja_abierta:
-            messages.error(request, 'Ya tienes una caja abierta. Debes cerrarla antes de abrir una nueva.')
-            return render(request, "facturacion/iniciocaja.html")
-        
-        # Crear nueva caja
         try:
             nueva_caja = Caja(
                 usuario=request.user,
                 monto_inicial=monto_inicial,
-                estado='abierta'
+                estado='abierta',
+                fecha_apertura=now,
+                observaciones='Apertura manual'
             )
             nueva_caja.save()
             
             messages.success(request, 'Caja iniciada correctamente. Redirigiendo a ventas...')
-            # Redirigir a ventas después de un breve retraso para mostrar el mensaje
-            return redirect('ventas')  # Asegúrate de tener una URL llamada 'ventas'
+            return redirect('ventas')
             
         except Exception as e:
             messages.error(request, f'Error al iniciar la caja: {str(e)}')
+            # Log del error para debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al crear caja: {str(e)}")
+            return render(request, "facturacion/iniciocaja.html", {'user': request.user})
     
     return render(request, "facturacion/iniciocaja.html", {'user': request.user})
-
 
 # @login_required
 # def ventas(request):
@@ -1575,35 +1719,66 @@ def iniciocaja(request):
     
 #     return JsonResponse({'error': 'Método no permitido', 'success': False})
 
-
-
 @login_required
 @check_module_access('ventas')
 def ventas(request):
-    # Verificar que el usuario tenga una caja abierta
-    try:
-        caja_abierta = Caja.objects.filter(usuario=request.user, estado='abierta').first()
-        if not caja_abierta:
-            messages.error(request, 'Debes abrir una caja antes de realizar ventas.')
-            return redirect('iniciocaja')
-        
-        if request.method == 'POST':
-            return procesar_venta(request)
-        
-        # Obtener clientes y productos activos
-        clientes = Cliente.objects.filter(status=True)
-        productos = EntradaProducto.objects.filter(activo=True, cantidad__gt=0)
-        
-        return render(request, "facturacion/ventas.html", {
-            'user': request.user,
-            'caja_abierta': caja_abierta,
-            'clientes': clientes,
-            'productos': productos
-        })
+    now = timezone.localtime(timezone.now())
+    today = now.date()
     
-    except Exception as e:
-        messages.error(request, f'Error al cargar la página de ventas: {str(e)}')
-        return redirect('inicio')
+    # Verificar que el usuario tenga una caja abierta
+    caja_abierta = Caja.objects.filter(
+        usuario=request.user, 
+        estado='abierta'
+    ).first()
+    
+    if not caja_abierta:
+        messages.error(request, 'No hay una caja abierta. Debe abrir una caja primero.')
+        return redirect('iniciocaja')
+    
+    # Verificar si es después de las 5:30 PM
+    current_time = now.time()
+    cutoff_time = time(17, 30, 0)
+    
+    if current_time >= cutoff_time:
+        # Cerrar la caja automáticamente
+        ventas_periodo = Venta.objects.filter(
+            vendedor=request.user,
+            fecha_venta__gte=caja_abierta.fecha_apertura,
+            completada=True,
+            anulada=False
+        )
+        
+        total_ventas = ventas_periodo.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        caja_abierta.monto_final = total_ventas
+        caja_abierta.fecha_cierre = now
+        caja_abierta.hora_cierre_exacta = cutoff_time
+        caja_abierta.estado = 'cerrada'
+        caja_abierta.tipo_cierre = 'automatico'
+        caja_abierta.observaciones = f'Cierre automático a las {cutoff_time.strftime("%H:%M")} PM desde ventas'
+        caja_abierta.save()
+        
+        messages.success(request, f'Caja cerrada automáticamente a las {cutoff_time.strftime("%H:%M")} PM. Redirigiendo...')
+        return redirect('iniciocaja')
+    
+    # Resto de la lógica normal de ventas...
+    if request.method == 'POST':
+        return procesar_venta(request)
+    
+    clientes = Cliente.objects.filter(status=True)
+    productos = EntradaProducto.objects.filter(activo=True, cantidad__gt=0)
+    
+    return render(request, "facturacion/ventas.html", {
+        'user': request.user,
+        'caja_abierta': caja_abierta,
+        'clientes': clientes,
+        'productos': productos
+    })
+
+
+
+
+
 
 # @csrf_exempt
 # @require_POST
@@ -2081,6 +2256,25 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import textwrap
 
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.db import transaction
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+from decimal import Decimal
+import json
+
+from django.core.mail import EmailMessage
+from django.conf import settings
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.units import inch
+
 @csrf_exempt
 @require_POST
 @transaction.atomic
@@ -2089,23 +2283,46 @@ def procesar_venta(request):
     try:
         data = request.POST
         user = request.user
+        
         if not data:
             return JsonResponse({'success': False, 'message': 'No se recibieron datos'})
 
-        # Datos de la venta
+        # ============================================
+        # VALIDACIÓN DE DESCUENTO - SOLO PARA SUPERUSUARIOS
+        # ============================================
+        if not user.is_superuser:
+            # Para usuarios normales, forzar descuento a 0
+            discount_percentage = Decimal('0.00')
+            discount_amount = Decimal('0.00')
+            
+            # Verificar si intentaron aplicar descuento (validación adicional)
+            received_discount = Decimal(data.get('discount_percentage', '0'))
+            if received_discount > 0:
+                return JsonResponse({
+                    'success': False, 
+                    'message': 'No tiene permisos para aplicar descuentos. Solo el administrador puede hacerlo.'
+                })
+        else:
+            # Para superusuarios, usar los valores recibidos
+            discount_percentage = Decimal(data.get('discount_percentage', 0))
+            discount_amount = Decimal(data.get('discount_amount', 0))
+        
+        # ============================================
+        # DATOS DE LA VENTA
+        # ============================================
         payment_type = data.get('payment_type', 'contado')
         payment_method = data.get('payment_method', 'efectivo')
         subtotal_sin_itbis = Decimal(data.get('subtotal', 0))  # Subtotal SIN ITBIS
         itbis_monto = Decimal(data.get('itbis_monto', 0))  # Monto del ITBIS
         itbis_porcentaje = Decimal(data.get('itbis_porcentaje', 18.00))  # Porcentaje del ITBIS
-        discount_percentage = Decimal(data.get('discount_percentage', 0))
-        discount_amount = Decimal(data.get('discount_amount', 0))
         total = Decimal(data.get('total', 0))
         total_a_pagar = Decimal(data.get('total_a_pagar', 0))
         cash_received = Decimal(data.get('cash_received', 0))
         change_amount = Decimal(data.get('change_amount', 0))
 
-        # Validaciones básicas
+        # ============================================
+        # VALIDACIONES BÁSICAS
+        # ============================================
         if payment_type not in ['contado', 'credito']:
             return JsonResponse({'success': False, 'message': 'Tipo de pago inválido'})
         if payment_method not in ['efectivo', 'tarjeta', 'transferencia']:
@@ -2114,37 +2331,54 @@ def procesar_venta(request):
             return JsonResponse({'success': False, 'message': 'El subtotal debe ser mayor o igual a 0'})
         if total <= 0:
             return JsonResponse({'success': False, 'message': 'El total debe ser mayor a 0'})
-        if discount_percentage < 0 or discount_percentage > 100:
-            return JsonResponse({'success': False, 'message': 'El porcentaje de descuento debe estar entre 0 y 100'})
+        
+        # Validar porcentaje de descuento (solo para superusuarios que pasaron la validación anterior)
+        if user.is_superuser and (discount_percentage < 0 or discount_percentage > 100):
+            return JsonResponse({
+                'success': False, 
+                'message': 'El porcentaje de descuento debe estar entre 0 y 100'
+            })
 
-        # Calcular subtotal con ITBIS para validaciones
+        # ============================================
+        # CÁLCULO Y VALIDACIÓN DE ITBIS
+        # ============================================
         subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
 
         # Validar que el ITBIS sea consistente
         itbis_calculado = subtotal_sin_itbis * (itbis_porcentaje / 100)
         if abs(itbis_monto - itbis_calculado) > Decimal('0.01'):
             print(f"Advertencia: ITBIS inconsistente. Recibido: {itbis_monto}, Calculado: {itbis_calculado}")
-            # Usar el calculado para consistencia
             itbis_monto = itbis_calculado
             subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
 
-        # Validar descuento
-        discount_amount_calculado = (subtotal_con_itbis * discount_percentage) / Decimal('100.00')
-        total_calculado = subtotal_con_itbis - discount_amount_calculado
-        
-        if abs(discount_amount - discount_amount_calculado) > Decimal('0.01'):
-            print(f"Advertencia: Descuento inconsistente. Recibido: {discount_amount}, Calculado: {discount_amount_calculado}")
-            discount_amount = discount_amount_calculado
-        
-        if abs(total - total_calculado) > Decimal('0.01'):
-            print(f"Advertencia: Total inconsistente. Recibido: {total}, Calculado: {total_calculado}")
-            total = total_calculado
+        # ============================================
+        # VALIDACIÓN DE DESCUENTO (CÁLCULO)
+        # ============================================
+        if user.is_superuser:
+            discount_amount_calculado = (subtotal_con_itbis * discount_percentage) / Decimal('100.00')
+            total_calculado = subtotal_con_itbis - discount_amount_calculado
+            
+            if abs(discount_amount - discount_amount_calculado) > Decimal('0.01'):
+                print(f"Advertencia: Descuento inconsistente. Recibido: {discount_amount}, Calculado: {discount_amount_calculado}")
+                discount_amount = discount_amount_calculado
+            
+            if abs(total - total_calculado) > Decimal('0.01'):
+                print(f"Advertencia: Total inconsistente. Recibido: {total}, Calculado: {total_calculado}")
+                total = total_calculado
+        else:
+            # Para usuarios normales, asegurarse de que el descuento sea 0
+            discount_amount = Decimal('0.00')
+            discount_percentage = Decimal('0.00')
+            # Recalcular total sin descuento
+            total = subtotal_con_itbis
 
         # Si el total cambió, actualizar total_a_pagar
         if total_a_pagar != total:
             total_a_pagar = total
 
-        # Procesar cliente
+        # ============================================
+        # PROCESAR CLIENTE
+        # ============================================
         client_id = data.get('client_id')
         client_name = data.get('client_name', '').strip()
         client_document = data.get('client_document', '').strip()
@@ -2164,7 +2398,6 @@ def procesar_venta(request):
                     eliminada=False
                 ).exclude(estado='pagada')
                 
-                # Usar la propiedad saldo_pendiente (calculada automáticamente)
                 total_deuda = sum(cuenta.saldo_pendiente for cuenta in cuentas_pendientes)
                 total_con_nueva_venta = total_deuda + total
                 
@@ -2180,7 +2413,9 @@ def procesar_venta(request):
             if not client_name:
                 return JsonResponse({'success': False, 'message': 'Debe ingresar el nombre del cliente'})
 
-        # Procesar items de la venta
+        # ============================================
+        # PROCESAR ITEMS DE LA VENTA
+        # ============================================
         sale_items_json = data.get('sale_items')
         if not sale_items_json:
             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
@@ -2232,7 +2467,9 @@ def procesar_venta(request):
             except (ValueError, KeyError) as e:
                 return JsonResponse({'success': False, 'message': f'Datos inválidos para producto: {item.get("name", "Desconocido")}. Error: {str(e)}'})
 
-        # Crear la venta
+        # ============================================
+        # CREAR LA VENTA
+        # ============================================
         from .models import Venta, DetalleVenta
         venta = Venta(
             vendedor=user,
@@ -2256,9 +2493,12 @@ def procesar_venta(request):
         )
         venta.save()
 
-        # Log de la venta para debugging
+        # ============================================
+        # LOG DE LA VENTA PARA DEBUGGING
+        # ============================================
         print(f"=== VENTA CREADA ===")
         print(f"Factura: {venta.numero_factura}")
+        print(f"Usuario: {user.username} (Superusuario: {user.is_superuser})")
         print(f"Subtotal (sin ITBIS): RD${venta.subtotal:.2f}")
         print(f"ITBIS ({venta.itbis_porcentaje}%): RD${venta.itbis_monto:.2f}")
         print(f"Subtotal (con ITBIS): RD${venta.subtotal + venta.itbis_monto:.2f}")
@@ -2269,7 +2509,9 @@ def procesar_venta(request):
         print(f"Efectivo recibido: RD${venta.efectivo_recibido:.2f}")
         print(f"Cambio: RD${venta.cambio:.2f}")
 
-        # Procesar detalles de venta y descontar stock
+        # ============================================
+        # PROCESAR DETALLES DE VENTA Y DESCONTAR STOCK
+        # ============================================
         productos_para_cuenta = []
         for item_data in productos_validados:
             producto = item_data['producto']
@@ -2302,19 +2544,20 @@ def procesar_venta(request):
             
             productos_para_cuenta.append(f"{nombre_producto} x{cantidad} - RD${precio_unitario:.2f}")
 
-        # Crear cuenta por cobrar si es venta a crédito (CORREGIDO)
+        # ============================================
+        # CREAR CUENTA POR COBRAR SI ES VENTA A CRÉDITO
+        # ============================================
         if payment_type == 'credito' and cliente:
             try:
                 from .models import CuentaPorCobrar
                 fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
                 productos_str = "\n".join(productos_para_cuenta)
                 
-                # NO intentar asignar saldo_pendiente ya que es una propiedad de solo lectura
                 cuenta_por_cobrar = CuentaPorCobrar(
                     venta=venta,
                     cliente=cliente,
                     monto_total=total,
-                    monto_pagado=0,  # Inicialmente no se ha pagado nada
+                    monto_pagado=0,
                     fecha_vencimiento=fecha_vencimiento,
                     productos=productos_str,
                     estado='pendiente',
@@ -2327,13 +2570,15 @@ Productos:
                 
                 print(f"Cuenta por cobrar creada: {cuenta_por_cobrar.id}")
                 print(f"Monto total: RD${total:.2f}")
-                print(f"Saldo pendiente (calculado automáticamente): RD${cuenta_por_cobrar.saldo_pendiente:.2f}")
+                print(f"Saldo pendiente: RD${cuenta_por_cobrar.saldo_pendiente:.2f}")
                 
             except Exception as e:
                 transaction.set_rollback(True)
                 return JsonResponse({'success': False, 'message': f'Error al crear cuenta por cobrar: {str(e)}'})
 
+        # ============================================
         # GENERAR Y ENVIAR PDF POR CORREO
+        # ============================================
         try:
             # Generar el PDF
             pdf_buffer = generar_pdf_venta(venta)
@@ -2385,13 +2630,16 @@ Productos:
         except Exception as e:
             # Si falla el envío del correo, no revertimos la venta, solo lo registramos
             print(f"Error al enviar correo: {str(e)}")
-            # Puedes decidir si quieres notificar al usuario o no
 
+        # ============================================
+        # RESPUESTA EXITOSA
+        # ============================================
         return JsonResponse({
             'success': True,
             'message': 'Venta procesada correctamente',
             'venta_id': venta.id,
             'numero_factura': venta.numero_factura,
+            'descuento_aplicado': user.is_superuser,  # Indica si se aplicó descuento
             'detalles': {
                 'subtotal_sin_itbis': float(venta.subtotal),
                 'itbis_porcentaje': float(venta.itbis_porcentaje),
@@ -2418,6 +2666,9 @@ Productos:
             'debug': error_traceback.split('\n')[-2] if 'debug' in request.GET else None
         })
 
+# ============================================
+# FUNCIÓN PARA GENERAR PDF (SIN CAMBIOS)
+# ============================================
 def generar_pdf_venta(venta):
     """Genera un PDF con los detalles de la venta"""
     buffer = BytesIO()
@@ -2518,7 +2769,6 @@ def generar_pdf_venta(venta):
     detalles = venta.detalles.all()
     for detalle in detalles:
         nombre_producto = detalle.producto.descripcion if hasattr(detalle.producto, 'descripcion') else str(detalle.producto)
-        # Limitar longitud del nombre para que quepa en el PDF
         if len(nombre_producto) > 40:
             nombre_producto = nombre_producto[:37] + "..."
             
@@ -2541,7 +2791,7 @@ def generar_pdf_venta(venta):
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),  # Alinear nombres a la izquierda
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
     
@@ -2582,6 +2832,11 @@ def generar_pdf_venta(venta):
     contenido.append(Paragraph("¡Gracias por su compra!", estilo_negrita))
     contenido.append(Paragraph("Para reclamos o devoluciones, presente esta factura.", estilo_normal))
     
+    # Nota sobre descuento (solo si fue aplicado)
+    if venta.descuento_porcentaje > 0:
+        contenido.append(Spacer(1, 10))
+        contenido.append(Paragraph(f"<i>Nota: Se aplicó un descuento del {venta.descuento_porcentaje}% autorizado por el administrador.</i>", estilo_normal))
+    
     # Construir el PDF
     doc.build(contenido)
     
@@ -2590,7 +2845,6 @@ def generar_pdf_venta(venta):
     buffer.close()
     
     return BytesIO(pdf)
-
 
 @login_required
 def comprobante_venta(request, venta_id):
@@ -4764,6 +5018,327 @@ def detalle_cuenta(request, cuenta_id):
 
 
 @login_required
+@xframe_options_exempt
+def generar_reporte_deudas_pdf(request):
+    """
+    Genera un reporte PDF de deudas por cliente
+    """
+    try:
+        # Obtener parámetros de filtrado (si existen)
+        search = request.GET.get('search', '')
+        status_filter = request.GET.get('status', '')
+        date_from = request.GET.get('date_from', '')
+        date_to = request.GET.get('date_to', '')
+
+        # Filtrar cuentas por cobrar (excluir anuladas y eliminadas)
+        cuentas = CuentaPorCobrar.objects.select_related('venta', 'cliente').filter(
+            anulada=False,
+            eliminada=False
+        ).order_by('cliente__full_name')
+
+        # Aplicar filtros si existen
+        if search:
+            cuentas = cuentas.filter(
+                Q(cliente__full_name__icontains=search) |
+                Q(venta__numero_factura__icontains=search) |
+                Q(cliente__identification_number__icontains=search)
+            )
+
+        if status_filter:
+            cuentas = cuentas.filter(estado=status_filter)
+
+        if date_from:
+            cuentas = cuentas.filter(venta__fecha_venta__gte=date_from)
+
+        if date_to:
+            cuentas = cuentas.filter(venta__fecha_venta__lte=date_to)
+
+        # Agrupar por cliente
+        clientes_dict = {}
+        
+        for cuenta in cuentas:
+            cliente = cuenta.cliente
+            if not cliente:
+                continue
+                
+            cliente_id = cliente.id
+            if cliente_id not in clientes_dict:
+                clientes_dict[cliente_id] = {
+                    'nombre': cliente.full_name or 'Sin nombre',
+                    'cedula': cliente.identification_number or 'N/A',
+                    'telefono': cliente.primary_phone or 'N/A',
+                    'facturas_pendientes': 0,
+                    'monto_total_pendiente': Decimal('0.00'),
+                    'estado_general': 'pagada',  # Empezamos asumiendo pagada
+                    'detalle_facturas': []
+                }
+            
+            # Calcular saldo pendiente
+            monto_total_original = Decimal(str(cuenta.venta.total_a_pagar))
+            saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
+            
+            # Solo considerar si tiene saldo pendiente
+            if saldo_pendiente > 0:
+                clientes_dict[cliente_id]['facturas_pendientes'] += 1
+                clientes_dict[cliente_id]['monto_total_pendiente'] += saldo_pendiente
+                
+                # Actualizar estado general
+                if cuenta.estado == 'vencida' and clientes_dict[cliente_id]['estado_general'] != 'vencida':
+                    clientes_dict[cliente_id]['estado_general'] = 'vencida'
+                elif cuenta.estado == 'pendiente' and clientes_dict[cliente_id]['estado_general'] not in ['vencida']:
+                    clientes_dict[cliente_id]['estado_general'] = 'pendiente'
+                elif cuenta.estado == 'parcial' and clientes_dict[cliente_id]['estado_general'] == 'pagada':
+                    clientes_dict[cliente_id]['estado_general'] = 'parcial'
+                
+                # Agregar detalle de factura
+                clientes_dict[cliente_id]['detalle_facturas'].append({
+                    'factura': cuenta.venta.numero_factura if cuenta.venta else 'N/A',
+                    'monto_pendiente': saldo_pendiente,
+                    'estado': cuenta.estado,
+                    'fecha_vencimiento': cuenta.fecha_vencimiento.strftime('%d/%m/%Y') if cuenta.fecha_vencimiento else 'N/A'
+                })
+        
+        # Filtrar solo clientes con deuda
+        clientes_con_deuda = []
+        total_deuda_general = Decimal('0.00')
+        
+        for cliente_info in clientes_dict.values():
+            if cliente_info['monto_total_pendiente'] > 0:
+                clientes_con_deuda.append(cliente_info)
+                total_deuda_general += cliente_info['monto_total_pendiente']
+        
+        # Crear el PDF
+        response = HttpResponse(content_type='application/pdf')
+        fecha_reporte = datetime.now().strftime('%Y%m%d_%H%M%S')
+        response['Content-Disposition'] = f'attachment; filename="reporte_deudas_{fecha_reporte}.pdf"'
+        
+        # Configurar el documento A4
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=portrait(A4),
+            rightMargin=1*cm,
+            leftMargin=1*cm,
+            topMargin=1*cm,
+            bottomMargin=1*cm
+        )
+        
+        # Estilos
+        styles = getSampleStyleSheet()
+        
+        # Título principal
+        titulo_style = ParagraphStyle(
+            'Titulo',
+            parent=styles['Title'],
+            fontSize=16,
+            spaceAfter=20,
+            alignment=1  # Centrado
+        )
+        
+        # Subtítulo
+        subtitulo_style = ParagraphStyle(
+            'Subtitulo',
+            parent=styles['Normal'],
+            fontSize=10,
+            spaceAfter=15,
+            alignment=1
+        )
+        
+        # Estilo para encabezados de tabla
+        encabezado_style = ParagraphStyle(
+            'Encabezado',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.white,
+            alignment=1
+        )
+        
+        # Estilo para datos de tabla
+        datos_style = ParagraphStyle(
+            'Datos',
+            parent=styles['Normal'],
+            fontSize=8,
+            alignment=0  # Izquierda
+        )
+        
+        # Contenido del PDF
+        contenido = []
+        
+        # Título
+        contenido.append(Paragraph("REPORTE DE DEUDAS POR CLIENTE", titulo_style))
+        
+        # Información del reporte
+        fecha_actual = datetime.now().strftime('%d/%m/%Y %H:%M')
+        filtros = []
+        if search:
+            filtros.append(f"Búsqueda: {search}")
+        if status_filter:
+            filtros.append(f"Estado: {status_filter}")
+        if date_from:
+            filtros.append(f"Desde: {date_from}")
+        if date_to:
+            filtros.append(f"Hasta: {date_to}")
+        
+        info_filtros = " | ".join(filtros) if filtros else "Todos los registros"
+        contenido.append(Paragraph(f"Generado: {fecha_actual}", subtitulo_style))
+        contenido.append(Paragraph(f"Filtros: {info_filtros}", subtitulo_style))
+        contenido.append(Spacer(1, 15))
+        
+        # Datos de resumen
+        resumen_data = [
+            ["Total Clientes con Deuda:", len(clientes_con_deuda)],
+            ["Deuda Total:", f"RD$ {total_deuda_general:,.2f}"],
+            ["Fecha de Reporte:", fecha_actual]
+        ]
+        
+        resumen_table = Table(resumen_data, colWidths=[4*cm, 4*cm])
+        resumen_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        
+        contenido.append(resumen_table)
+        contenido.append(Spacer(1, 20))
+        
+        # Tabla principal de deudas
+        if clientes_con_deuda:
+            # Encabezados de la tabla
+            encabezados = [
+                Paragraph("Cliente", encabezado_style),
+                Paragraph("Cédula", encabezado_style),
+                Paragraph("Teléfono", encabezado_style),
+                Paragraph("Facturas Pendientes", encabezado_style),
+                Paragraph("Monto Total Pendiente", encabezado_style),
+                Paragraph("Estado General", encabezado_style)
+            ]
+            
+            datos_tabla = [encabezados]
+            
+            # Agregar datos de cada cliente
+            for cliente in clientes_con_deuda:
+                # Determinar color del estado
+                estado_texto = {
+                    'vencida': 'VENCIDA',
+                    'pendiente': 'PENDIENTE',
+                    'parcial': 'PAGO PARCIAL',
+                    'pagada': 'PAGADA'
+                }.get(cliente['estado_general'], cliente['estado_general'].upper())
+                
+                fila = [
+                    Paragraph(cliente['nombre'], datos_style),
+                    Paragraph(cliente['cedula'], datos_style),
+                    Paragraph(cliente['telefono'], datos_style),
+                    Paragraph(str(cliente['facturas_pendientes']), datos_style),
+                    Paragraph(f"RD$ {cliente['monto_total_pendiente']:,.2f}", datos_style),
+                    Paragraph(estado_texto, datos_style)
+                ]
+                datos_tabla.append(fila)
+            
+            # Crear tabla
+            tabla = Table(datos_tabla, colWidths=[4.5*cm, 2.5*cm, 3*cm, 3*cm, 4*cm, 3*cm])
+            
+            # Estilos de la tabla
+            tabla.setStyle(TableStyle([
+                # Encabezado
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                
+                # Filas alternas
+                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                ('ALIGN', (0, 1), (2, -1), 'LEFT'),
+                ('ALIGN', (3, 1), (3, -1), 'CENTER'),
+                ('ALIGN', (4, 1), (4, -1), 'RIGHT'),
+                ('ALIGN', (5, 1), (5, -1), 'CENTER'),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                ('TOPPADDING', (0, 1), (-1, -1), 6),
+                
+                # Bordes
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                
+                # Resaltar montos
+                ('FONTNAME', (4, 1), (4, -1), 'Helvetica-Bold'),
+                
+                # Colorear estados
+                ('TEXTCOLOR', (5, 1), (5, -1), lambda r, c: 
+                    colors.red if datos_tabla[r][5].text == 'VENCIDA' 
+                    else colors.orange if datos_tabla[r][5].text == 'PENDIENTE'
+                    else colors.blue if datos_tabla[r][5].text == 'PAGO PARCIAL'
+                    else colors.green)
+            ]))
+            
+            contenido.append(tabla)
+            contenido.append(Spacer(1, 20))
+            
+            # Pie de página con totales
+            pie_data = [
+                ["TOTAL GENERAL:", f"RD$ {total_deuda_general:,.2f}"]
+            ]
+            
+            pie_table = Table(pie_data, colWidths=[15*cm, 5*cm])
+            pie_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f9fa')),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+                ('ALIGN', (0, 0), (0, 0), 'RIGHT'),
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ]))
+            
+            contenido.append(pie_table)
+            
+        else:
+            # Si no hay deudas
+            contenido.append(Paragraph("No hay deudas pendientes para mostrar.", styles['Heading3']))
+            contenido.append(Spacer(1, 20))
+        
+        # Nota al pie
+        nota = Paragraph(
+            "Este reporte fue generado automáticamente por el sistema de gestión Super Bestia. "
+            "Los montos están expresados en pesos dominicanos (RD$).",
+            ParagraphStyle(
+                'Nota',
+                parent=styles['Normal'],
+                fontSize=7,
+                textColor=colors.grey,
+                alignment=1
+            )
+        )
+        contenido.append(Spacer(1, 30))
+        contenido.append(nota)
+        
+        # Construir el PDF
+        doc.build(contenido)
+        
+        # Obtener el valor del buffer
+        pdf = buffer.getvalue()
+        buffer.close()
+        
+        response.write(pdf)
+        return response
+        
+    except Exception as e:
+        # En caso de error, devolver una respuesta de error
+        error_message = f"Error al generar el reporte: {str(e)}"
+        return HttpResponse(error_message, content_type='text/plain')
+
+
+@login_required
 def gestiondesuplidores(request):
     proveedores = Proveedor.objects.all().order_by('nombre_empresa')
     paises = Proveedor.PAIS_CHOICES
@@ -4945,6 +5520,7 @@ def registrosuplidores(request):
 
 
     #ESTE ES EL NUEVO DE CIEERE DE CAJA
+# views.py
 logger = logging.getLogger(__name__)
 
 @login_required
@@ -5047,17 +5623,33 @@ def cierredecaja(request):
     
     return render(request, "facturacion/cierredecaja.html", context)
 
-
-
 @login_required
 def procesar_cierre_caja(request):
     if request.method == 'POST':
+        logger.info(f"==== INICIANDO PROCESO DE CIERRE ====")
+        logger.info(f"Usuario: {request.user.username}")
+        logger.info(f"Datos POST: {dict(request.POST)}")
+        
+        # Verificar si es un cierre automático
+        es_automatico = request.POST.get('es_automatico') == 'true'
+        logger.info(f"Es cierre automático: {es_automatico}")
+        
         # Obtener la caja abierta actual
         caja_abierta = Caja.objects.filter(usuario=request.user, estado='abierta').first()
         
         if not caja_abierta:
-            messages.error(request, 'No hay una caja abierta para cerrar.')
+            error_msg = 'No hay una caja abierta para cerrar.'
+            logger.error(error_msg)
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or es_automatico:
+                return JsonResponse({
+                    'success': False,
+                    'message': error_msg
+                })
+            messages.error(request, error_msg)
             return redirect('cierredecaja')
+        
+        logger.info(f"Caja encontrada: ID={caja_abierta.id}, Fecha apertura={caja_abierta.fecha_apertura}")
         
         # Obtener ventas desde la apertura de caja
         ventas_periodo = Venta.objects.filter(
@@ -5066,6 +5658,8 @@ def procesar_cierre_caja(request):
             completada=True,
             anulada=False
         )
+        
+        logger.info(f"Total ventas en período: {ventas_periodo.count()}")
         
         # VENTAS AL CONTADO - Usamos el TOTAL FINAL
         ventas_contado_efectivo = ventas_periodo.filter(
@@ -5099,54 +5693,118 @@ def procesar_cierre_caja(request):
             metodo_pago='transferencia'
         ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
         
-        # Calcular total esperado
+        # Calcular total esperado (igual que en cierredecaja)
         total_esperado = (ventas_contado_efectivo + ventas_contado_tarjeta + ventas_contado_transferencia +
                          ventas_credito_efectivo + ventas_credito_tarjeta + ventas_credito_transferencia)
         
-        # Resto del código permanece igual...
-        # Obtener datos del formulario
-        monto_efectivo_real = request.POST.get('cash-amount')
-        monto_tarjeta_real = request.POST.get('card-amount') or '0'
-        observaciones = request.POST.get('observations', '')
+        logger.info(f"Total esperado calculado: RD${total_esperado}")
         
-        # Validaciones
-        if not monto_efectivo_real:
-            messages.error(request, 'Debe ingresar el monto en efectivo real.')
-            return redirect('cierredecaja')
+        # Si es cierre automático, usar montos de ventas
+        if es_automatico:
+            monto_efectivo_real = ventas_contado_efectivo + ventas_credito_efectivo
+            monto_tarjeta_real = ventas_contado_tarjeta + ventas_credito_tarjeta
+            observaciones = f"Cierre automático a las {timezone.localtime(timezone.now()).strftime('%H:%M:%S')}"
+            logger.info(f"Cierre automático - Montos: Efectivo={monto_efectivo_real}, Tarjeta={monto_tarjeta_real}")
+        else:
+            # Obtener datos del formulario
+            monto_efectivo_real = request.POST.get('cash-amount', '0')
+            monto_tarjeta_real = request.POST.get('card-amount', '0')
+            observaciones = request.POST.get('observations', '')
+            
+            logger.info(f"Cierre manual - Montos recibidos: Efectivo={monto_efectivo_real}, Tarjeta={monto_tarjeta_real}")
+            
+            # Convertir a Decimal
+            try:
+                monto_efectivo_real = Decimal(monto_efectivo_real)
+                monto_tarjeta_real = Decimal(monto_tarjeta_real)
+            except (ValueError, InvalidOperation) as e:
+                error_msg = f'Los montos deben ser valores numéricos válidos. Error: {str(e)}'
+                logger.error(error_msg)
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'message': error_msg
+                    })
+                messages.error(request, error_msg)
+                return redirect('cierredecaja')
         
-        try:
-            # Convertir a Decimal en lugar de float
-            monto_efectivo_real = Decimal(monto_efectivo_real)
-            monto_tarjeta_real = Decimal(monto_tarjeta_real)
-        except (ValueError, InvalidOperation):
-            messages.error(request, 'Los montos deben ser valores numéricos válidos.')
-            return redirect('cierredecaja')
-        
-        # Calcular diferencia (todos son Decimal ahora)
+        # Calcular total real y diferencia
         total_real = monto_efectivo_real + monto_tarjeta_real
         diferencia = total_real - total_esperado
         
+        logger.info(f"Total real: RD${total_real}, Diferencia: RD${diferencia}")
+        
         # Actualizar la caja
+        now = timezone.now()
+        hora_actual = timezone.localtime(now).time()
+        
         caja_abierta.monto_final = total_real
-        caja_abierta.fecha_cierre = timezone.now()
+        caja_abierta.fecha_cierre = now
         caja_abierta.estado = 'cerrada'
+        caja_abierta.tipo_cierre = 'automatico' if es_automatico else 'manual'
         caja_abierta.observaciones = observaciones
-        caja_abierta.save()
+        caja_abierta.hora_cierre_exacta = hora_actual
         
-        # Crear registro de cierre
-        cierre = CierreCaja.objects.create(
-            caja=caja_abierta,
-            monto_efectivo_real=monto_efectivo_real,
-            monto_tarjeta_real=monto_tarjeta_real,
-            total_esperado=total_esperado,
-            diferencia=diferencia,
-            observaciones=observaciones
-        )
+        logger.info(f"Actualizando caja: Estado=cerrada, Tipo={caja_abierta.tipo_cierre}, Hora={hora_actual}")
         
-        # Guardar información en sesión para mostrar en el cuadre
+        try:
+            caja_abierta.save()
+            logger.info(f"Caja actualizada exitosamente. ID: {caja_abierta.id}")
+        except Exception as e:
+            error_msg = f'Error al actualizar la caja: {str(e)}'
+            logger.error(error_msg, exc_info=True)
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': error_msg
+                })
+            messages.error(request, error_msg)
+            return redirect('cierredecaja')
+        
+        # Crear registro de cierre en la tabla CierreCaja
+        logger.info(f"Creando registro en CierreCaja...")
+        
+        try:
+            cierre = CierreCaja.objects.create(
+                caja=caja_abierta,
+                monto_efectivo_real=monto_efectivo_real,
+                monto_tarjeta_real=monto_tarjeta_real,
+                total_esperado=total_esperado,
+                diferencia=diferencia,
+                observaciones=observaciones,
+                tipo_cierre='automatico' if es_automatico else 'manual',
+                hora_cierre_exacta=hora_actual
+            )
+            
+            logger.info(f"¡CierreCaja creado exitosamente! ID: {cierre.id}")
+            logger.info(f"Datos guardados: Efectivo=RD${monto_efectivo_real}, "
+                       f"Tarjeta=RD${monto_tarjeta_real}, "
+                       f"Esperado=RD${total_esperado}, "
+                       f"Diferencia=RD${diferencia}")
+            
+        except Exception as e:
+            error_msg = f'Error al crear registro de cierre: {str(e)}'
+            logger.error(error_msg, exc_info=True)
+            
+            # Aunque falle el registro detallado, la caja ya está cerrada
+            # Continuamos pero registramos el error
+            
+        # Si es cierre automático o petición AJAX, responder con JSON
+        if es_automatico or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            response_data = {
+                'success': True,
+                'message': 'Caja cerrada exitosamente',
+                'redirect_url': reverse('iniciocaja')
+            }
+            logger.info(f"Respondiendo con JSON: {response_data}")
+            return JsonResponse(response_data)
+        
+        # Para cierre manual normal, crear información para la sesión
         request.session['cierre_info'] = {
-            'fecha': timezone.now().date().strftime('%d/%m/%Y'),
-            'hora_cierre': timezone.now().strftime('%H:%M:%S'),
+            'fecha': now.date().strftime('%d/%m/%Y'),
+            'hora_cierre': now.strftime('%H:%M:%S'),
             'monto_efectivo_real': float(monto_efectivo_real),
             'monto_tarjeta_real': float(monto_tarjeta_real),
             'total_esperado': float(total_esperado),
@@ -5158,11 +5816,240 @@ def procesar_cierre_caja(request):
             ).distinct().count()
         }
         
-        messages.success(request, f'Caja cerrada exitosamente. Diferencia: RD${diferencia:,.2f}')
+        success_msg = f'Caja cerrada exitosamente. Diferencia: RD${diferencia:,.2f}'
+        logger.info(success_msg)
+        messages.success(request, success_msg)
         return redirect('cuadre')
     
+    logger.warning("Intento de acceso a procesar_cierre_caja con método GET")
     return redirect('cierredecaja')
 
+def cerrar_caja_individual(caja, cutoff_time, today):
+    """
+    Cierra una caja individual automáticamente
+    """
+    try:
+        usuario = caja.usuario
+        
+        # Obtener ventas desde la apertura de caja
+        ventas_periodo = Venta.objects.filter(
+            vendedor=usuario,
+            fecha_venta__gte=caja.fecha_apertura,
+            completada=True,
+            anulada=False
+        )
+        
+        # VENTAS AL CONTADO
+        ventas_contado_efectivo = ventas_periodo.filter(
+            tipo_venta='contado',
+            metodo_pago='efectivo'
+        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        ventas_contado_tarjeta = ventas_periodo.filter(
+            tipo_venta='contado',
+            metodo_pago='tarjeta'
+        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        ventas_contado_transferencia = ventas_periodo.filter(
+            tipo_venta='contado',
+            metodo_pago='transferencia'
+        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        # VENTAS A CRÉDITO (solo monto inicial)
+        ventas_credito_efectivo = ventas_periodo.filter(
+            tipo_venta='credito',
+            metodo_pago='efectivo'
+        ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
+        
+        ventas_credito_tarjeta = ventas_periodo.filter(
+            tipo_venta='credito',
+            metodo_pago='tarjeta'
+        ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
+        
+        ventas_credito_transferencia = ventas_periodo.filter(
+            tipo_venta='credito',
+            metodo_pago='transferencia'
+        ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
+        
+        # Calcular totales
+        total_efectivo_vendido = ventas_contado_efectivo + ventas_credito_efectivo
+        total_tarjeta_vendido = ventas_contado_tarjeta + ventas_credito_tarjeta
+        total_transferencia_vendido = ventas_contado_transferencia + ventas_credito_transferencia
+        
+        total_esperado = total_efectivo_vendido + total_tarjeta_vendido + total_transferencia_vendido
+        
+        # Usar montos de ventas como montos reales
+        monto_efectivo_real = total_efectivo_vendido
+        monto_tarjeta_real = total_tarjeta_vendido
+        total_real = monto_efectivo_real + monto_tarjeta_real
+        
+        # Diferencia (debería ser 0)
+        diferencia = total_real - total_esperado
+        
+        # Crear fecha y hora de cierre
+        hora_cierre_exacta = cutoff_time
+        fecha_cierre_completa = datetime.combine(today, hora_cierre_exacta)
+        fecha_cierre_completa = timezone.make_aware(fecha_cierre_completa)
+        
+        # Actualizar la caja
+        caja.monto_final = total_real
+        caja.fecha_cierre = fecha_cierre_completa
+        caja.hora_cierre_exacta = hora_cierre_exacta
+        caja.estado = 'cerrada'
+        caja.tipo_cierre = 'automatico'
+        
+        observaciones = (
+            f'Cierre automático ejecutado a las {hora_cierre_exacta.strftime("%H:%M")} PM por el sistema. '
+            f'Montos basados en ventas reales. '
+            f'Total ventas: RD${total_esperado:,.2f}. '
+            f'Efectivo: RD${monto_efectivo_real:,.2f}, Tarjeta: RD${monto_tarjeta_real:,.2f}, '
+            f'Transferencia: RD${total_transferencia_vendido:,.2f}.'
+        )
+        caja.observaciones = observaciones
+        caja.save()
+        
+        # Crear registro de cierre
+        cierre = CierreCaja.objects.create(
+            caja=caja,
+            monto_efectivo_real=monto_efectivo_real,
+            monto_tarjeta_real=monto_tarjeta_real,
+            total_esperado=total_esperado,
+            diferencia=diferencia,
+            observaciones=observaciones,
+            tipo_cierre='automatico',
+            hora_cierre_exacta=hora_cierre_exacta
+        )
+        
+        return {
+            'success': True,
+            'message': f'Caja cerrada. Total: RD${total_real:,.2f}, Ventas: {ventas_periodo.count()}',
+            'cierre_id': cierre.id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error al cerrar caja individual {caja.id}: {str(e)}", exc_info=True)
+        return {
+            'success': False,
+            'message': str(e)
+        }
+
+
+
+
+def cerrar_todas_cajas_automaticamente():
+    """
+    Cierra TODAS las cajas abiertas automáticamente a las 5:30 PM
+    """
+    try:
+        now = timezone.localtime(timezone.now())
+        today = now.date()
+        
+        # Buscar todas las cajas abiertas (sin importar la fecha)
+        cajas_abiertas = Caja.objects.filter(estado='abierta')
+        
+        if not cajas_abiertas.exists():
+            logger.info(f"[{now}] No hay cajas abiertas para cerrar automáticamente")
+            return {
+                'success': True,
+                'message': 'No hay cajas abiertas',
+                'cajas_cerradas': 0
+            }
+        
+        exitosos = 0
+        fallidos = 0
+        detalles = []
+        cutoff_time = time(17, 30, 0)  # 5:30 PM
+        
+        for caja in cajas_abiertas:
+            try:
+                # Obtener ventas desde la apertura de caja
+                ventas_periodo = Venta.objects.filter(
+                    vendedor=caja.usuario,
+                    fecha_venta__gte=caja.fecha_apertura,
+                    completada=True,
+                    anulada=False
+                )
+                
+                # Calcular totales
+                total_efectivo_vendido = ventas_periodo.filter(
+                    metodo_pago='efectivo'
+                ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+                
+                total_tarjeta_vendido = ventas_periodo.filter(
+                    metodo_pago='tarjeta'
+                ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+                
+                total_transferencia_vendido = ventas_periodo.filter(
+                    metodo_pago='transferencia'
+                ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+                
+                total_esperado = total_efectivo_vendido + total_tarjeta_vendido + total_transferencia_vendido
+                
+                # Crear fecha y hora de cierre
+                hora_cierre_exacta = cutoff_time
+                fecha_cierre_completa = datetime.combine(today, hora_cierre_exacta)
+                fecha_cierre_completa = timezone.make_aware(fecha_cierre_completa)
+                
+                # Actualizar la caja
+                caja.monto_final = total_esperado
+                caja.fecha_cierre = fecha_cierre_completa
+                caja.hora_cierre_exacta = hora_cierre_exacta
+                caja.estado = 'cerrada'
+                caja.tipo_cierre = 'automatico'
+                observaciones = f'Cierre automático a las {hora_cierre_exacta.strftime("%H:%M")} PM'
+                caja.observaciones = observaciones
+                caja.save()
+                
+                # Crear registro de cierre
+                cierre = CierreCaja.objects.create(
+                    caja=caja,
+                    monto_efectivo_real=total_efectivo_vendido,
+                    monto_tarjeta_real=total_tarjeta_vendido,
+                    total_esperado=total_esperado,
+                    diferencia=Decimal('0.00'),
+                    observaciones=observaciones,
+                    tipo_cierre='automatico',
+                    hora_cierre_exacta=hora_cierre_exacta
+                )
+                
+                exitosos += 1
+                detalles.append(f"✓ {caja.usuario.username}: Cerrada automáticamente")
+                logger.info(f"Caja {caja.id} cerrada automáticamente para {caja.usuario.username}")
+                
+            except Exception as e:
+                fallidos += 1
+                detalles.append(f"✗ {caja.usuario.username}: Error: {str(e)}")
+                logger.error(f"Error al cerrar caja {caja.id}: {str(e)}")
+        
+        # Resumen
+        resumen = f"Proceso completado. {exitosos} exitoso(s), {fallidos} fallido(s)"
+        logger.info(f"CIERRE AUTOMÁTICO MASIVO: {resumen}")
+        
+        return True, {
+            'exitosos': exitosos,
+            'fallidos': fallidos,
+            'resumen': resumen,
+            'detalles': detalles
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en cierre automático masivo: {str(e)}")
+        return False, f"Error: {str(e)}"
+
+
+
+
+@shared_task
+def cerrar_cajas_5_30_pm():
+    """
+    Tarea que se ejecuta automáticamente todos los días a las 5:30 PM
+    """
+    logger.info("Iniciando cierre automático de cajas a las 5:30 PM...")
+    success, result = cerrar_todas_cajas_automaticamente()
+    return {
+        'success': success,
+        'result': result
+    }
 
 #ESTE ES EL CODGO COMENTADO DEL CIERRE DE CAJA, POR SI SE NECESITA EN EL FUTURO
 # logger = logging.getLogger(__name__)
@@ -7308,3 +8195,565 @@ def generar_factura_pdf(request, cuenta_id):
         import traceback
         print(f"📋 Traceback: {traceback.format_exc()}")
         return JsonResponse({'error': f'Error al generar PDF: {str(e)}'}, status=500)
+
+
+
+
+
+
+def reportes(request):
+    # Fechas por defecto (últimos 30 días)
+    fecha_hasta = timezone.now()
+    fecha_desde = fecha_hasta - timedelta(days=30)
+    
+    # Calcular fechas para botones de período
+    hoy = timezone.now().date()
+    semana_pasada = hoy - timedelta(days=7)
+    mes_pasado = hoy - timedelta(days=30)
+    
+    # Procesar filtros del formulario
+    if request.method == 'GET':
+        fecha_desde_str = request.GET.get('fecha_desde')
+        fecha_hasta_str = request.GET.get('fecha_hasta')
+        vendedor_id = request.GET.get('vendedor')
+        producto_id = request.GET.get('producto')
+        
+        if fecha_desde_str:
+            try:
+                fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+            except ValueError:
+                pass
+        if fecha_hasta_str:
+            try:
+                fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+            except ValueError:
+                pass
+    
+    # Filtrar ventas
+    ventas = Venta.objects.filter(
+        completada=True,
+        anulada=False,
+        fecha_venta__range=[fecha_desde, fecha_hasta]
+    )
+    
+    # Aplicar filtros adicionales
+    if vendedor_id and vendedor_id != '':
+        ventas = ventas.filter(vendedor_id=vendedor_id)
+    
+    # Obtener detalles de ventas
+    detalles = DetalleVenta.objects.filter(
+        venta__in=ventas
+    ).select_related('venta', 'producto', 'venta__vendedor', 'venta__cliente')
+    
+    if producto_id and producto_id != '':
+        detalles = detalles.filter(producto_id=producto_id)
+    
+    # Estadísticas generales
+    total_vendido = ventas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+    total_transacciones = ventas.count()
+    
+    # Vendedores únicos en el período
+    vendedores_activos = ventas.values('vendedor').distinct().count()
+    
+    # Ticket promedio
+    ticket_promedio = ventas.aggregate(promedio=Avg('total'))['promedio'] or Decimal('0.00')
+    
+    # Calcular total por vendedor
+    total_por_vendedor = {}
+    for venta in ventas:
+        vendedor_nombre = venta.vendedor.get_full_name() or venta.vendedor.username
+        if vendedor_nombre not in total_por_vendedor:
+            total_por_vendedor[vendedor_nombre] = Decimal('0.00')
+        total_por_vendedor[vendedor_nombre] += venta.total
+    
+    # Preparar datos para la tabla principal
+    ventas_detalladas = []
+    for detalle in detalles:
+        venta = detalle.venta
+        ventas_detalladas.append({
+            'id': detalle.id,
+            'fecha': venta.fecha_venta.strftime('%Y-%m-%d'),
+            'numero_factura': venta.numero_factura,
+            'producto_nombre': detalle.producto.descripcion if detalle.producto else 'N/A',
+            'producto_codigo': detalle.producto.codigo_producto if detalle.producto else '',
+            'cliente_nombre': venta.cliente_nombre,
+            'cliente_documento': venta.cliente_documento,
+            'vendedor_nombre': venta.vendedor.get_full_name() or venta.vendedor.username,
+            'vendedor_id': venta.vendedor.id,
+            'cantidad': detalle.cantidad,
+            'precio_unitario': detalle.precio_unitario,
+            'monto': detalle.subtotal,
+            'metodo_pago': venta.get_metodo_pago_display(),
+            'tipo_venta': venta.get_tipo_venta_display(),
+            'total_vendedor': total_por_vendedor.get(venta.vendedor.get_full_name() or venta.vendedor.username, Decimal('0.00')),
+        })
+    
+    # Resumen por vendedor
+    resumen_vendedores = ventas.values(
+        'vendedor__id',
+        'vendedor__username', 
+        'vendedor__first_name', 
+        'vendedor__last_name'
+    ).annotate(
+        cantidad_ventas=Count('id'),
+        monto_total=Sum('total'),
+        ticket_promedio=Avg('total')
+    ).order_by('-monto_total')
+    
+    # Calcular porcentaje del total para cada vendedor
+    for resumen in resumen_vendedores:
+        if total_vendido > 0:
+            resumen['porcentaje'] = (resumen['monto_total'] / total_vendido) * 100
+        else:
+            resumen['porcentaje'] = 0
+    
+    # Resumen por producto
+    resumen_productos = detalles.values(
+        'producto__descripcion',
+        'producto__codigo_producto'
+    ).annotate(
+        cantidad_vendida=Sum('cantidad'),
+        monto_total=Sum('subtotal'),
+        precio_promedio=Avg('precio_unitario')
+    ).order_by('-monto_total')
+    
+    # Calcular porcentaje del total para cada producto
+    for resumen in resumen_productos:
+        if total_vendido > 0:
+            resumen['porcentaje'] = (resumen['monto_total'] / total_vendido) * 100
+        else:
+            resumen['porcentaje'] = 0
+    
+    # Obtener listas para filtros
+    vendedores_disponibles = User.objects.filter(
+        id__in=ventas.values_list('vendedor', flat=True)
+    ).distinct().order_by('first_name', 'last_name')
+    
+    productos_ids = detalles.values_list('producto', flat=True).distinct()
+    productos_disponibles = EntradaProducto.objects.filter(
+        id__in=productos_ids
+    ).order_by('descripcion')
+    
+    # Ventas por día
+    ventas_por_dia = ventas.annotate(
+        fecha_dia=TruncDate('fecha_venta')
+    ).values('fecha_dia').annotate(
+        total_dia=Sum('total'),
+        cantidad_ventas=Count('id')
+    ).order_by('fecha_dia')
+    
+    # Preparar datos para el gráfico
+    chart_labels = []
+    chart_data = []
+    for venta_dia in ventas_por_dia:
+        chart_labels.append(venta_dia['fecha_dia'].strftime('%d/%m'))
+        chart_data.append(float(venta_dia['total_dia'] or 0))
+    
+    context = {
+        'fecha_desde': fecha_desde.strftime('%Y-%m-%d'),
+        'fecha_hasta': fecha_hasta.strftime('%Y-%m-%d'),
+        'hoy': hoy,
+        'semana_pasada': semana_pasada,
+        'mes_pasado': mes_pasado,
+        'ventas_detalladas': ventas_detalladas,
+        'resumen_vendedores': resumen_vendedores,
+        'resumen_productos': resumen_productos,
+        'ventas_por_dia': ventas_por_dia,
+        'vendedores_disponibles': vendedores_disponibles,
+        'productos_disponibles': productos_disponibles,
+        'total_vendido': total_vendido,
+        'total_transacciones': total_transacciones,
+        'vendedores_activos': vendedores_activos,
+        'ticket_promedio': ticket_promedio,
+        'total_por_vendedor': json.dumps(total_por_vendedor, default=str),  # Para JavaScript
+        'chart_labels': json.dumps(chart_labels),
+        'chart_data': json.dumps(chart_data),
+    }
+    
+    return render(request, "facturacion/reportes.html", context)
+
+def reporte_detallado_vendedor(request, vendedor_id):
+    """Reporte detallado de un vendedor específico"""
+    fecha_hasta = timezone.now()
+    fecha_desde = fecha_hasta - timedelta(days=30)
+    
+    if request.method == 'GET':
+        fecha_desde_str = request.GET.get('fecha_desde')
+        fecha_hasta_str = request.GET.get('fecha_hasta')
+        
+        if fecha_desde_str:
+            fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+        if fecha_hasta_str:
+            fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+    
+    # Obtener ventas del vendedor
+    ventas = Venta.objects.filter(
+        vendedor_id=vendedor_id,
+        completada=True,
+        anulada=False,
+        fecha_venta__range=[fecha_desde, fecha_hasta]
+    ).select_related('cliente')
+    
+    # Detalles de ventas
+    detalles = DetalleVenta.objects.filter(
+        venta__in=ventas
+    ).select_related('producto', 'venta')
+    
+    # Estadísticas del vendedor
+    total_vendido = ventas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+    cantidad_ventas = ventas.count()
+    ticket_promedio = ventas.aggregate(promedio=Avg('total'))['promedio'] or Decimal('0.00')
+    
+    # Ventas por día
+    ventas_por_dia = ventas.annotate(
+        fecha_dia=TruncDate('fecha_venta')
+    ).values('fecha_dia').annotate(
+        total_dia=Sum('total'),
+        cantidad_ventas=Count('id')
+    ).order_by('fecha_dia')
+    
+    # Ventas por cliente
+    ventas_por_cliente = ventas.values(
+        'cliente_nombre',
+        'cliente_documento'
+    ).annotate(
+        total_cliente=Sum('total'),
+        cantidad_compras=Count('id')
+    ).order_by('-total_cliente')
+    
+    # Obtener información del vendedor
+    try:
+        vendedor = User.objects.get(id=vendedor_id)
+        vendedor_nombre = vendedor.get_full_name() or vendedor.username
+    except User.DoesNotExist:
+        vendedor_nombre = "Vendedor no encontrado"
+    
+    context = {
+        'vendedor_id': vendedor_id,
+        'vendedor_nombre': vendedor_nombre,
+        'fecha_desde': fecha_desde.strftime('%Y-%m-%d'),
+        'fecha_hasta': fecha_hasta.strftime('%Y-%m-%d'),
+        'ventas': ventas,
+        'detalles': detalles,
+        'total_vendido': total_vendido,
+        'cantidad_ventas': cantidad_ventas,
+        'ticket_promedio': ticket_promedio,
+        'ventas_por_dia': ventas_por_dia,
+        'ventas_por_cliente': ventas_por_cliente,
+    }
+    
+    return render(request, "facturacion/reporte_vendedor.html", context)
+
+def exportar_reporte_csv(request):
+    """Exportar reporte a CSV"""
+    import csv
+    from django.http import HttpResponse
+    
+    # Obtener filtros
+    fecha_desde_str = request.GET.get('fecha_desde')
+    fecha_hasta_str = request.GET.get('fecha_hasta')
+    vendedor_id = request.GET.get('vendedor')
+    
+    fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d') if fecha_desde_str else timezone.now() - timedelta(days=30)
+    fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d') if fecha_hasta_str else timezone.now()
+    
+    # Filtrar ventas
+    ventas = Venta.objects.filter(
+        completada=True,
+        anulada=False,
+        fecha_venta__range=[fecha_desde, fecha_hasta]
+    )
+    
+    if vendedor_id:
+        ventas = ventas.filter(vendedor_id=vendedor_id)
+    
+    # Crear respuesta HTTP con CSV
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="reporte_ventas_{fecha_desde.date()}_al_{fecha_hasta.date()}.csv"'
+    
+    writer = csv.writer(response, delimiter=';')
+    
+    # Encabezados
+    writer.writerow([
+        'Fecha', 'N° Factura', 'Vendedor', 'Cliente', 'Cédula/RIF',
+        'Producto', 'Cantidad', 'Precio Unitario', 'Subtotal',
+        'Método Pago', 'Tipo Venta', 'Total Factura'
+    ])
+    
+    # Datos
+    for venta in ventas:
+        detalles = DetalleVenta.objects.filter(venta=venta)
+        for detalle in detalles:
+            writer.writerow([
+                venta.fecha_venta.strftime('%Y-%m-%d'),
+                venta.numero_factura,
+                venta.vendedor.get_full_name() or venta.vendedor.username,
+                venta.cliente_nombre,
+                venta.cliente_documento,
+                detalle.producto.descripcion if detalle.producto else 'N/A',
+                detalle.cantidad,
+                detalle.precio_unitario,
+                detalle.subtotal,
+                venta.get_metodo_pago_display(),
+                venta.get_tipo_venta_display(),
+                venta.total
+            ])
+    
+    return response
+
+
+
+def exportar_reporte_pdf(request):
+    """Exportar reporte a PDF"""
+    # Importar los modelos necesarios
+    from .models import Venta, DetalleVenta, EntradaProducto
+    from django.contrib.auth.models import User
+    
+    # Obtener filtros
+    fecha_desde_str = request.GET.get('fecha_desde')
+    fecha_hasta_str = request.GET.get('fecha_hasta')
+    vendedor_id = request.GET.get('vendedor')
+    producto_id = request.GET.get('producto')
+    
+    # Convertir fechas
+    if fecha_desde_str:
+        fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+    else:
+        fecha_desde = timezone.now() - timedelta(days=30)
+    
+    if fecha_hasta_str:
+        fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+    else:
+        fecha_hasta = timezone.now()
+    
+    # Asegurarnos de que las fechas sean objetos datetime
+    if hasattr(fecha_desde, 'strftime'):
+        fecha_desde_dt = fecha_desde
+    else:
+        fecha_desde_dt = datetime.combine(fecha_desde, datetime.min.time())
+    
+    if hasattr(fecha_hasta, 'strftime'):
+        fecha_hasta_dt = fecha_hasta
+    else:
+        fecha_hasta_dt = datetime.combine(fecha_hasta, datetime.max.time())
+    
+    # Filtrar ventas
+    ventas = Venta.objects.filter(
+        completada=True,
+        anulada=False,
+        fecha_venta__range=[fecha_desde_dt, fecha_hasta_dt]
+    ).select_related('vendedor', 'cliente')
+    
+    if vendedor_id:
+        ventas = ventas.filter(vendedor_id=vendedor_id)
+    
+    # Obtener detalles
+    detalles = DetalleVenta.objects.filter(
+        venta__in=ventas
+    ).select_related('producto', 'venta')
+    
+    if producto_id and producto_id != '':
+        detalles = detalles.filter(producto_id=producto_id)
+    
+    # Estadísticas
+    total_vendido_result = ventas.aggregate(total=Sum('total'))
+    total_vendido = total_vendido_result['total'] or Decimal('0.00')
+    
+    total_transacciones = ventas.count()
+    vendedores_activos = ventas.values('vendedor').distinct().count()
+    
+    ticket_promedio_result = ventas.aggregate(promedio=Avg('total'))
+    ticket_promedio = ticket_promedio_result['promedio'] or Decimal('0.00')
+    
+    # Crear el PDF
+    buffer = BytesIO()
+    
+    # Usar orientación landscape para más espacio horizontal
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=landscape(letter),
+        rightMargin=30,
+        leftMargin=30,
+        topMargin=30,
+        bottomMargin=30
+    )
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Título
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=20,
+        alignment=1  # Centrado
+    )
+    
+    elements.append(Paragraph("REPORTE DE VENTAS - SUPER BESTIA", title_style))
+    
+    # Información del período
+    periodo_text = f"Período: {fecha_desde.strftime('%d/%m/%Y')} al {fecha_hasta.strftime('%d/%m/%Y')}"
+    elements.append(Paragraph(periodo_text, styles["Normal"]))
+    elements.append(Spacer(1, 20))
+    
+    # Estadísticas rápidas
+    stats_data = [
+        ['Total Vendido', 'Transacciones', 'Vendedores Activos', 'Ticket Promedio'],
+        [f"${total_vendido:,.2f}", str(total_transacciones), str(vendedores_activos), f"${ticket_promedio:,.2f}"]
+    ]
+    
+    stats_table = Table(stats_data, colWidths=[2.5*inch, 2*inch, 2*inch, 2*inch])
+    stats_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, 1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, 1), 11),
+    ]))
+    
+    elements.append(stats_table)
+    elements.append(Spacer(1, 30))
+    
+    # Tabla de detalles de ventas
+    elements.append(Paragraph("DETALLE DE VENTAS", styles["Heading2"]))
+    elements.append(Spacer(1, 10))
+    
+    # Preparar datos para la tabla
+    table_data = [['Fecha', 'Factura', 'Producto', 'Cliente', 'Vendedor', 'Cant.', 'Precio', 'Total']]
+    
+    # Limitar a 100 registros para el PDF para evitar archivos muy grandes
+    detalles_limitados = detalles[:100]
+    
+    for detalle in detalles_limitados:
+        venta = detalle.venta
+        producto_desc = detalle.producto.descripcion if detalle.producto else 'N/A'
+        if len(producto_desc) > 30:
+            producto_desc = producto_desc[:27] + "..."
+        
+        cliente_nombre = venta.cliente_nombre or 'N/A'
+        if len(cliente_nombre) > 20:
+            cliente_nombre = cliente_nombre[:17] + "..."
+        
+        vendedor_nombre = venta.vendedor.get_full_name() or venta.vendedor.username
+        if len(vendedor_nombre) > 15:
+            vendedor_nombre = vendedor_nombre[:12] + "..."
+        
+        row = [
+            venta.fecha_venta.strftime('%d/%m/%Y'),
+            venta.numero_factura or 'N/A',
+            producto_desc,
+            cliente_nombre,
+            vendedor_nombre,
+            str(detalle.cantidad),
+            f"${detalle.precio_unitario:,.2f}",
+            f"${detalle.subtotal:,.2f}"
+        ]
+        table_data.append(row)
+    
+    # Si no hay detalles, agregar mensaje
+    if not detalles_limitados:
+        table_data.append(['', '', 'No hay datos para mostrar', '', '', '', '', ''])
+    
+    # Crear tabla
+    ventas_table = Table(table_data, colWidths=[0.8*inch, 1*inch, 2*inch, 1.5*inch, 1.5*inch, 0.5*inch, 0.8*inch, 1*inch])
+    ventas_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('ALIGN', (5, 1), (7, -1), 'RIGHT'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+    ]))
+    
+    elements.append(ventas_table)
+    
+    # Resumen por vendedor (solo si hay ventas)
+    if ventas.exists():
+        elements.append(Spacer(1, 30))
+        elements.append(Paragraph("RESUMEN POR VENDEDOR", styles["Heading2"]))
+        elements.append(Spacer(1, 10))
+        
+        # Agrupar por vendedor
+        resumen_vendedores = ventas.values(
+            'vendedor__first_name', 
+            'vendedor__last_name',
+            'vendedor__username'
+        ).annotate(
+            cantidad_ventas=Count('id'),
+            monto_total=Sum('total'),
+            ticket_promedio=Avg('total')
+        ).order_by('-monto_total')
+        
+        vendedor_data = [['Vendedor', 'Ventas', 'Monto Total', 'Ticket Promedio', '%']]
+        
+        for resumen in resumen_vendedores:
+            nombre = f"{resumen['vendedor__first_name'] or ''} {resumen['vendedor__last_name'] or ''}".strip()
+            if not nombre:
+                nombre = resumen['vendedor__username']
+            
+            if len(nombre) > 20:
+                nombre = nombre[:17] + "..."
+            
+            porcentaje = (float(resumen['monto_total'] or 0) / float(total_vendido) * 100) if total_vendido > 0 else 0
+            
+            row = [
+                nombre,
+                str(resumen['cantidad_ventas']),
+                f"${resumen['monto_total'] or 0:,.2f}",
+                f"${resumen['ticket_promedio'] or 0:,.2f}",
+                f"{porcentaje:.1f}%"
+            ]
+            vendedor_data.append(row)
+        
+        vendedor_table = Table(vendedor_data, colWidths=[2*inch, 1*inch, 1.5*inch, 1.5*inch, 1*inch])
+        vendedor_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('ALIGN', (1, 1), (4, -1), 'RIGHT'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+        ]))
+        
+        elements.append(vendedor_table)
+    
+    # Pie de página
+    elements.append(Spacer(1, 40))
+    fecha_generacion = timezone.now().strftime("%d/%m/%Y %H:%M:%S")
+    elements.append(Paragraph(f"Generado el: {fecha_generacion}", styles["Normal"]))
+    elements.append(Paragraph(f"Total registros en período: {detalles.count()}", styles["Normal"]))
+    if detalles.count() > 100:
+        elements.append(Paragraph(f"Nota: Mostrando solo los primeros 100 registros de {detalles.count()}", 
+                                 ParagraphStyle('Note', parent=styles['Normal'], fontSize=8, textColor=colors.grey)))
+    
+    # Construir el PDF
+    doc.build(elements)
+    
+    # Obtener el valor del buffer
+    pdf = buffer.getvalue()
+    buffer.close()
+    
+    # Crear la respuesta HTTP
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="reporte_ventas_{fecha_desde.strftime("%Y-%m-%d")}_al_{fecha_hasta.strftime("%Y-%m-%d")}.pdf"'
+    response.write(pdf)
+    
+    return response

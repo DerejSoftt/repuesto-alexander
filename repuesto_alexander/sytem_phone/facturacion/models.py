@@ -780,7 +780,13 @@ class MovimientoStock(models.Model):
 
 
     # Añade este modelo a tu models.py
+# models.py
 class CierreCaja(models.Model):
+    TIPO_CIERRE_CHOICES = (
+        ('manual', 'Manual'),
+        ('automatico', 'Automático'),
+    )
+    
     caja = models.ForeignKey(Caja, on_delete=models.CASCADE)
     monto_efectivo_real = models.DecimalField(max_digits=10, decimal_places=2)
     monto_tarjeta_real = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -788,16 +794,17 @@ class CierreCaja(models.Model):
     diferencia = models.DecimalField(max_digits=10, decimal_places=2)
     observaciones = models.TextField(blank=True, null=True)
     fecha_cierre = models.DateTimeField(auto_now_add=True)
+    tipo_cierre = models.CharField(max_length=10, choices=TIPO_CIERRE_CHOICES, default='manual')
+    hora_cierre_exacta = models.TimeField(null=True, blank=True)  # Nueva campo para hora exacta
     
     class Meta:
         db_table = 'cierre_caja'
         verbose_name = 'Cierre de Caja'
         verbose_name_plural = 'Cierres de Caja'
+        ordering = ['-fecha_cierre']
     
     def __str__(self):
-        return f"Cierre {self.id} - {self.caja.usuario.username} - {self.fecha_cierre.strftime('%Y-%m-%d')}"
-    
-
+        return f"Cierre {self.id} - {self.caja.usuario.username} - {self.fecha_cierre.strftime('%Y-%m-%d %H:%M')} - {self.tipo_cierre}"
 
 
 

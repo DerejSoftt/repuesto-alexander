@@ -90,6 +90,11 @@ urlpatterns = [
      # En tu urls.py
     path('dashboard/movimientos/', views.movimientos_stock, name='movimientos_stock'),
     path('dashboard/movimientos/pdf/', views.movimientos_stock_pdf, name='movimientos_stock_pdf'),
+   path('generar-reporte-deudas-pdf/', views.generar_reporte_deudas_pdf, name='generar_reporte_deudas_pdf'),
+   path('reportes', views.reportes, name='reportes'),
+    path('reportes/vendedor/<int:vendedor_id>/', views.reporte_detallado_vendedor, name='reporte_vendedor'),
+    path('reportes/exportar/csv/', views.exportar_reporte_csv, name='exportar_reporte_csv'),
+    path('reportes/exportar-pdf/', views.exportar_reporte_pdf, name='exportar_reporte_pdf'),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
     
