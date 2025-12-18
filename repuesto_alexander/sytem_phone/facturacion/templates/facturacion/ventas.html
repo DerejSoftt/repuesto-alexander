@@ -1453,7 +1453,7 @@
         <!-- Campos adicionales para crédito -->
         <input type="hidden" name="total_a_pagar" id="total-a-pagar-field">
     </form>
-   <script>
+ <script>
     // Funciones para el sidebar
     document.addEventListener("DOMContentLoaded", () => {
         // Estado de la aplicación
@@ -1537,6 +1537,10 @@
             wholesaleSaleBtn: document.getElementById('wholesale-sale-btn'),
         };
 
+        // ============================================
+        // FUNCIONES UTILITARIAS
+        // ============================================
+
         // Formatear moneda en pesos dominicanos
         const formatCurrency = (amount) => {
             return new Intl.NumberFormat('es-DO', {
@@ -1545,6 +1549,23 @@
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             }).format(amount).replace('DOP', 'RD$');
+        };
+
+        // Sanitizar números para evitar errores de conversión
+        const sanitizeNumber = (value) => {
+            if (value === null || value === undefined || value === '') return '0';
+            // Convertir a string y reemplazar comas por puntos
+            const str = String(value).replace(',', '.');
+            // Remover cualquier caracter que no sea número, punto o signo negativo
+            const cleaned = str.replace(/[^\d.-]/g, '');
+            return cleaned || '0';
+        };
+
+        // Convertir a número seguro
+        const safeNumber = (value, defaultValue = 0) => {
+            const sanitized = sanitizeNumber(value);
+            const num = parseFloat(sanitized);
+            return isNaN(num) ? defaultValue : num;
         };
 
         // Mostrar alerta personalizada
@@ -1627,11 +1648,11 @@
                             <div class="product-item"
                                  data-id="${producto.id}"
                                  data-name="${producto.descripcion}"
-                                 data-price="${producto.precio}"
-                                 data-price-with-itbis="${producto.precio_con_itbis}"
-                                 data-wholesale-price="${producto.precio_por_mayor}"
-                                 data-wholesale-price-with-itbis="${producto.precio_por_mayor_con_itbis}"
-                                 data-stock="${producto.cantidad}">
+                                 data-price="${sanitizeNumber(producto.precio)}"
+                                 data-price-with-itbis="${sanitizeNumber(producto.precio_con_itbis)}"
+                                 data-wholesale-price="${sanitizeNumber(producto.precio_por_mayor)}"
+                                 data-wholesale-price-with-itbis="${sanitizeNumber(producto.precio_por_mayor_con_itbis)}"
+                                 data-stock="${parseInt(producto.cantidad) || 0}">
                                 <div style="display: flex; align-items: center;">
                                     <img src="${imagenUrl}"
                                          class="product-image"
@@ -1649,7 +1670,7 @@
                                         <div class="product-details">Stock: ${producto.cantidad}</div>
                                     </div>
                                 </div>
-                                <div class="product-price">${formatCurrency(producto.precio_con_itbis)}</div>
+                                <div class="product-price">${formatCurrency(parseFloat(sanitizeNumber(producto.precio_con_itbis)))}</div>
                             </div>
                         `;
                     });
@@ -1773,14 +1794,19 @@
 
         // Actualizar total de la venta
         const updateTotal = () => {
-            state.totalSales = state.saleItems.reduce((total, item) => total + item.subtotal, 0); // Subtotal CON ITBIS
-            const itbisPercentage = 18; // 18% de ITBIS
+            // Calcular total con ITBIS
+            state.totalSales = state.saleItems.reduce((total, item) => total + safeNumber(item.subtotal), 0);
+            
+            // Calcular subtotal sin ITBIS (18% de ITBIS)
+            const itbisPercentage = 18;
             state.subtotalSinITBIS = state.totalSales / (1 + (itbisPercentage / 100));
             state.itbisAmount = state.totalSales - state.subtotalSinITBIS;
+            
             updateDiscount();
-            DOM.subtotalAmount.textContent = formatCurrency(state.subtotalSinITBIS); // Mostrar subtotal SIN ITBIS
+            
+            DOM.subtotalAmount.textContent = formatCurrency(state.subtotalSinITBIS);
             DOM.itbisAmount.textContent = formatCurrency(state.itbisAmount);
-            DOM.totalWithITBIS.textContent = formatCurrency(state.totalSales); // Total CON ITBIS
+            DOM.totalWithITBIS.textContent = formatCurrency(state.totalSales);
             
             console.log('Actualizando totales:', {
                 subtotalSinITBIS: state.subtotalSinITBIS,
@@ -1794,8 +1820,8 @@
             let discountPercentage;
             
             if (state.isSuperuser) {
-                // Para superusuarios, usar el valor del campo
-                discountPercentage = parseFloat(DOM.discountInput.value) || 0;
+                // Para superusuarios, usar el valor del campo sanitizado
+                discountPercentage = safeNumber(DOM.discountInput.value);
                 state.discountPercentage = Math.max(0, Math.min(discountPercentage, 100));
             } else {
                 // Para usuarios normales, siempre 0
@@ -1823,7 +1849,7 @@
         // Calcular cambio para pago en efectivo
         const calculateChange = () => {
             if (state.paymentType !== 'contado' || state.paymentMethod !== 'efectivo') return;
-            state.cashReceived = parseFloat(DOM.cashReceivedInput.value) || 0;
+            state.cashReceived = safeNumber(DOM.cashReceivedInput.value);
             state.changeAmount = Math.max(0, state.cashReceived - state.finalTotal);
             DOM.changeAmountDisplay.textContent = formatCurrency(state.changeAmount);
         };
@@ -1882,11 +1908,12 @@
         const selectProduct = async (productElement) => {
             const productId = productElement.getAttribute('data-id');
             const productName = productElement.getAttribute('data-name');
-            const productPrice = parseFloat(productElement.getAttribute('data-price'));
-            const productPriceWithITBIS = parseFloat(productElement.getAttribute('data-price-with-itbis'));
-            const productWholesalePrice = parseFloat(productElement.getAttribute('data-wholesale-price'));
-            const productWholesalePriceWithITBIS = parseFloat(productElement.getAttribute('data-wholesale-price-with-itbis'));
-            const productStock = parseInt(productElement.getAttribute('data-stock'));
+            const productPrice = safeNumber(productElement.getAttribute('data-price'));
+            const productPriceWithITBIS = safeNumber(productElement.getAttribute('data-price-with-itbis'));
+            const productWholesalePrice = safeNumber(productElement.getAttribute('data-wholesale-price'));
+            const productWholesalePriceWithITBIS = safeNumber(productElement.getAttribute('data-wholesale-price-with-itbis'));
+            const productStock = parseInt(productElement.getAttribute('data-stock')) || 0;
+            
             state.selectedProduct = {
                 id: productId,
                 name: productName,
@@ -1896,12 +1923,16 @@
                 wholesalePriceWithITBIS: productWholesalePriceWithITBIS,
                 stock: productStock
             };
+            
             DOM.productSearch.value = productName;
             DOM.productQuantity.max = productStock;
+            DOM.productQuantity.value = 1;
+            
             if (DOM.productQuantity.value > productStock) {
                 DOM.productQuantity.value = productStock;
                 showAlert(`Cantidad ajustada al stock disponible: ${productStock}`, 'warning');
             }
+            
             await showPriceModal(state.selectedProduct);
         };
 
@@ -1911,19 +1942,24 @@
                 showAlert('Debe seleccionar un producto primero', 'error');
                 return;
             }
+            
             const quantity = parseInt(DOM.productQuantity.value) || 1;
             if (quantity <= 0) {
                 showAlert('La cantidad debe ser mayor a cero', 'error');
                 return;
             }
+            
             if (quantity > state.selectedProduct.stock) {
                 showAlert(`No hay suficiente stock. Disponible: ${state.selectedProduct.stock}`, 'error');
                 return;
             }
+            
             const currentPrice = state.saleType === 'mayor'
                 ? state.selectedProduct.wholesalePriceWithITBIS
                 : state.selectedProduct.priceWithITBIS;
+            
             const existingItemIndex = state.saleItems.findIndex(item => item.id === state.selectedProduct.id);
+            
             if (existingItemIndex !== -1) {
                 state.saleItems[existingItemIndex].quantity += quantity;
                 state.saleItems[existingItemIndex].price = currentPrice;
@@ -1937,15 +1973,17 @@
                     subtotal: quantity * currentPrice
                 });
             }
+            
             updateTotal();
             renderSaleItems();
             showAlert(`Producto agregado: ${state.selectedProduct.name} x${quantity}`, 'success');
+            
             state.selectedProduct = null;
             DOM.productSearch.value = '';
             DOM.productQuantity.value = '1';
         };
 
-        // Preparar campos del formulario antes de enviar
+        // Preparar campos del formulario antes de enviar (SANITIZADO)
         const prepareFormFields = () => {
             DOM.paymentTypeField.value = state.paymentType;
             DOM.paymentMethodField.value = state.paymentMethod;
@@ -1959,35 +1997,53 @@
                 DOM.clientDocumentField.value = DOM.cashClientDocument.value.trim();
             }
             
-            // Campos para ITBIS - IMPORTANTE
-            DOM.subtotalField.value = state.subtotalSinITBIS.toFixed(2); // Subtotal SIN ITBIS
-            DOM.itbisMontoField.value = state.itbisAmount.toFixed(2); // Monto del ITBIS
-            DOM.itbisPorcentajeField.value = '18.00'; // Porcentaje fijo del 18%
+            // Sanitizar todos los valores numéricos antes de enviar
+            const subtotalSinITBIS = sanitizeNumber(state.subtotalSinITBIS);
+            const itbisMonto = sanitizeNumber(state.itbisAmount);
+            const discountPercentage = sanitizeNumber(state.discountPercentage);
+            const discountAmount = sanitizeNumber(state.discountAmount);
+            const total = sanitizeNumber(state.finalTotal);
+            const cashReceived = sanitizeNumber(state.cashReceived);
+            const changeAmount = sanitizeNumber(state.changeAmount);
             
-            DOM.discountPercentageField.value = state.discountPercentage.toFixed(2);
-            DOM.discountAmountField.value = state.discountAmount.toFixed(2);
-            DOM.totalField.value = state.finalTotal.toFixed(2);
-            DOM.cashReceivedField.value = state.cashReceived.toFixed(2);
-            DOM.changeAmountField.value = state.changeAmount.toFixed(2);
-            DOM.saleItemsField.value = JSON.stringify(state.saleItems);
-            DOM.totalAPagarField.value = state.finalTotal.toFixed(2);
+            // Convertir a números, formatear y enviar
+            DOM.subtotalField.value = parseFloat(subtotalSinITBIS).toFixed(2);
+            DOM.itbisMontoField.value = parseFloat(itbisMonto).toFixed(2);
+            DOM.itbisPorcentajeField.value = '18.00';
+            DOM.discountPercentageField.value = parseFloat(discountPercentage).toFixed(2);
+            DOM.discountAmountField.value = parseFloat(discountAmount).toFixed(2);
+            DOM.totalField.value = parseFloat(total).toFixed(2);
+            DOM.cashReceivedField.value = parseFloat(cashReceived).toFixed(2);
+            DOM.changeAmountField.value = parseFloat(changeAmount).toFixed(2);
+            DOM.totalAPagarField.value = parseFloat(total).toFixed(2);
+            
+            // Sanitizar los items de la venta
+            const safeItems = state.saleItems.map(item => ({
+                id: item.id,
+                name: item.name,
+                price: sanitizeNumber(item.price),
+                quantity: parseInt(item.quantity) || 1,
+                subtotal: sanitizeNumber(item.subtotal)
+            }));
+            
+            DOM.saleItemsField.value = JSON.stringify(safeItems);
 
-            console.log('Preparando datos para enviar:', {
-                subtotal: state.subtotalSinITBIS,
-                itbis_monto: state.itbisAmount,
-                itbis_porcentaje: 18.00,
-                total: state.finalTotal,
-                items: state.saleItems,
-                is_superuser: state.isSuperuser
+            console.log('Datos preparados para enviar:', {
+                subtotal: DOM.subtotalField.value,
+                itbis_monto: DOM.itbisMontoField.value,
+                total: DOM.totalField.value,
+                items: safeItems
             });
         };
 
         // Validar y completar la venta
         const completeSale = async () => {
+            // Validaciones básicas
             if (state.saleItems.length === 0) {
                 showAlert('Debe agregar al menos un producto a la venta', 'error');
                 return;
             }
+            
             if (state.paymentType === 'credito') {
                 if (!state.selectedClient) {
                     showAlert('Debe seleccionar un cliente para venta a crédito', 'error');
@@ -2006,9 +2062,9 @@
                 }
             }
 
-            // Validar datos del ITBIS
-            if (state.itbisAmount <= 0 && state.totalSales > 0) {
-                showAlert('Error en el cálculo del ITBIS. Por favor, recargue la página.', 'error');
+            // Validar que el total sea mayor a 0
+            if (state.finalTotal <= 0) {
+                showAlert('El total de la venta debe ser mayor a 0', 'error');
                 return;
             }
 
@@ -2048,7 +2104,9 @@
             }
         };
 
-        // Event Listeners
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
         DOM.cashPaymentBtn.addEventListener('click', () => setPaymentType('contado'));
         DOM.creditPaymentBtn.addEventListener('click', () => setPaymentType('credito'));
         DOM.cashMethodBtn.addEventListener('click', () => setPaymentMethod('efectivo'));
@@ -2107,6 +2165,7 @@
                 e.preventDefault();
                 DOM.discountInput.value = 0;
                 showAlert('El descuento solo puede ser aplicado por el administrador', 'warning');
+                updateDiscount();
             });
             
             DOM.discountInput.addEventListener('keydown', (e) => {
@@ -2118,6 +2177,7 @@
             
             // Establecer estilo de solo lectura
             DOM.discountInput.classList.add('discount-input-disabled');
+            DOM.discountInput.disabled = true;
         }
 
         // Inicializar la interfaz
@@ -2151,6 +2211,10 @@
         searchProducts('');
     });
 
+    // ============================================
+    // FUNCIONES GLOBALES
+    // ============================================
+
     // Funciones globales para el modal de imagen
     function openImageModal(imageUrl) {
         const modal = document.getElementById('image-modal');
@@ -2164,7 +2228,7 @@
         modal.classList.remove('active');
     }
 
-    // Funciones para el sidebar (mantener las existentes)
+    // Funciones para el sidebar
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.querySelector('.sidebar-overlay');

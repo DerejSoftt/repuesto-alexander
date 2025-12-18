@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path  
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 
 # Cargar las variables de entorno desde el archivo .env
@@ -87,6 +87,12 @@ WSGI_APPLICATION = 'sytem_phone.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+
+
+# settings.py
+TIME_ZONE = 'America/Santo_Domingo'  # Mantener para Django
+USE_TZ = True
+
 # DATABASES = {
 #     "default": {
 #         "ENGINE": "django.db.backends.mysql",
@@ -96,12 +102,16 @@ WSGI_APPLICATION = 'sytem_phone.wsgi.application'
 #         "HOST": "localhost",
 #         "PORT": "3306",
 #         "OPTIONS": {
-#             "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-#         }
+#             # Usar offset numérico en lugar de nombre de zona
+#             "init_command": "SET time_zone = '-04:00'",  # Para República Dominicana (UTC-4)
+#             # Otras opciones importantes
+#             "charset": "utf8mb4",
+#             "use_unicode": True,
+#         },
+#         # Esto es crucial para MySQL con Django
+#         "TIME_ZONE": TIME_ZONE,
 #     }
 # }
-
-
 
 
 
@@ -116,11 +126,12 @@ DATABASES = {
         'HOST': os.environ.get('DB_HOST'),
         'PORT': os.environ.get('DB_PORT'),
         'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'; SET time_zone = '-04:00';",
+            'charset': 'utf8mb4',
+            'use_unicode': True,
         },
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -146,7 +157,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# TIME_ZONE = 'UTC'
 
 USE_I18N = True
 

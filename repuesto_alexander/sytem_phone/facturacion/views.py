@@ -789,74 +789,501 @@ def dashboard_data_tradicional(request):
 
 
 
-
-# En tu views.py, agrega estas vistas:
-
 def movimientos_stock(request):
-    """API para obtener movimientos de stock"""
+    """API para obtener movimientos de stock - INCLUYENDO VENTAS Y ENTRADAS"""
     try:
+        movimientos_data = []
+        
+        # =============================================
+        # 1. OBTENER ENTRADAS DE PRODUCTOS (COMPRAS)
+        # =============================================
+        # El error indica que EntradaProducto tiene solo 'proveedor' como relación
+        # Probablemente EntradaProducto ES el producto en sí mismo, no tiene relación con otro modelo Producto
+        
+        print("=== DEBUG: Obteniendo entradas de productos ===")
+        
+        # Obtener entradas sin select_related a 'producto' ya que no existe
+        try:
+            entradas = EntradaProducto.objects.all().order_by('-fecha_entrada')[:500]
+            print(f"Entradas encontradas (ordenadas por fecha_entrada): {entradas.count()}")
+        except:
+            # Intentar con otro campo de fecha si fecha_entrada no existe
+            try:
+                entradas = EntradaProducto.objects.all().order_by('-fecha_registro')[:500]
+                print(f"Entradas encontradas (ordenadas por fecha_registro): {entradas.count()}")
+            except:
+                entradas = EntradaProducto.objects.all().order_by('-id')[:500]
+                print(f"Entradas encontradas (ordenadas por ID): {entradas.count()}")
+        
+        # =============================================
+        # 2. OBTENER MOVIMIENTOS DE STOCK (AJUSTES, ETC.)
+        # =============================================
         movimientos = MovimientoStock.objects.select_related('producto', 'usuario').order_by('-fecha_movimiento')
         
-        # Aplicar filtros
+        # =============================================
+        # 3. OBTENER VENTAS (DETALLES DE VENTA)
+        # =============================================
+        ventas = DetalleVenta.objects.select_related(
+            'venta', 'producto', 'venta__vendedor'
+        ).filter(
+            venta__anulada=False
+        ).order_by('-venta__fecha_venta')
+        
+        # =============================================
+        # 4. APLICAR FILTROS
+        # =============================================
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         tipo_movimiento = request.GET.get('tipo_movimiento')
         
+        print(f"Filtros recibidos: fecha_desde={fecha_desde}, fecha_hasta={fecha_hasta}, tipo={tipo_movimiento}")
+        
+        # Aplicar filtros a entradas
+        if fecha_desde:
+            try:
+                entradas = entradas.filter(fecha_entrada__date__gte=fecha_desde)
+                print(f"Entradas filtradas por fecha_desde: {entradas.count()}")
+            except Exception as e:
+                print(f"Error filtrando fecha_desde en entradas: {e}")
+                try:
+                    entradas = entradas.filter(fecha_registro__date__gte=fecha_desde)
+                except:
+                    pass
+        
+        if fecha_hasta:
+            try:
+                entradas = entradas.filter(fecha_entrada__date__lte=fecha_hasta)
+                print(f"Entradas filtradas por fecha_hasta: {entradas.count()}")
+            except Exception as e:
+                print(f"Error filtrando fecha_hasta en entradas: {e}")
+                try:
+                    entradas = entradas.filter(fecha_registro__date__lte=fecha_hasta)
+                except:
+                    pass
+        
+        if tipo_movimiento and tipo_movimiento != 'entrada':
+            entradas = entradas.none()
+        
+        # Aplicar filtros a movimientos de stock
         if fecha_desde:
             movimientos = movimientos.filter(fecha_movimiento__date__gte=fecha_desde)
         if fecha_hasta:
             movimientos = movimientos.filter(fecha_movimiento__date__lte=fecha_hasta)
-        if tipo_movimiento:
+        if tipo_movimiento and tipo_movimiento not in ['entrada', 'venta']:
             movimientos = movimientos.filter(tipo_movimiento=tipo_movimiento)
         
-        # Limitar a 1000 registros para no sobrecargar
-        movimientos = movimientos[:1000]
+        # Aplicar filtros a ventas
+        if fecha_desde:
+            ventas = ventas.filter(venta__fecha_venta__date__gte=fecha_desde)
+        if fecha_hasta:
+            ventas = ventas.filter(venta__fecha_venta__date__lte=fecha_hasta)
+        if tipo_movimiento == 'venta':
+            # Si solo se quiere ver ventas
+            pass
+        elif tipo_movimiento and tipo_movimiento != 'venta':
+            # Si se filtra por otro tipo, excluir ventas
+            ventas = ventas.none()
         
-        data = {
-            'movimientos': [
-                {
+        # Limitar registros
+        movimientos = movimientos[:500]
+        ventas = ventas[:500]
+        
+        # =============================================
+        # 5. PROCESAR ENTRADAS DE PRODUCTOS
+        # =============================================
+        print(f"Procesando {entradas.count()} entradas...")
+        
+        for entrada in entradas:
+            try:
+                # Obtener nombre del producto directamente de EntradaProducto
+                # EntradaProducto probablemente tiene campos como 'descripcion', 'nombre_producto', etc.
+                producto_nombre = ""
+                
+                if hasattr(entrada, 'descripcion') and entrada.descripcion:
+                    producto_nombre = entrada.descripcion
+                elif hasattr(entrada, 'nombre_producto') and entrada.nombre_producto:
+                    producto_nombre = entrada.nombre_producto
+                elif hasattr(entrada, 'nombre') and entrada.nombre:
+                    producto_nombre = entrada.nombre
+                else:
+                    producto_nombre = f"Producto ID: {entrada.id}"
+                
+                # Obtener usuario que hizo la entrada
+                usuario_nombre = "Sistema"
+                
+                # Intentar obtener usuario de diferentes maneras
+                if hasattr(entrada, 'usuario') and entrada.usuario:
+                    usuario_nombre = entrada.usuario.username
+                elif hasattr(entrada, 'vendedor') and entrada.vendedor:
+                    usuario_nombre = entrada.vendedor.username
+                elif hasattr(entrada, 'creado_por') and entrada.creado_por:
+                    usuario_nombre = entrada.creado_por.username
+                elif hasattr(entrada, 'proveedor') and entrada.proveedor:
+                    # Si no hay usuario, al menos mostrar el proveedor
+                    usuario_nombre = f"Proveedor: {entrada.proveedor.nombre}"
+                
+                # Obtener fecha
+                fecha_str = "Fecha no disponible"
+                if hasattr(entrada, 'fecha_entrada') and entrada.fecha_entrada:
+                    fecha_str = entrada.fecha_entrada.strftime('%Y-%m-%d %H:%M')
+                elif hasattr(entrada, 'fecha_registro') and entrada.fecha_registro:
+                    fecha_str = entrada.fecha_registro.strftime('%Y-%m-%d %H:%M')
+                elif hasattr(entrada, 'created_at') and entrada.created_at:
+                    fecha_str = entrada.created_at.strftime('%Y-%m-%d %H:%M')
+                
+                # Obtener cantidad
+                cantidad = 0
+                if hasattr(entrada, 'cantidad') and entrada.cantidad:
+                    cantidad = entrada.cantidad
+                elif hasattr(entrada, 'cantidad_entrada') and entrada.cantidad_entrada:
+                    cantidad = entrada.cantidad_entrada
+                
+                # Obtener motivo/referencia
+                motivo = "Entrada de mercancía"
+                if hasattr(entrada, 'observaciones') and entrada.observaciones:
+                    motivo = entrada.observaciones
+                elif hasattr(entrada, 'notas') and entrada.notas:
+                    motivo = entrada.notas
+                
+                referencia = ""
+                if hasattr(entrada, 'numero_factura') and entrada.numero_factura:
+                    referencia = entrada.numero_factura
+                elif hasattr(entrada, 'referencia') and entrada.referencia:
+                    referencia = entrada.referencia
+                
+                movimientos_data.append({
+                    'fecha_movimiento': fecha_str,
+                    'producto': producto_nombre,
+                    'tipo_movimiento': 'entrada',
+                    'tipo_operacion': 'entrada',
+                    'cantidad': cantidad,
+                    'cantidad_anterior': 0,
+                    'cantidad_nueva': cantidad,
+                    'motivo': motivo,
+                    'usuario': usuario_nombre,
+                    'referencia': referencia,
+                    'origen': 'entrada_producto'
+                })
+                
+            except Exception as e:
+                print(f"Error procesando entrada ID {entrada.id}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        # =============================================
+        # 6. PROCESAR MOVIMIENTOS DE STOCK
+        # =============================================
+        print(f"Procesando {movimientos.count()} movimientos de stock...")
+        
+        for mov in movimientos:
+            try:
+                # Determinar tipo_operacion basado en el tipo y signo
+                if mov.tipo_movimiento == 'entrada':
+                    tipo_operacion = "entrada"
+                elif mov.tipo_movimiento in ['salida', 'venta']:
+                    tipo_operacion = "salida"
+                elif mov.tipo_movimiento == 'ajuste':
+                    tipo_operacion = "entrada" if mov.cantidad > 0 else "salida"
+                elif mov.tipo_movimiento == 'devolucion':
+                    tipo_operacion = "entrada" if mov.cantidad > 0 else "salida"
+                else:
+                    tipo_operacion = "entrada" if mov.cantidad > 0 else "salida"
+                
+                # Obtener nombre del producto
+                producto_nombre = ""
+                if hasattr(mov.producto, 'descripcion'):
+                    producto_nombre = mov.producto.descripcion
+                elif hasattr(mov.producto, 'nombre_producto'):
+                    producto_nombre = mov.producto.nombre_producto
+                elif hasattr(mov.producto, 'nombre'):
+                    producto_nombre = mov.producto.nombre
+                else:
+                    producto_nombre = str(mov.producto)
+                
+                movimientos_data.append({
                     'fecha_movimiento': mov.fecha_movimiento.strftime('%Y-%m-%d %H:%M'),
-                    'producto': mov.producto.descripcion,
+                    'producto': producto_nombre,
                     'tipo_movimiento': mov.tipo_movimiento,
+                    'tipo_operacion': tipo_operacion,
                     'cantidad': mov.cantidad,
                     'cantidad_anterior': mov.cantidad_anterior,
                     'cantidad_nueva': mov.cantidad_nueva,
                     'motivo': mov.motivo,
                     'usuario': mov.usuario.username if mov.usuario else 'Sistema',
-                    'referencia': mov.referencia
-                }
-                for mov in movimientos
-            ]
+                    'referencia': mov.referencia or '',
+                    'origen': 'movimiento_stock'
+                })
+            except Exception as e:
+                print(f"Error procesando movimiento ID {mov.id}: {e}")
+                continue
+        
+        # =============================================
+        # 7. PROCESAR VENTAS
+        # =============================================
+        print(f"Procesando {ventas.count()} ventas...")
+        
+        for detalle_venta in ventas:
+            try:
+                venta = detalle_venta.venta
+                producto = detalle_venta.producto
+                
+                # Para ventas, la cantidad siempre es negativa (es una salida)
+                cantidad = -detalle_venta.cantidad
+                
+                # Obtener nombre del producto
+                producto_nombre = ""
+                if hasattr(producto, 'descripcion'):
+                    producto_nombre = producto.descripcion
+                elif hasattr(producto, 'nombre_producto'):
+                    producto_nombre = producto.nombre_producto
+                elif hasattr(producto, 'nombre'):
+                    producto_nombre = producto.nombre
+                else:
+                    producto_nombre = str(producto)
+                
+                movimientos_data.append({
+                    'fecha_movimiento': venta.fecha_venta.strftime('%Y-%m-%d %H:%M'),
+                    'producto': producto_nombre,
+                    'tipo_movimiento': 'venta',
+                    'tipo_operacion': 'salida',
+                    'cantidad': cantidad,
+                    'cantidad_anterior': 0,
+                    'cantidad_nueva': 0,
+                    'motivo': f"Venta #{venta.numero_factura} - {venta.cliente_nombre}",
+                    'usuario': venta.vendedor.username if venta.vendedor else 'Sistema',
+                    'referencia': venta.numero_factura,
+                    'origen': 'venta'
+                })
+            except Exception as e:
+                print(f"Error procesando venta ID {detalle_venta.id}: {e}")
+                continue
+        
+        # =============================================
+        # 8. ORDENAR Y LIMITAR
+        # =============================================
+        # Ordenar por fecha de movimiento (más reciente primero)
+        movimientos_data.sort(key=lambda x: x['fecha_movimiento'], reverse=True)
+        
+        # Limitar a 1000 registros en total
+        movimientos_data = movimientos_data[:1000]
+        
+        # Eliminar campo 'origen' antes de enviar al frontend
+        for mov in movimientos_data:
+            mov.pop('origen', None)
+        
+        # DEBUG: Mostrar resumen
+        print(f"=== RESUMEN FINAL ===")
+        print(f"Total movimientos procesados: {len(movimientos_data)}")
+        print(f"Entradas: {len([m for m in movimientos_data if m['tipo_movimiento'] == 'entrada'])}")
+        print(f"Ventas: {len([m for m in movimientos_data if m['tipo_movimiento'] == 'venta'])}")
+        print(f"Otros movimientos: {len([m for m in movimientos_data if m['tipo_movimiento'] not in ['entrada', 'venta']])}")
+        
+        data = {
+            'movimientos': movimientos_data
         }
         return JsonResponse(data)
         
     except Exception as e:
         print(f"Error en movimientos_stock: {e}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
 
+
 def movimientos_stock_pdf(request):
-    """Generar PDF de movimientos de stock"""
+    """Generar PDF de movimientos de stock - INCLUYENDO VENTAS"""
     try:
-        # Obtener movimientos con los filtros
-        movimientos = MovimientoStock.objects.select_related('producto', 'usuario').order_by('-fecha_movimiento')
+        # =============================================
+        # 1. OBTENER MOVIMIENTOS DE STOCK
+        # =============================================
+        movimientos_stock = MovimientoStock.objects.select_related(
+            'producto', 'usuario'
+        ).order_by('-fecha_movimiento')
         
-        # Aplicar filtros
+        # =============================================
+        # 2. OBTENER VENTAS (DETALLES DE VENTA)
+        # =============================================
+        ventas_detalles = DetalleVenta.objects.select_related(
+            'venta', 'producto', 'venta__vendedor'
+        ).filter(
+            venta__anulada=False
+        ).order_by('-venta__fecha_venta')
+        
+        # =============================================
+        # 3. APLICAR FILTROS A AMBAS FUENTES
+        # =============================================
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         tipo_movimiento = request.GET.get('tipo_movimiento')
         
+        # Filtros para movimientos de stock
         if fecha_desde:
-            movimientos = movimientos.filter(fecha_movimiento__date__gte=fecha_desde)
-        if fecha_hasta:
-            movimientos = movimientos.filter(fecha_movimiento__date__lte=fecha_hasta)
-        if tipo_movimiento:
-            movimientos = movimientos.filter(tipo_movimiento=tipo_movimiento)
+            try:
+                movimientos_stock = movimientos_stock.filter(
+                    fecha_movimiento__date__gte=fecha_desde
+                )
+            except Exception as e:
+                print(f"Error filtrando fecha_desde en movimientos_stock: {e}")
         
+        if fecha_hasta:
+            try:
+                movimientos_stock = movimientos_stock.filter(
+                    fecha_movimiento__date__lte=fecha_hasta
+                )
+            except Exception as e:
+                print(f"Error filtrando fecha_hasta en movimientos_stock: {e}")
+        
+        if tipo_movimiento and tipo_movimiento != 'venta':
+            movimientos_stock = movimientos_stock.filter(
+                tipo_movimiento=tipo_movimiento
+            )
+        
+        # Filtros para ventas
+        if fecha_desde:
+            try:
+                ventas_detalles = ventas_detalles.filter(
+                    venta__fecha_venta__date__gte=fecha_desde
+                )
+            except Exception as e:
+                print(f"Error filtrando fecha_desde en ventas: {e}")
+        
+        if fecha_hasta:
+            try:
+                ventas_detalles = ventas_detalles.filter(
+                    venta__fecha_venta__date__lte=fecha_hasta
+                )
+            except Exception as e:
+                print(f"Error filtrando fecha_hasta en ventas: {e}")
+        
+        if tipo_movimiento == 'venta':
+            # Si solo se quiere ver ventas, excluir movimientos de stock
+            movimientos_stock = movimientos_stock.none()
+        elif tipo_movimiento and tipo_movimiento != 'venta':
+            # Si se filtra por otro tipo, excluir ventas
+            ventas_detalles = ventas_detalles.none()
+        
+        # Limitar resultados para evitar PDFs demasiado grandes
+        movimientos_stock = movimientos_stock[:500]
+        ventas_detalles = ventas_detalles[:500]
+        
+        # DEBUG: Verificar qué datos se están obteniendo
+        print(f"=== DATOS PARA PDF ===")
+        print(f"Movimientos de stock encontrados: {movimientos_stock.count()}")
+        print(f"Ventas encontradas: {ventas_detalles.count()}")
+        print(f"Filtros aplicados: desde={fecha_desde}, hasta={fecha_hasta}, tipo={tipo_movimiento}")
+        
+        # =============================================
+        # 4. COMBINAR Y PREPARAR DATOS
+        # =============================================
+        all_movements = []
+        
+        # Procesar movimientos de stock
+        for mov in movimientos_stock:
+            # Determinar tipo de operación
+            if mov.tipo_movimiento == 'entrada':
+                tipo_operacion = "ENTRADA"
+                es_entrada = True
+            elif mov.tipo_movimiento in ['salida', 'venta']:
+                tipo_operacion = "SALIDA"
+                es_entrada = False
+            elif mov.tipo_movimiento == 'ajuste':
+                if mov.cantidad > 0:
+                    tipo_operacion = "AJUSTE ENTRADA"
+                    es_entrada = True
+                else:
+                    tipo_operacion = "AJUSTE SALIDA"
+                    es_entrada = False
+            elif mov.tipo_movimiento == 'devolucion':
+                if mov.cantidad > 0:
+                    tipo_operacion = "DEVOLUCIÓN ENTRADA"
+                    es_entrada = True
+                else:
+                    tipo_operacion = "DEVOLUCIÓN SALIDA"
+                    es_entrada = False
+            else:
+                tipo_operacion = mov.tipo_movimiento.upper()
+                es_entrada = mov.cantidad > 0
+            
+            all_movements.append({
+                'fecha': mov.fecha_movimiento,
+                'producto': mov.producto.descripcion,
+                'tipo_movimiento': mov.tipo_movimiento,
+                'tipo_operacion': tipo_operacion,
+                'es_entrada': es_entrada,
+                'cantidad': mov.cantidad,
+                'cantidad_anterior': mov.cantidad_anterior,
+                'cantidad_nueva': mov.cantidad_nueva,
+                'motivo': mov.motivo,
+                'usuario': mov.usuario.username if mov.usuario else 'Sistema',
+                'referencia': mov.referencia or '',
+                'origen': 'movimiento_stock'
+            })
+        
+        # Procesar ventas
+        for detalle_venta in ventas_detalles:
+            venta = detalle_venta.venta
+            producto = detalle_venta.producto
+            
+            # Para ventas, la cantidad siempre es negativa (es una salida)
+            cantidad = -detalle_venta.cantidad
+            
+            # Calcular stock aproximado
+            # Nota: Esto es aproximado porque no tenemos el stock exacto en el momento de la venta
+            # Podríamos usar el stock actual como referencia
+            try:
+                # Intentar obtener el stock actual del producto
+                cantidad_actual = producto.cantidad if hasattr(producto, 'cantidad') else 0
+                cantidad_anterior = cantidad_actual + detalle_venta.cantidad
+                cantidad_nueva = cantidad_actual
+            except:
+                cantidad_anterior = 0
+                cantidad_nueva = 0
+            
+            all_movements.append({
+                'fecha': venta.fecha_venta,
+                'producto': producto.descripcion,
+                'tipo_movimiento': 'venta',
+                'tipo_operacion': 'VENTA',
+                'es_entrada': False,  # Las ventas siempre son salidas
+                'cantidad': cantidad,
+                'cantidad_anterior': cantidad_anterior,
+                'cantidad_nueva': cantidad_nueva,
+                'motivo': f"Venta #{venta.numero_factura} - {venta.cliente_nombre}",
+                'usuario': venta.vendedor.username if venta.vendedor else 'Sistema',
+                'referencia': venta.numero_factura,
+                'origen': 'venta'
+            })
+        
+        # Ordenar por fecha descendente
+        all_movements.sort(key=lambda x: x['fecha'], reverse=True)
+        
+        # Limitar a 1000 registros para el PDF
+        all_movements = all_movements[:1000]
+        
+        # =============================================
+        # 5. CREAR RESPONSE PDF
+        # =============================================
         # Crear respuesta HTTP con tipo PDF
         response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="reporte_movimientos.pdf"'
+        
+        # Nombre del archivo
+        filename = "reporte_movimientos.pdf"
+        if fecha_desde and fecha_hasta:
+            filename = f"movimientos_{fecha_desde}_a_{fecha_hasta}.pdf"
+        
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         # Crear el documento PDF
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        from reportlab.lib.units import inch
+        from reportlab.pdfgen import canvas
+        from io import BytesIO
+        
+        # Usar página horizontal para más espacio
         doc = SimpleDocTemplate(
             response,
             pagesize=landscape(letter),
@@ -871,104 +1298,278 @@ def movimientos_stock_pdf(request):
         
         # Estilos
         styles = getSampleStyleSheet()
+        
+        # Estilo para título personalizado
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
             fontSize=16,
             spaceAfter=30,
-            alignment=1  # Centrado
+            alignment=1,  # Centrado
+            textColor=colors.HexColor('#333333')
         )
         
-        # Título
+        # Estilo para subtítulo
+        subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Heading2'],
+            fontSize=12,
+            spaceAfter=20,
+            alignment=1,
+            textColor=colors.HexColor('#666666')
+        )
+        
+        # =============================================
+        # 6. ENCABEZADO Y INFORMACIÓN
+        # =============================================
+        # Título principal
         title = Paragraph("REPORTE DE MOVIMIENTOS DE INVENTARIO", title_style)
         elements.append(title)
         
         # Información del reporte
         info_style = styles['Normal']
         fecha_reporte = timezone.now().strftime('%d/%m/%Y %H:%M')
+        empresa = "Super Bestia"
         
-        info_text = f"<b>Fecha de reporte:</b> {fecha_reporte}"
+        info_text = f"""
+        <b>Empresa:</b> {empresa}<br/>
+        <b>Fecha de reporte:</b> {fecha_reporte}
+        """
+        
         if fecha_desde and fecha_hasta:
-            info_text += f" | <b>Período:</b> {fecha_desde} al {fecha_hasta}"
+            info_text += f"<br/><b>Período:</b> {fecha_desde} al {fecha_hasta}"
+        
         if tipo_movimiento:
-            tipo_display = dict(MovimientoStock.TIPOS_MOVIMIENTO).get(tipo_movimiento, tipo_movimiento)
-            info_text += f" | <b>Tipo:</b> {tipo_display}"
+            # Traducir tipo de movimiento
+            tipo_display = {
+                'entrada': 'Entradas',
+                'salida': 'Salidas',
+                'venta': 'Ventas',
+                'ajuste': 'Ajustes',
+                'devolucion': 'Devoluciones',
+                'todos': 'Todos los tipos'
+            }.get(tipo_movimiento, tipo_movimiento.capitalize())
+            
+            info_text += f"<br/><b>Tipo de movimiento:</b> {tipo_display}"
         
         info_paragraph = Paragraph(info_text, info_style)
         elements.append(info_paragraph)
         elements.append(Spacer(1, 20))
         
-        # Preparar datos para la tabla
-        table_data = [['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Stock Anterior', 'Stock Nuevo', 'Motivo', 'Usuario']]
-        
-        # Calcular totales
+        # =============================================
+        # 7. CALCULAR ESTADÍSTICAS
+        # =============================================
+        total_movimientos = len(all_movements)
         total_entradas = 0
         total_salidas = 0
         
-        for mov in movimientos:
-            # Formatear fecha
-            fecha_str = mov.fecha_movimiento.strftime('%d/%m/%Y %H:%M')
-            
-            # Formatear tipo de movimiento
-            tipo_display = dict(MovimientoStock.TIPOS_MOVIMIENTO).get(mov.tipo_movimiento, mov.tipo_movimiento)
-            
-            # Agregar fila a la tabla
-            table_data.append([
-                fecha_str,
-                mov.producto.descripcion[:30] + '...' if len(mov.producto.descripcion) > 30 else mov.producto.descripcion,
-                tipo_display,
-                str(mov.cantidad),
-                str(mov.cantidad_anterior),
-                str(mov.cantidad_nueva),
-                mov.motivo[:25] + '...' if len(mov.motivo) > 25 else mov.motivo,
-                mov.usuario.username if mov.usuario else 'Sistema'
-            ])
-            
-            # Acumular totales
-            if mov.tipo_movimiento == 'entrada':
-                total_entradas += mov.cantidad
-            elif mov.tipo_movimiento in ['salida', 'venta']:
-                total_salidas += mov.cantidad
+        for mov in all_movements:
+            if mov['es_entrada']:
+                total_entradas += abs(mov['cantidad'])
+            else:
+                total_salidas += abs(mov['cantidad'])
         
-        # Crear tabla
-        if len(table_data) > 1:  # Si hay datos además del encabezado
-            table = Table(table_data, colWidths=[1.2*inch, 1.5*inch, 0.8*inch, 0.7*inch, 0.9*inch, 0.9*inch, 1.5*inch, 0.8*inch])
+        saldo_neto = total_entradas - total_salidas
+        
+        # Mostrar estadísticas rápidas
+        stats_text = f"""
+        <b>Estadísticas del Reporte:</b><br/>
+        Total de movimientos: <b>{total_movimientos}</b> | 
+        Total entradas: <b>{total_entradas}</b> unidades | 
+        Total salidas: <b>{total_salidas}</b> unidades | 
+        Saldo neto: <b>{saldo_neto}</b> unidades
+        """
+        
+        stats_paragraph = Paragraph(stats_text, info_style)
+        elements.append(stats_paragraph)
+        elements.append(Spacer(1, 15))
+        
+        # =============================================
+        # 8. TABLA DE MOVIMIENTOS
+        # =============================================
+        if total_movimientos > 0:
+            # Preparar datos para la tabla
+            table_data = [['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Stock Anterior', 'Stock Nuevo', 'Motivo', 'Usuario', 'Referencia']]
+            
+            for mov in all_movements:
+                # Formatear fecha
+                fecha_str = mov['fecha'].strftime('%d/%m/%Y %H:%M')
+                
+                # Formatear tipo
+                tipo_display = mov['tipo_operacion']
+                
+                # Formatear cantidad (color y signo)
+                cantidad_str = f"+{mov['cantidad']}" if mov['es_entrada'] else f"{mov['cantidad']}"
+                
+                # Acortar texto si es muy largo
+                producto_display = mov['producto']
+                if len(producto_display) > 30:
+                    producto_display = producto_display[:27] + "..."
+                
+                motivo_display = mov['motivo']
+                if len(motivo_display) > 35:
+                    motivo_display = motivo_display[:32] + "..."
+                
+                table_data.append([
+                    fecha_str,
+                    producto_display,
+                    tipo_display,
+                    cantidad_str,
+                    str(mov['cantidad_anterior']),
+                    str(mov['cantidad_nueva']),
+                    motivo_display,
+                    mov['usuario'],
+                    mov['referencia']
+                ])
+            
+            # Crear tabla
+            table = Table(
+                table_data, 
+                colWidths=[
+                    1.2*inch,  # Fecha
+                    1.5*inch,  # Producto
+                    0.9*inch,  # Tipo
+                    0.7*inch,  # Cantidad
+                    0.9*inch,  # Stock Anterior
+                    0.9*inch,  # Stock Nuevo
+                    1.5*inch,  # Motivo
+                    0.8*inch,  # Usuario
+                    0.9*inch   # Referencia
+                ]
+            )
+            
+            # Estilo de la tabla
             table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                # Encabezado
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                
+                # Filas de datos
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f8f9fa')),
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dee2e6')),
+                ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
+                ('ALIGN', (1, 1), (1, -1), 'LEFT'),  # Producto alineado a la izquierda
+                ('ALIGN', (6, 1), (6, -1), 'LEFT'),  # Motivo alineado a la izquierda
+                
+                # Colores para cantidades
+                ('TEXTCOLOR', (3, 1), (3, -1), lambda row, col, cell, cellvalue: 
+                    colors.HexColor('#28a745') if cellvalue.startswith('+') else colors.HexColor('#dc3545')),
+                
+                # Alternar colores de filas
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f2f2f2')]),
             ]))
+            
             elements.append(table)
         else:
-            # Mensaje si no hay datos
-            no_data = Paragraph("<b>No hay movimientos que mostrar con los filtros seleccionados</b>", styles['Heading2'])
+            # Mensaje cuando no hay datos
+            no_data_style = ParagraphStyle(
+                'NoData',
+                parent=styles['Heading2'],
+                fontSize=14,
+                spaceAfter=20,
+                alignment=1,
+                textColor=colors.HexColor('#6c757d')
+            )
+            
+            no_data = Paragraph("No hay movimientos que mostrar con los filtros seleccionados", no_data_style)
             elements.append(Spacer(1, 50))
             elements.append(no_data)
         
-        # Agregar resumen
+        # =============================================
+        # 9. RESUMEN DETALLADO
+        # =============================================
         elements.append(Spacer(1, 30))
-        resumen_style = ParagraphStyle(
-            'Resumen',
+        
+        # Título del resumen
+        summary_title = Paragraph("<b>RESUMEN DETALLADO</b>", styles['Heading2'])
+        elements.append(summary_title)
+        elements.append(Spacer(1, 10))
+        
+        # Estilo para resumen
+        summary_style = ParagraphStyle(
+            'Summary',
             parent=styles['Normal'],
-            fontSize=10,
-            spaceAfter=6
+            fontSize=9,
+            spaceAfter=5,
+            textColor=colors.HexColor('#495057')
         )
         
-        elements.append(Paragraph(f"<b>RESUMEN DEL REPORTE</b>", styles['Heading2']))
-        elements.append(Paragraph(f"Total de movimientos: {len(table_data) - 1}", resumen_style))
-        elements.append(Paragraph(f"Total entradas: {total_entradas} unidades", resumen_style))
-        elements.append(Paragraph(f"Total salidas: {total_salidas} unidades", resumen_style))
-        elements.append(Paragraph(f"Saldo neto: {total_entradas - total_salidas} unidades", resumen_style))
+        # Información del resumen
+        summary_text = f"""
+        <b>Total de registros:</b> {total_movimientos}<br/>
+        <b>Total entradas:</b> {total_entradas} unidades<br/>
+        <b>Total salidas:</b> {total_salidas} unidades<br/>
+        <b>Saldo neto (entradas - salidas):</b> {saldo_neto} unidades<br/>
+        <b>Porcentaje de entradas:</b> {round((total_entradas / (total_entradas + total_salidas) * 100), 2) if (total_entradas + total_salidas) > 0 else 0}%<br/>
+        <b>Porcentaje de salidas:</b> {round((total_salidas / (total_entradas + total_salidas) * 100), 2) if (total_entradas + total_salidas) > 0 else 0}%
+        """
         
-        # Generar PDF
+        summary_paragraph = Paragraph(summary_text, summary_style)
+        elements.append(summary_paragraph)
+        
+        # Desglose por tipo de movimiento
+        if total_movimientos > 0:
+            elements.append(Spacer(1, 15))
+            
+            # Contar por tipo
+            tipos_count = {}
+            for mov in all_movements:
+                tipo = mov['tipo_movimiento']
+                if tipo in tipos_count:
+                    tipos_count[tipo] += 1
+                else:
+                    tipos_count[tipo] = 1
+            
+            # Crear texto de desglose
+            tipos_text = "<b>Desglose por tipo de movimiento:</b><br/>"
+            for tipo, count in tipos_count.items():
+                porcentaje = round((count / total_movimientos) * 100, 1)
+                tipos_text += f"• {tipo.capitalize()}: {count} registros ({porcentaje}%)<br/>"
+            
+            tipos_paragraph = Paragraph(tipos_text, summary_style)
+            elements.append(tipos_paragraph)
+        
+        # =============================================
+        # 10. PIE DE PÁGINA
+        # =============================================
+        elements.append(Spacer(1, 30))
+        
+        footer_style = ParagraphStyle(
+            'Footer',
+            parent=styles['Normal'],
+            fontSize=8,
+            alignment=1,
+            textColor=colors.HexColor('#6c757d')
+        )
+        
+        footer_text = f"""
+        <i>Reporte generado automáticamente por el sistema de Super Bestia<br/>
+        Fecha de generación: {fecha_reporte}<br/>
+        Este documento es confidencial y para uso interno.</i>
+        """
+        
+        footer_paragraph = Paragraph(footer_text, footer_style)
+        elements.append(footer_paragraph)
+        
+        # =============================================
+        # 11. GENERAR PDF
+        # =============================================
+        # Construir el documento
         doc.build(elements)
+        
+        # DEBUG: Mostrar información final
+        print(f"=== PDF GENERADO ===")
+        print(f"Total movimientos en PDF: {total_movimientos}")
+        print(f"Total entradas: {total_entradas}")
+        print(f"Total salidas: {total_salidas}")
+        print(f"Tipos encontrados: {set([m['tipo_movimiento'] for m in all_movements])}")
+        
         return response
         
     except Exception as e:
@@ -976,9 +1577,11 @@ def movimientos_stock_pdf(request):
         import traceback
         traceback.print_exc()
         
-        # En caso de error, devolver un mensaje JSON
-        from django.http import JsonResponse
-        return JsonResponse({'error': str(e)}, status=500)
+        # En caso de error, devolver respuesta JSON en lugar de PDF
+        return JsonResponse({
+            'error': str(e),
+            'mensaje': 'Error al generar el PDF. Por favor, intente nuevamente.'
+        }, status=500)
 
 
 
@@ -1458,14 +2061,19 @@ def inventario_eliminar(request, id):
 #             messages.error(request, f'Error al iniciar la caja: {str(e)}')
     
 #     return render(request, "facturacion/iniciocaja.html", {'user': request.user})
-
-
 @login_required
 def iniciocaja(request):
+    import logging
+    logger = logging.getLogger(__name__)
+    
     now = timezone.localtime(timezone.now())
     today = now.date()
     
-    # 1. Primero verificar si hay caja abierta HOY
+    logger.info(f"=== INICIOCAJA - Usuario: {request.user.username} ===")
+    logger.info(f"Método: {request.method}")
+    logger.info(f"Fecha: {today}, Hora: {now.strftime('%H:%M:%S')}")
+    
+    # SOLAMENTE verificar si hay caja abierta HOY
     caja_abierta_hoy = Caja.objects.filter(
         usuario=request.user, 
         estado='abierta',
@@ -1473,57 +2081,27 @@ def iniciocaja(request):
     ).first()
     
     if caja_abierta_hoy:
+        logger.info(f"Ya hay caja abierta: ID {caja_abierta_hoy.id}")
         messages.info(request, f'Ya tienes una caja abierta desde {caja_abierta_hoy.fecha_apertura.strftime("%H:%M")}.')
         return redirect('ventas')
     
-    # 2. Verificar si hay caja cerrada HOY (usando fecha_cierre)
-    caja_cerrada_hoy = Caja.objects.filter(
-        usuario=request.user,
-        estado='cerrada',
-        fecha_cierre__date=today  # ← CORREGIDO: usar fecha_cierre
-    ).first()
-    
-    if caja_cerrada_hoy:
-        messages.info(request, 'Ya cerraste la caja de hoy. Puedes abrir una nueva mañana.')
-        return render(request, "facturacion/iniciocaja.html", {'user': request.user})
-    
-    # 3. Verificar si hay cajas abiertas de días anteriores
-    cajas_abiertas_anteriores = Caja.objects.filter(
-        usuario=request.user,
-        estado='abierta'
-    ).exclude(fecha_apertura__date=today)
-    
-    if cajas_abiertas_anteriores.exists():
-        # Si es después de las 5:30 PM, cerrar automáticamente
-        cutoff_time = timezone.localtime(timezone.now()).replace(hour=17, minute=30, second=0, microsecond=0)
-        
-        if now >= cutoff_time:
-            for caja in cajas_abiertas_anteriores:
-                caja.estado = 'cerrada'
-                caja.fecha_cierre = now
-                caja.observaciones = f'Cierre automático a las {cutoff_time.strftime("%H:%M")}'
-                caja.save()
-            
-            messages.info(request, f'Caja(s) anterior(es) cerrada(s) automáticamente.')
-        else:
-            # Si es antes de las 5:30 PM, mostrar error
-            messages.error(request, 'Tienes una caja abierta de un día anterior. Debes cerrarla primero.')
-            return redirect('ventas')  # O redirigir a una página de cierre de caja
-    
-    # 4. Procesar apertura de caja
     if request.method == 'POST':
+        logger.info("Procesando POST para abrir caja")
         monto_inicial = request.POST.get('monto_inicial')
         
         if not monto_inicial:
+            logger.warning("No se recibió monto inicial")
             messages.error(request, 'Debe ingresar un monto inicial.')
             return render(request, "facturacion/iniciocaja.html", {'user': request.user})
         
         try:
             monto_inicial = Decimal(monto_inicial)
             if monto_inicial < 0:
+                logger.warning(f"Monto inicial negativo: {monto_inicial}")
                 messages.error(request, 'El monto inicial debe ser mayor o igual a cero.')
                 return render(request, "facturacion/iniciocaja.html", {'user': request.user})
-        except (ValueError, InvalidOperation, TypeError):
+        except (ValueError, InvalidOperation, TypeError) as e:
+            logger.error(f"Error en monto inicial: {str(e)}")
             messages.error(request, 'Por favor ingrese un monto válido.')
             return render(request, "facturacion/iniciocaja.html", {'user': request.user})
         
@@ -1537,19 +2115,28 @@ def iniciocaja(request):
             )
             nueva_caja.save()
             
+            logger.info(f"✅ Caja creada exitosamente - ID: {nueva_caja.id}")
+            logger.info(f"Redirigiendo a ventas...")
+            
             messages.success(request, 'Caja iniciada correctamente. Redirigiendo a ventas...')
-            return redirect('ventas')
+            
+            # IMPORTANTE: Usar HttpResponseRedirect en lugar de redirect()
+            from django.http import HttpResponseRedirect
+            from django.urls import reverse
+            
+            # Redirigir directamente a ventas
+            ventas_url = reverse('ventas')
+            logger.info(f"URL de ventas: {ventas_url}")
+            
+            return HttpResponseRedirect(ventas_url)
             
         except Exception as e:
+            logger.error(f"❌ Error al crear caja: {str(e)}", exc_info=True)
             messages.error(request, f'Error al iniciar la caja: {str(e)}')
-            # Log del error para debugging
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error al crear caja: {str(e)}")
             return render(request, "facturacion/iniciocaja.html", {'user': request.user})
     
+    logger.info("Mostrando formulario de inicio de caja")
     return render(request, "facturacion/iniciocaja.html", {'user': request.user})
-
 # @login_required
 # def ventas(request):
 #     # Verificar que el usuario tenga una caja abierta
@@ -1725,41 +2312,19 @@ def ventas(request):
     now = timezone.localtime(timezone.now())
     today = now.date()
     
-    # Verificar que el usuario tenga una caja abierta
+    # Verificar que el usuario tenga una caja abierta HOY
     caja_abierta = Caja.objects.filter(
         usuario=request.user, 
-        estado='abierta'
+        estado='abierta',
+        fecha_apertura__date=today
     ).first()
     
     if not caja_abierta:
         messages.error(request, 'No hay una caja abierta. Debe abrir una caja primero.')
         return redirect('iniciocaja')
     
-    # Verificar si es después de las 5:30 PM
-    current_time = now.time()
-    cutoff_time = time(17, 30, 0)
-    
-    if current_time >= cutoff_time:
-        # Cerrar la caja automáticamente
-        ventas_periodo = Venta.objects.filter(
-            vendedor=request.user,
-            fecha_venta__gte=caja_abierta.fecha_apertura,
-            completada=True,
-            anulada=False
-        )
-        
-        total_ventas = ventas_periodo.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        
-        caja_abierta.monto_final = total_ventas
-        caja_abierta.fecha_cierre = now
-        caja_abierta.hora_cierre_exacta = cutoff_time
-        caja_abierta.estado = 'cerrada'
-        caja_abierta.tipo_cierre = 'automatico'
-        caja_abierta.observaciones = f'Cierre automático a las {cutoff_time.strftime("%H:%M")} PM desde ventas'
-        caja_abierta.save()
-        
-        messages.success(request, f'Caja cerrada automáticamente a las {cutoff_time.strftime("%H:%M")} PM. Redirigiendo...')
-        return redirect('iniciocaja')
+    # ELIMINAR la lógica de cierre automático aquí
+    # El cierre automático solo debe ocurrir via Celery a las 5:30 PM
     
     # Resto de la lógica normal de ventas...
     if request.method == 'POST':
@@ -1774,8 +2339,6 @@ def ventas(request):
         'clientes': clientes,
         'productos': productos
     })
-
-
 
 
 
@@ -2284,8 +2847,25 @@ def procesar_venta(request):
         data = request.POST
         user = request.user
         
-        if not data:
-            return JsonResponse({'success': False, 'message': 'No se recibieron datos'})
+        print("=== INICIANDO PROCESO DE VENTA ===")
+        print(f"Usuario: {user.username} (Superusuario: {user.is_superuser})")
+        
+        # ============================================
+        # DATOS DE LA VENTA - USANDO safe_decimal
+        # ============================================
+        payment_type = data.get('payment_type', 'contado')
+        payment_method = data.get('payment_method', 'efectivo')
+        
+        # Usar safe_decimal para todos los campos decimales
+        subtotal_sin_itbis = safe_decimal(data.get('subtotal'), 0)
+        itbis_monto = safe_decimal(data.get('itbis_monto'), 0)
+        itbis_porcentaje = safe_decimal(data.get('itbis_porcentaje', 18.00))
+        total = safe_decimal(data.get('total'), 0)
+        total_a_pagar = safe_decimal(data.get('total_a_pagar'), 0)
+        cash_received = safe_decimal(data.get('cash_received'), 0)
+        change_amount = safe_decimal(data.get('change_amount'), 0)
+
+        print(f"Datos recibidos - Subtotal: {subtotal_sin_itbis}, ITBIS: {itbis_monto}, Total: {total}")
 
         # ============================================
         # VALIDACIÓN DE DESCUENTO - SOLO PARA SUPERUSUARIOS
@@ -2295,8 +2875,8 @@ def procesar_venta(request):
             discount_percentage = Decimal('0.00')
             discount_amount = Decimal('0.00')
             
-            # Verificar si intentaron aplicar descuento (validación adicional)
-            received_discount = Decimal(data.get('discount_percentage', '0'))
+            # Verificar si intentaron aplicar descuento
+            received_discount = safe_decimal(data.get('discount_percentage', 0))
             if received_discount > 0:
                 return JsonResponse({
                     'success': False, 
@@ -2304,35 +2884,27 @@ def procesar_venta(request):
                 })
         else:
             # Para superusuarios, usar los valores recibidos
-            discount_percentage = Decimal(data.get('discount_percentage', 0))
-            discount_amount = Decimal(data.get('discount_amount', 0))
-        
-        # ============================================
-        # DATOS DE LA VENTA
-        # ============================================
-        payment_type = data.get('payment_type', 'contado')
-        payment_method = data.get('payment_method', 'efectivo')
-        subtotal_sin_itbis = Decimal(data.get('subtotal', 0))  # Subtotal SIN ITBIS
-        itbis_monto = Decimal(data.get('itbis_monto', 0))  # Monto del ITBIS
-        itbis_porcentaje = Decimal(data.get('itbis_porcentaje', 18.00))  # Porcentaje del ITBIS
-        total = Decimal(data.get('total', 0))
-        total_a_pagar = Decimal(data.get('total_a_pagar', 0))
-        cash_received = Decimal(data.get('cash_received', 0))
-        change_amount = Decimal(data.get('change_amount', 0))
+            discount_percentage = safe_decimal(data.get('discount_percentage', 0))
+            discount_amount = safe_decimal(data.get('discount_amount', 0))
+
+        print(f"Descuento - Porcentaje: {discount_percentage}%, Monto: {discount_amount}")
 
         # ============================================
         # VALIDACIONES BÁSICAS
         # ============================================
         if payment_type not in ['contado', 'credito']:
             return JsonResponse({'success': False, 'message': 'Tipo de pago inválido'})
+        
         if payment_method not in ['efectivo', 'tarjeta', 'transferencia']:
             return JsonResponse({'success': False, 'message': 'Método de pago inválido'})
+        
         if subtotal_sin_itbis < 0:
             return JsonResponse({'success': False, 'message': 'El subtotal debe ser mayor o igual a 0'})
+        
         if total <= 0:
             return JsonResponse({'success': False, 'message': 'El total debe ser mayor a 0'})
-        
-        # Validar porcentaje de descuento (solo para superusuarios que pasaron la validación anterior)
+
+        # Validar porcentaje de descuento (solo para superusuarios)
         if user.is_superuser and (discount_percentage < 0 or discount_percentage > 100):
             return JsonResponse({
                 'success': False, 
@@ -2345,11 +2917,13 @@ def procesar_venta(request):
         subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
 
         # Validar que el ITBIS sea consistente
-        itbis_calculado = subtotal_sin_itbis * (itbis_porcentaje / 100)
+        itbis_calculado = subtotal_sin_itbis * (itbis_porcentaje / Decimal('100.00'))
         if abs(itbis_monto - itbis_calculado) > Decimal('0.01'):
             print(f"Advertencia: ITBIS inconsistente. Recibido: {itbis_monto}, Calculado: {itbis_calculado}")
             itbis_monto = itbis_calculado
             subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
+
+        print(f"ITBIS - Porcentaje: {itbis_porcentaje}%, Monto: {itbis_monto}, Calculado: {itbis_calculado}")
 
         # ============================================
         # VALIDACIÓN DE DESCUENTO (CÁLCULO)
@@ -2373,8 +2947,10 @@ def procesar_venta(request):
             total = subtotal_con_itbis
 
         # Si el total cambió, actualizar total_a_pagar
-        if total_a_pagar != total:
+        if abs(total_a_pagar - total) > Decimal('0.01'):
             total_a_pagar = total
+
+        print(f"Totales - Subtotal con ITBIS: {subtotal_con_itbis}, Total: {total}, Total a pagar: {total_a_pagar}")
 
         # ============================================
         # PROCESAR CLIENTE
@@ -2398,13 +2974,13 @@ def procesar_venta(request):
                     eliminada=False
                 ).exclude(estado='pagada')
                 
-                total_deuda = sum(cuenta.saldo_pendiente for cuenta in cuentas_pendientes)
+                total_deuda = sum(safe_decimal(cuenta.saldo_pendiente) for cuenta in cuentas_pendientes)
                 total_con_nueva_venta = total_deuda + total
                 
-                if total_con_nueva_venta > cliente.credit_limit:
+                if total_con_nueva_venta > safe_decimal(cliente.credit_limit):
                     return JsonResponse({
                         'success': False,
-                        'message': f'El cliente {cliente.full_name} ha excedido su límite de crédito. Límite: RD${cliente.credit_limit:.2f}, Deuda actual: RD${total_deuda:.2f}, Nueva deuda: RD${total_con_nueva_venta:.2f}'
+                        'message': f'El cliente {cliente.full_name} ha excedido su límite de crédito. Límite: RD${safe_decimal(cliente.credit_limit):.2f}, Deuda actual: RD${total_deuda:.2f}, Nueva deuda: RD${total_con_nueva_venta:.2f}'
                     })
                     
             except Cliente.DoesNotExist:
@@ -2414,7 +2990,7 @@ def procesar_venta(request):
                 return JsonResponse({'success': False, 'message': 'Debe ingresar el nombre del cliente'})
 
         # ============================================
-        # PROCESAR ITEMS DE LA VENTA
+        # PROCESAR ITEMS DE LA VENTA - USANDO safe_int y safe_decimal
         # ============================================
         sale_items_json = data.get('sale_items')
         if not sale_items_json:
@@ -2436,8 +3012,8 @@ def procesar_venta(request):
             try:
                 producto_id = item.get('id')
                 producto_nombre = item.get('name', 'Producto Desconocido')
-                cantidad_solicitada = int(item.get('quantity', 0))
-                precio_unitario = Decimal(item.get('price', 0))
+                cantidad_solicitada = safe_int(item.get('quantity', 0))
+                precio_unitario = safe_decimal(item.get('price', 0))
                 
                 if not producto_id:
                     return JsonResponse({'success': False, 'message': f'Producto sin ID: {producto_nombre}'})
@@ -2447,7 +3023,7 @@ def procesar_venta(request):
                 
                 producto = EntradaProducto.objects.get(id=producto_id, activo=True)
                 
-                if producto.cantidad < cantidad_solicitada:
+                if safe_int(producto.cantidad) < cantidad_solicitada:
                     nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
                     return JsonResponse({
                         'success': False,
@@ -2458,7 +3034,7 @@ def procesar_venta(request):
                     'producto': producto,
                     'cantidad': cantidad_solicitada,
                     'precio_unitario': precio_unitario,
-                    'subtotal': Decimal(item.get('subtotal', 0)),
+                    'subtotal': safe_decimal(item.get('subtotal', 0)),
                     'nombre': producto_nombre
                 })
                 
@@ -2466,6 +3042,8 @@ def procesar_venta(request):
                 return JsonResponse({'success': False, 'message': f'Producto no encontrado: {item.get("name", "Desconocido")}'})
             except (ValueError, KeyError) as e:
                 return JsonResponse({'success': False, 'message': f'Datos inválidos para producto: {item.get("name", "Desconocido")}. Error: {str(e)}'})
+
+        print(f"Productos validados: {len(productos_validados)} items")
 
         # ============================================
         # CREAR LA VENTA
@@ -2478,14 +3056,14 @@ def procesar_venta(request):
             cliente_documento=client_document,
             tipo_venta=payment_type,
             metodo_pago=payment_method,
-            subtotal=subtotal_sin_itbis,  # Subtotal SIN ITBIS
+            subtotal=subtotal_sin_itbis,
             itbis_porcentaje=itbis_porcentaje,
             itbis_monto=itbis_monto,
             descuento_porcentaje=discount_percentage,
             descuento_monto=discount_amount,
             total=total,
             total_a_pagar=total_a_pagar,
-            montoinicial=0,
+            montoinicial=Decimal('0.00'),
             efectivo_recibido=cash_received,
             cambio=change_amount,
             completada=True,
@@ -2557,7 +3135,7 @@ def procesar_venta(request):
                     venta=venta,
                     cliente=cliente,
                     monto_total=total,
-                    monto_pagado=0,
+                    monto_pagado=Decimal('0.00'),
                     fecha_vencimiento=fecha_vencimiento,
                     productos=productos_str,
                     estado='pendiente',
@@ -2580,56 +3158,93 @@ Productos:
         # GENERAR Y ENVIAR PDF POR CORREO
         # ============================================
         try:
-            # Generar el PDF
-            pdf_buffer = generar_pdf_venta(venta)
+            from django.core.mail import EmailMessage
+            from django.conf import settings
             
-            # Configurar el correo
-            subject = f'Factura de Venta - {venta.numero_factura}'
-            message = f'''
-            Se ha procesado una nueva venta en el sistema.
+            # Verificar si el correo está configurado en settings
+            email_configured = hasattr(settings, 'EMAIL_HOST') and settings.EMAIL_HOST
+            
+            if email_configured:
+                # Lista de destinatarios - puedes personalizar esto
+                recipient_list = []
+                
+                # Agregar al vendedor si tiene email
+                if user.email:
+                    recipient_list.append(user.email)
+                
+                # Agregar al cliente si tiene email (solo para ventas a crédito)
+                if payment_type == 'credito' and cliente and hasattr(cliente, 'email') and cliente.email:
+                    recipient_list.append(cliente.email)
+                
+                # También puedes agregar correos fijos (como el administrador)
+                recipient_list.append('superbestiard16@gmail.com')  # Cambia por el correo real
+                
+                # Eliminar duplicados
+                recipient_list = list(set(recipient_list))
+                
+                # Solo enviar si hay destinatarios
+                if recipient_list:
+                    # Importar la función de generar PDF
+                    try:
+                        from .utils import generar_pdf_venta
+                        pdf_buffer = generar_pdf_venta(venta)
+                        
+                        subject = f'Factura de Venta - {venta.numero_factura}'
+                        message = f'''
+Se ha procesado una nueva venta en el sistema.
 
-            Detalles de la venta:
-            - Número de Factura: {venta.numero_factura}
-            - Cliente: {client_name if client_name else cliente.full_name if cliente else "N/A"}
-            - Documento: {client_document if client_document else cliente.identification_number if cliente else "N/A"}
-            - Tipo de Venta: {payment_type.title()}
-            - Método de Pago: {payment_method.title()}
-            - Subtotal: RD${subtotal_sin_itbis:.2f}
-            - ITBIS ({itbis_porcentaje}%): RD${itbis_monto:.2f}
-            - Descuento: {discount_percentage}% (RD${discount_amount:.2f})
-            - Total: RD${total:.2f}
-            - Fecha: {venta.fecha_venta.strftime("%d/%m/%Y %H:%M")}
-            - Vendedor: {user.get_full_name() or user.username}
+Detalles de la venta:
+- Número de Factura: {venta.numero_factura}
+- Cliente: {client_name if client_name else cliente.full_name if cliente else "N/A"}
+- Documento: {client_document if client_document else cliente.identification_number if cliente else "N/A"}
+- Tipo de Venta: {payment_type.title()}
+- Método de Pago: {payment_method.title()}
+- Subtotal: RD${subtotal_sin_itbis:.2f}
+- ITBIS ({itbis_porcentaje}%): RD${itbis_monto:.2f}
+- Descuento: {discount_percentage}% (RD${discount_amount:.2f})
+- Total: RD${total:.2f}
+- Fecha: {venta.fecha_venta.strftime("%d/%m/%Y %H:%M")}
+- Vendedor: {user.get_full_name() or user.username}
 
-            Se adjunta el comprobante en PDF.
+Se adjunta el comprobante en PDF.
 
-            Saludos,
-            Sistema de Ventas
-            '''
-            
-            # Crear el email
-            email = EmailMessage(
-                subject=subject,
-                body=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=['superbestiard16@gmail.com'],  # Agrega aquí los destinatarios
-            )
-            
-            # Adjuntar el PDF
-            email.attach(
-                filename=f'factura_{venta.numero_factura}.pdf',
-                content=pdf_buffer.getvalue(),
-                mimetype='application/pdf'
-            )
-            
-            # Enviar el correo
-            email.send()
-            
-            print(f"Correo enviado exitosamente para la factura {venta.numero_factura}")
-            
+Saludos,
+Sistema de Ventas - Super Bestia
+'''
+                        
+                        # Crear el email
+                        email = EmailMessage(
+                            subject=subject,
+                            body=message,
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            to=recipient_list,
+                        )
+                        
+                        # Adjuntar el PDF
+                        email.attach(
+                            filename=f'factura_{venta.numero_factura}.pdf',
+                            content=pdf_buffer.getvalue(),
+                            mimetype='application/pdf'
+                        )
+                        
+                        # Enviar el correo
+                        email.send(fail_silently=False)
+                        
+                        print(f"✓ Correo enviado exitosamente a {recipient_list}")
+                        print(f"✓ Factura: {venta.numero_factura}")
+                        
+                    except ImportError as e:
+                        print(f"✗ Error: Función generar_pdf_venta no encontrada: {str(e)}")
+                    except Exception as e:
+                        print(f"✗ Error al enviar correo: {str(e)}")
+                else:
+                    print("ℹ️ No hay destinatarios para enviar el correo")
+            else:
+                print("ℹ️ Configuración de correo no encontrada en settings.py")
+                
         except Exception as e:
             # Si falla el envío del correo, no revertimos la venta, solo lo registramos
-            print(f"Error al enviar correo: {str(e)}")
+            print(f"⚠️ Advertencia: Error en envío de correo: {str(e)}")
 
         # ============================================
         # RESPUESTA EXITOSA
@@ -2639,7 +3254,7 @@ Productos:
             'message': 'Venta procesada correctamente',
             'venta_id': venta.id,
             'numero_factura': venta.numero_factura,
-            'descuento_aplicado': user.is_superuser,  # Indica si se aplicó descuento
+            'descuento_aplicado': user.is_superuser,
             'detalles': {
                 'subtotal_sin_itbis': float(venta.subtotal),
                 'itbis_porcentaje': float(venta.itbis_porcentaje),
@@ -2659,13 +3274,13 @@ Productos:
         transaction.set_rollback(True)
         import traceback
         error_traceback = traceback.format_exc()
-        print(f"Error completo: {error_traceback}")
+        print(f"✗ Error completo: {error_traceback}")
         return JsonResponse({
             'success': False, 
             'message': f'Error al procesar la venta: {str(e)}',
-            'debug': error_traceback.split('\n')[-2] if 'debug' in request.GET else None
+            'error_type': str(type(e).__name__),
+            'traceback': error_traceback if settings.DEBUG else None
         })
-
 # ============================================
 # FUNCIÓN PARA GENERAR PDF (SIN CAMBIOS)
 # ============================================
@@ -5525,11 +6140,16 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def cierredecaja(request):
-    # Verificar si hay una caja abierta
-    caja_abierta = Caja.objects.filter(usuario=request.user, estado='abierta').first()
+    # Verificar si hay una caja abierta HOY
+    today = timezone.localtime(timezone.now()).date()
+    caja_abierta = Caja.objects.filter(
+        usuario=request.user, 
+        estado='abierta',
+        fecha_apertura__date=today
+    ).first()
     
     if not caja_abierta:
-        messages.error(request, 'No hay una caja abierta. Debe abrir una caja primero.')
+        messages.error(request, 'No hay una caja abierta hoy. Debe abrir una caja primero.')
         return redirect('iniciocaja')
     
     # Obtener ventas desde la apertura de caja para el usuario actual
@@ -5573,40 +6193,18 @@ def cierredecaja(request):
     ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
     
     # CALCULAR TOTALES AJUSTADOS
-    # Efectivo: contado (total final) + crédito (solo monto inicial)
     ventas_efectivo_ajustado = ventas_contado_efectivo + ventas_credito_efectivo
-    
-    # Tarjeta: contado (total final) + crédito (solo monto inicial)
     ventas_tarjeta_ajustado = ventas_contado_tarjeta + ventas_credito_tarjeta
-    
-    # Transferencia: contado (total final) + crédito (solo monto inicial)
     ventas_transferencia_ajustado = ventas_contado_transferencia + ventas_credito_transferencia
     
-    # Total general de ventas
     total_ventas_ajustado = (ventas_contado_efectivo + ventas_contado_tarjeta + ventas_contado_transferencia +
                             ventas_credito_efectivo + ventas_credito_tarjeta + ventas_credito_transferencia)
     
-    # Totales por tipo de venta para reporte
-    total_ventas_contado = ventas_contado_efectivo + ventas_contado_tarjeta + ventas_contado_transferencia
-    total_ventas_credito = ventas_credito_efectivo + ventas_credito_tarjeta + ventas_credito_transferencia
-    
-    # Obtener cantidad de ventas
-    cantidad_ventas = ventas_periodo.count()
-    
-    # Obtener información de clientes
-    clientes_count = Cliente.objects.filter(
-        venta__in=ventas_periodo
-    ).distinct().count()
-    
-    # Log para depuración
-    logger.info(f"Caja abierta: {caja_abierta}")
-    logger.info(f"Ventas encontradas: {cantidad_ventas}")
-    logger.info(f"Ventas contado efectivo: {ventas_contado_efectivo}")
-    logger.info(f"Ventas contado tarjeta: {ventas_contado_tarjeta}")
-    logger.info(f"Ventas contado transferencia: {ventas_contado_transferencia}")
-    logger.info(f"Ventas crédito efectivo (monto inicial): {ventas_credito_efectivo}")
-    logger.info(f"Ventas crédito tarjeta (monto inicial): {ventas_credito_tarjeta}")
-    logger.info(f"Ventas crédito transferencia (monto inicial): {ventas_credito_transferencia}")
+    # Verificar hora actual
+    now = timezone.localtime(timezone.now())
+    hora_actual = now.time()
+    hora_limite = time(17, 30, 0)  # 5:30 PM
+    es_despues_de_limite = hora_actual > hora_limite
     
     context = {
         'caja_abierta': caja_abierta,
@@ -5614,14 +6212,16 @@ def cierredecaja(request):
         'ventas_efectivo': ventas_efectivo_ajustado,
         'ventas_tarjeta': ventas_tarjeta_ajustado,
         'ventas_transferencia': ventas_transferencia_ajustado,
-        'total_ventas_contado': total_ventas_contado,
-        'total_ventas_credito': total_ventas_credito,
-        'cantidad_ventas': cantidad_ventas,
-        'clientes_hoy': clientes_count,
-        'hoy': timezone.now().date(),
+        'total_ventas_contado': ventas_contado_efectivo + ventas_contado_tarjeta + ventas_contado_transferencia,
+        'total_ventas_credito': ventas_credito_efectivo + ventas_credito_tarjeta + ventas_credito_transferencia,
+        'cantidad_ventas': ventas_periodo.count(),
+        'hoy': today,
+        'current_time': hora_actual.strftime('%H:%M'),
+        'is_after_cutoff': es_despues_de_limite,
     }
     
     return render(request, "facturacion/cierredecaja.html", context)
+
 
 @login_required
 def procesar_cierre_caja(request):
@@ -6432,19 +7032,29 @@ def buscar_factura_devolucion(request):
         productos = []
         for detalle in detalles:
             producto = detalle.producto
-            productos.append({
+            
+            # Obtener imagen si existe
+            imagen_url = '/static/images/default-product.png'
+            if producto.imagen and hasattr(producto.imagen, 'url'):
+                try:
+                    imagen_url = producto.imagen.url
+                except:
+                    pass
+            
+            producto_info = {
                 'id': detalle.id,
                 'codigo': producto.codigo_producto,
-                'producto': producto.nombre_producto,
-                'marca': producto.get_marca_display(),
-                'capacidad': producto.get_capacidad_display() if producto.capacidad else 'N/A',
+                'producto': producto.descripcion,  # Usar descripcion en lugar de nombre_producto
+                'marca': producto.get_marca_display() if producto.marca else 'N/A',
+                'capacidad': 'N/A',  # Tu modelo no tiene campo capacidad
                 'color': producto.get_color_display() if producto.color else 'N/A',
-                'estado': producto.get_estado_display(),
+                'estado': 'Activo' if producto.activo else 'Inactivo',  # Tu modelo no tiene campo estado, usa activo
                 'cantidad': detalle.cantidad,
                 'precio': str(detalle.precio_unitario),
-                'chasis': producto.imei_serial,
-                'imagen': '/static/images/default-product.png'  # Imagen por defecto
-            })
+                'chasis': 'N/A',  # Tu modelo no tiene imei_serial
+                'imagen': imagen_url
+            }
+            productos.append(producto_info)
         
         # Información de la factura
         factura_info = {
@@ -6460,8 +7070,9 @@ def buscar_factura_devolucion(request):
         return JsonResponse({'factura': factura_info})
     
     except Exception as e:
-        return JsonResponse({'error': f'Error al buscar la factura: {str(e)}'}, status=500)
-
+        import traceback
+        traceback.print_exc()  # Esto imprimirá el error completo en la consola
+        return JsonResponse({'error': f'Error interno al buscar la factura: {str(e)}'}, status=500)
 
 @user_passes_test(is_superuser, login_url='/admin/login/')
 @csrf_exempt
@@ -6498,8 +7109,10 @@ def procesar_devolucion(request):
             referencia=f"Factura: {venta.numero_factura}"
         )
         
-        # Registrar la devolución (aquí puedes crear un modelo Devolucion si lo necesitas)
-        # Por ahora, simplemente actualizamos el detalle de venta
+        # Calcular monto a descontar de la cuenta por cobrar
+        monto_devolucion = cantidad_devolver * detalle.precio_unitario
+        
+        # Actualizar detalle de venta
         detalle.cantidad -= cantidad_devolver
         if detalle.cantidad == 0:
             detalle.delete()
@@ -6513,13 +7126,51 @@ def procesar_devolucion(request):
         venta.total = venta.subtotal - venta.descuento_monto
         venta.save()
         
+        # ACTUALIZAR CUENTA POR COBRAR - Esta es la parte crítica
+        try:
+            cuenta = CuentaPorCobrar.objects.get(venta=venta, anulada=False, eliminada=False)
+            
+            # Actualizar el monto total de la cuenta por cobrar
+            cuenta.monto_total = venta.total
+            
+            # Si ya se había pagado algo, ajustar el monto pagado
+            if cuenta.monto_pagado > cuenta.monto_total:
+                # Si el monto pagado es mayor que el nuevo total, reducir el monto pagado
+                cuenta.monto_pagado = cuenta.monto_total
+                cuenta.estado = 'pagada'
+            else:
+                # Recalcular el estado basado en el nuevo saldo
+                saldo_pendiente = cuenta.monto_total - cuenta.monto_pagado
+                if saldo_pendiente == 0:
+                    cuenta.estado = 'pagada'
+                elif cuenta.monto_pagado > 0:
+                    cuenta.estado = 'parcial'
+                else:
+                    cuenta.estado = 'pendiente'
+                
+                # Verificar si está vencida
+                if cuenta.esta_vencida:
+                    cuenta.estado = 'vencida'
+            
+            cuenta.save()
+            
+            # Registrar el movimiento de la devolución en la cuenta
+            registrar_movimiento_cuenta(cuenta, monto_devolucion, 'devolucion', request.user, f"Devolución de {cantidad_devolver} unidades")
+            
+        except CuentaPorCobrar.DoesNotExist:
+            # Si no existe cuenta por cobrar, no hay nada que actualizar
+            pass
+        
         return JsonResponse({
             'success': True,
             'mensaje': f'Devolución procesada correctamente. Se han devuelto {cantidad_devolver} unidades.',
-            'numero_devolucion': f'DEV-{timezone.now().strftime("%Y%m%d")}-{venta.id}'
+            'numero_devolucion': f'DEV-{timezone.now().strftime("%Y%m%d")}-{venta.id}',
+            'monto_devolucion': str(monto_devolucion)
         })
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'error': f'Error al procesar la devolución: {str(e)}'}, status=500)
 
 
@@ -8198,9 +8849,7 @@ def generar_factura_pdf(request, cuenta_id):
 
 
 
-
-
-
+@login_required
 def reportes(request):
     # Fechas por defecto (últimos 30 días)
     fecha_hasta = timezone.now()
@@ -8217,15 +8866,20 @@ def reportes(request):
         fecha_hasta_str = request.GET.get('fecha_hasta')
         vendedor_id = request.GET.get('vendedor')
         producto_id = request.GET.get('producto')
+        tipo_venta = request.GET.get('tipo_venta')  # Nuevo filtro
         
         if fecha_desde_str:
             try:
                 fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+                fecha_desde = timezone.make_aware(fecha_desde)
             except ValueError:
                 pass
         if fecha_hasta_str:
             try:
                 fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+                fecha_hasta = timezone.make_aware(fecha_hasta)
+                # Ajustar para incluir todo el día
+                fecha_hasta = fecha_hasta.replace(hour=23, minute=59, second=59)
             except ValueError:
                 pass
     
@@ -8240,6 +8894,10 @@ def reportes(request):
     if vendedor_id and vendedor_id != '':
         ventas = ventas.filter(vendedor_id=vendedor_id)
     
+    # Aplicar filtro por tipo de venta (nuevo)
+    if tipo_venta and tipo_venta != '':
+        ventas = ventas.filter(tipo_venta=tipo_venta)
+    
     # Obtener detalles de ventas
     detalles = DetalleVenta.objects.filter(
         venta__in=ventas
@@ -8251,6 +8909,12 @@ def reportes(request):
     # Estadísticas generales
     total_vendido = ventas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
     total_transacciones = ventas.count()
+    
+    # Estadísticas por tipo de venta
+    ventas_contado = ventas.filter(tipo_venta='contado').count()
+    ventas_credito = ventas.filter(tipo_venta='credito').count()
+    monto_contado = ventas.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+    monto_credito = ventas.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
     
     # Vendedores únicos en el período
     vendedores_activos = ventas.values('vendedor').distinct().count()
@@ -8288,27 +8952,46 @@ def reportes(request):
             'total_vendedor': total_por_vendedor.get(venta.vendedor.get_full_name() or venta.vendedor.username, Decimal('0.00')),
         })
     
-    # Resumen por vendedor
-    resumen_vendedores = ventas.values(
-        'vendedor__id',
-        'vendedor__username', 
-        'vendedor__first_name', 
-        'vendedor__last_name'
-    ).annotate(
-        cantidad_ventas=Count('id'),
-        monto_total=Sum('total'),
-        ticket_promedio=Avg('total')
-    ).order_by('-monto_total')
+    # Resumen por vendedor con tipo de venta
+    resumen_vendedores = []
+    for vendedor in ventas.values('vendedor__id', 'vendedor__username', 'vendedor__first_name', 'vendedor__last_name').distinct():
+        ventas_vendedor = ventas.filter(vendedor_id=vendedor['vendedor__id'])
+        
+        ventas_contado_vendedor = ventas_vendedor.filter(tipo_venta='contado').count()
+        ventas_credito_vendedor = ventas_vendedor.filter(tipo_venta='credito').count()
+        
+        monto_contado_vendedor = ventas_vendedor.filter(tipo_venta='contado').aggregate(
+            total=Sum('total'))['total'] or Decimal('0.00')
+        monto_credito_vendedor = ventas_vendedor.filter(tipo_venta='credito').aggregate(
+            total=Sum('total'))['total'] or Decimal('0.00')
+        
+        cantidad_ventas = ventas_vendedor.count()
+        monto_total = ventas_vendedor.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        ticket_promedio_vendedor = ventas_vendedor.aggregate(promedio=Avg('total'))['promedio'] or Decimal('0.00')
+        
+        porcentaje = (monto_total / total_vendido * 100) if total_vendido > 0 else 0
+        
+        resumen_vendedores.append({
+            'vendedor__id': vendedor['vendedor__id'],
+            'vendedor__username': vendedor['vendedor__username'],
+            'vendedor__first_name': vendedor['vendedor__first_name'],
+            'vendedor__last_name': vendedor['vendedor__last_name'],
+            'cantidad_ventas': cantidad_ventas,
+            'ventas_contado': ventas_contado_vendedor,
+            'ventas_credito': ventas_credito_vendedor,
+            'monto_contado': monto_contado_vendedor,
+            'monto_credito': monto_credito_vendedor,
+            'monto_total': monto_total,
+            'ticket_promedio': ticket_promedio_vendedor,
+            'porcentaje': porcentaje,
+        })
     
-    # Calcular porcentaje del total para cada vendedor
-    for resumen in resumen_vendedores:
-        if total_vendido > 0:
-            resumen['porcentaje'] = (resumen['monto_total'] / total_vendido) * 100
-        else:
-            resumen['porcentaje'] = 0
+    # Ordenar por monto total descendente
+    resumen_vendedores = sorted(resumen_vendedores, key=lambda x: x['monto_total'], reverse=True)
     
     # Resumen por producto
     resumen_productos = detalles.values(
+        'producto__id',
         'producto__descripcion',
         'producto__codigo_producto'
     ).annotate(
@@ -8363,15 +9046,21 @@ def reportes(request):
         'productos_disponibles': productos_disponibles,
         'total_vendido': total_vendido,
         'total_transacciones': total_transacciones,
+        'ventas_contado': ventas_contado,
+        'ventas_credito': ventas_credito,
+        'monto_contado': monto_contado,
+        'monto_credito': monto_credito,
         'vendedores_activos': vendedores_activos,
         'ticket_promedio': ticket_promedio,
-        'total_por_vendedor': json.dumps(total_por_vendedor, default=str),  # Para JavaScript
+        'tipo_venta_selected': tipo_venta,  # Para mantener el filtro seleccionado
+        'total_por_vendedor': json.dumps(total_por_vendedor, default=str),
         'chart_labels': json.dumps(chart_labels),
         'chart_data': json.dumps(chart_data),
     }
     
     return render(request, "facturacion/reportes.html", context)
 
+@login_required
 def reporte_detallado_vendedor(request, vendedor_id):
     """Reporte detallado de un vendedor específico"""
     fecha_hasta = timezone.now()
@@ -8383,8 +9072,11 @@ def reporte_detallado_vendedor(request, vendedor_id):
         
         if fecha_desde_str:
             fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+            fecha_desde = timezone.make_aware(fecha_desde)
         if fecha_hasta_str:
             fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+            fecha_hasta = timezone.make_aware(fecha_hasta)
+            fecha_hasta = fecha_hasta.replace(hour=23, minute=59, second=59)
     
     # Obtener ventas del vendedor
     ventas = Venta.objects.filter(
@@ -8403,6 +9095,12 @@ def reporte_detallado_vendedor(request, vendedor_id):
     total_vendido = ventas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
     cantidad_ventas = ventas.count()
     ticket_promedio = ventas.aggregate(promedio=Avg('total'))['promedio'] or Decimal('0.00')
+    
+    # Ventas por tipo
+    ventas_contado = ventas.filter(tipo_venta='contado').count()
+    ventas_credito = ventas.filter(tipo_venta='credito').count()
+    monto_contado = ventas.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+    monto_credito = ventas.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
     
     # Ventas por día
     ventas_por_dia = ventas.annotate(
@@ -8438,12 +9136,17 @@ def reporte_detallado_vendedor(request, vendedor_id):
         'total_vendido': total_vendido,
         'cantidad_ventas': cantidad_ventas,
         'ticket_promedio': ticket_promedio,
+        'ventas_contado': ventas_contado,
+        'ventas_credito': ventas_credito,
+        'monto_contado': monto_contado,
+        'monto_credito': monto_credito,
         'ventas_por_dia': ventas_por_dia,
         'ventas_por_cliente': ventas_por_cliente,
     }
     
     return render(request, "facturacion/reporte_vendedor.html", context)
 
+@login_required
 def exportar_reporte_csv(request):
     """Exportar reporte a CSV"""
     import csv
@@ -8453,9 +9156,13 @@ def exportar_reporte_csv(request):
     fecha_desde_str = request.GET.get('fecha_desde')
     fecha_hasta_str = request.GET.get('fecha_hasta')
     vendedor_id = request.GET.get('vendedor')
+    tipo_venta = request.GET.get('tipo_venta')  # Nuevo filtro
     
     fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d') if fecha_desde_str else timezone.now() - timedelta(days=30)
+    fecha_desde = timezone.make_aware(fecha_desde)
     fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d') if fecha_hasta_str else timezone.now()
+    fecha_hasta = timezone.make_aware(fecha_hasta)
+    fecha_hasta = fecha_hasta.replace(hour=23, minute=59, second=59)
     
     # Filtrar ventas
     ventas = Venta.objects.filter(
@@ -8466,6 +9173,9 @@ def exportar_reporte_csv(request):
     
     if vendedor_id:
         ventas = ventas.filter(vendedor_id=vendedor_id)
+    
+    if tipo_venta:
+        ventas = ventas.filter(tipo_venta=tipo_venta)
     
     # Crear respuesta HTTP con CSV
     response = HttpResponse(content_type='text/csv')
@@ -8501,8 +9211,7 @@ def exportar_reporte_csv(request):
     
     return response
 
-
-
+@login_required
 def exportar_reporte_pdf(request):
     """Exportar reporte a PDF"""
     # Importar los modelos necesarios
@@ -8514,38 +9223,34 @@ def exportar_reporte_pdf(request):
     fecha_hasta_str = request.GET.get('fecha_hasta')
     vendedor_id = request.GET.get('vendedor')
     producto_id = request.GET.get('producto')
+    tipo_venta = request.GET.get('tipo_venta')  # Nuevo filtro
     
     # Convertir fechas
     if fecha_desde_str:
         fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+        fecha_desde = timezone.make_aware(fecha_desde)
     else:
         fecha_desde = timezone.now() - timedelta(days=30)
     
     if fecha_hasta_str:
         fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+        fecha_hasta = timezone.make_aware(fecha_hasta)
+        fecha_hasta = fecha_hasta.replace(hour=23, minute=59, second=59)
     else:
         fecha_hasta = timezone.now()
-    
-    # Asegurarnos de que las fechas sean objetos datetime
-    if hasattr(fecha_desde, 'strftime'):
-        fecha_desde_dt = fecha_desde
-    else:
-        fecha_desde_dt = datetime.combine(fecha_desde, datetime.min.time())
-    
-    if hasattr(fecha_hasta, 'strftime'):
-        fecha_hasta_dt = fecha_hasta
-    else:
-        fecha_hasta_dt = datetime.combine(fecha_hasta, datetime.max.time())
     
     # Filtrar ventas
     ventas = Venta.objects.filter(
         completada=True,
         anulada=False,
-        fecha_venta__range=[fecha_desde_dt, fecha_hasta_dt]
+        fecha_venta__range=[fecha_desde, fecha_hasta]
     ).select_related('vendedor', 'cliente')
     
     if vendedor_id:
         ventas = ventas.filter(vendedor_id=vendedor_id)
+    
+    if tipo_venta:
+        ventas = ventas.filter(tipo_venta=tipo_venta)
     
     # Obtener detalles
     detalles = DetalleVenta.objects.filter(
@@ -8564,6 +9269,12 @@ def exportar_reporte_pdf(request):
     
     ticket_promedio_result = ventas.aggregate(promedio=Avg('total'))
     ticket_promedio = ticket_promedio_result['promedio'] or Decimal('0.00')
+    
+    # Estadísticas por tipo de venta para el PDF
+    ventas_contado = ventas.filter(tipo_venta='contado').count()
+    ventas_credito = ventas.filter(tipo_venta='credito').count()
+    monto_contado = ventas.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+    monto_credito = ventas.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
     
     # Crear el PDF
     buffer = BytesIO()
@@ -8595,15 +9306,34 @@ def exportar_reporte_pdf(request):
     # Información del período
     periodo_text = f"Período: {fecha_desde.strftime('%d/%m/%Y')} al {fecha_hasta.strftime('%d/%m/%Y')}"
     elements.append(Paragraph(periodo_text, styles["Normal"]))
+    
+    # Información de filtros aplicados
+    filtros_text = []
+    if vendedor_id:
+        try:
+            vendedor = User.objects.get(id=vendedor_id)
+            vendedor_nombre = vendedor.get_full_name() or vendedor.username
+            filtros_text.append(f"Vendedor: {vendedor_nombre}")
+        except User.DoesNotExist:
+            pass
+    
+    if tipo_venta:
+        tipo_text = "Contado" if tipo_venta == 'contado' else "Crédito"
+        filtros_text.append(f"Tipo Venta: {tipo_text}")
+    
+    if filtros_text:
+        elements.append(Paragraph(" | ".join(filtros_text), styles["Normal"]))
+    
     elements.append(Spacer(1, 20))
     
     # Estadísticas rápidas
     stats_data = [
-        ['Total Vendido', 'Transacciones', 'Vendedores Activos', 'Ticket Promedio'],
-        [f"${total_vendido:,.2f}", str(total_transacciones), str(vendedores_activos), f"${ticket_promedio:,.2f}"]
+        ['Total Vendido', 'Transacciones', 'Contado', 'Crédito'],
+        [f"${total_vendido:,.2f}", str(total_transacciones), f"${monto_contado:,.2f}", f"${monto_credito:,.2f}"],
+        ['', '', f"({ventas_contado} ventas)", f"({ventas_credito} ventas)"]
     ]
     
-    stats_table = Table(stats_data, colWidths=[2.5*inch, 2*inch, 2*inch, 2*inch])
+    stats_table = Table(stats_data, colWidths=[2*inch, 2*inch, 2*inch, 2*inch])
     stats_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -8611,10 +9341,12 @@ def exportar_reporte_pdf(request):
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, 1), colors.white),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica'),
+        ('BACKGROUND', (0, 1), (-1, 2), colors.white),
+        ('GRID', (0, 0), (-1, 2), 1, colors.black),
+        ('FONTNAME', (0, 1), (-1, 2), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, 1), 11),
+        ('FONTSIZE', (0, 2), (-1, 2), 9),
+        ('TEXTCOLOR', (0, 2), (-1, 2), colors.grey),
     ]))
     
     elements.append(stats_table)
@@ -8625,7 +9357,7 @@ def exportar_reporte_pdf(request):
     elements.append(Spacer(1, 10))
     
     # Preparar datos para la tabla
-    table_data = [['Fecha', 'Factura', 'Producto', 'Cliente', 'Vendedor', 'Cant.', 'Precio', 'Total']]
+    table_data = [['Fecha', 'Factura', 'Tipo', 'Producto', 'Cliente', 'Vendedor', 'Cant.', 'Precio', 'Total']]
     
     # Limitar a 100 registros para el PDF para evitar archivos muy grandes
     detalles_limitados = detalles[:100]
@@ -8644,9 +9376,12 @@ def exportar_reporte_pdf(request):
         if len(vendedor_nombre) > 15:
             vendedor_nombre = vendedor_nombre[:12] + "..."
         
+        tipo_venta_display = "C" if venta.tipo_venta == 'contado' else "Créd"
+        
         row = [
             venta.fecha_venta.strftime('%d/%m/%Y'),
             venta.numero_factura or 'N/A',
+            tipo_venta_display,
             producto_desc,
             cliente_nombre,
             vendedor_nombre,
@@ -8658,10 +9393,10 @@ def exportar_reporte_pdf(request):
     
     # Si no hay detalles, agregar mensaje
     if not detalles_limitados:
-        table_data.append(['', '', 'No hay datos para mostrar', '', '', '', '', ''])
+        table_data.append(['', '', 'No hay datos para mostrar', '', '', '', '', '', ''])
     
     # Crear tabla
-    ventas_table = Table(table_data, colWidths=[0.8*inch, 1*inch, 2*inch, 1.5*inch, 1.5*inch, 0.5*inch, 0.8*inch, 1*inch])
+    ventas_table = Table(table_data, colWidths=[0.8*inch, 1*inch, 0.5*inch, 2*inch, 1.5*inch, 1.5*inch, 0.5*inch, 0.8*inch, 1*inch])
     ventas_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -8673,7 +9408,7 @@ def exportar_reporte_pdf(request):
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 8),
-        ('ALIGN', (5, 1), (7, -1), 'RIGHT'),
+        ('ALIGN', (6, 1), (8, -1), 'RIGHT'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
     ]))
     

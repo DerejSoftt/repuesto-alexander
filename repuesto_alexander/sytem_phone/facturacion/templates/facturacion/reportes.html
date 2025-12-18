@@ -457,7 +457,7 @@
 
         .filtros-row {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr auto;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto;
             gap: 1rem;
             align-items: end;
         }
@@ -744,13 +744,13 @@
     
     </a>
 
-    <a href="{% url 'reportes' %}" class="menu-item ">
+    <a href="{% url 'reportes' %}" class="menu-item active">
                 <i class='bx bx-bar-chart'></i>
                 <span>Reportes</span>
             </a>
 
 
-    <a href="{% url 'dashboard' %}" class="menu-item active">
+    <a href="{% url 'dashboard' %}" class="menu-item">
         <i class='bx bx-grid-alt'></i>
         <span>Dashboard</span>
     </a>
@@ -799,14 +799,14 @@
                     <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">Número de ventas</div>
                 </div>
                 <div class="stat-card info">
-                    <div class="stat-title">Vendedores Activos</div>
-                    <div class="stat-value" id="totalVendedores">{{ vendedores_activos }}</div>
-                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">En el período</div>
+                    <div class="stat-title">Ventas al Contado</div>
+                    <div class="stat-value" id="ventasContado">{{ ventas_contado }}</div>
+                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">${{ monto_contado|floatformat:2|intcomma }}</div>
                 </div>
                 <div class="stat-card warning">
-                    <div class="stat-title">Ticket Promedio</div>
-                    <div class="stat-value" id="ticketPromedio">${{ ticket_promedio|floatformat:2|intcomma }}</div>
-                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">Venta promedio</div>
+                    <div class="stat-title">Ventas a Crédito</div>
+                    <div class="stat-value" id="ventasCredito">{{ ventas_credito }}</div>
+                    <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">${{ monto_credito|floatformat:2|intcomma }}</div>
                 </div>
             </div>
 
@@ -855,6 +855,14 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Tipo Venta</label>
+                            <select name="tipo_venta" id="filtroTipoVenta" class="form-control">
+                                <option value="">Todos los Tipos</option>
+                                <option value="contado" {% if request.GET.tipo_venta == 'contado' %}selected{% endif %}>Contado</option>
+                                <option value="credito" {% if request.GET.tipo_venta == 'credito' %}selected{% endif %}>Crédito</option>
+                            </select>
+                        </div>
                         <div style="display: flex; gap: 0.5rem;">
                             <button type="submit" class="btn-buscar">
                                 <i class='bx bx-search'></i> Buscar
@@ -900,6 +908,8 @@
                                 <tr>
                                     <th>Fecha</th>
                                     <th>Factura</th>
+                                    <th>Tipo Venta</th>
+                                    <th>Método Pago</th>
                                     <th>Producto</th>
                                     <th>Cliente</th>
                                     <th>Vendedor</th>
@@ -916,6 +926,22 @@
                                     <td>{{ venta.fecha }}</td>
                                     <td>
                                         <span class="badge badge-info">{{ venta.numero_factura }}</span>
+                                    </td>
+                                    <td>
+                                        {% if venta.tipo_venta == 'Contado' %}
+                                            <span class="badge badge-success">{{ venta.tipo_venta }}</span>
+                                        {% else %}
+                                            <span class="badge badge-warning">{{ venta.tipo_venta }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if venta.metodo_pago == 'Efectivo' %}
+                                            <span class="badge badge-primary">{{ venta.metodo_pago }}</span>
+                                        {% elif venta.metodo_pago == 'Tarjeta' %}
+                                            <span class="badge badge-info">{{ venta.metodo_pago }}</span>
+                                        {% else %}
+                                            <span class="badge badge-secondary">{{ venta.metodo_pago }}</span>
+                                        {% endif %}
                                     </td>
                                     <td>{{ venta.producto_nombre }}</td>
                                     <td>
@@ -946,7 +972,7 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="10" class="empty-state">
+                                    <td colspan="12" class="empty-state">
                                         <i class='bx bx-inbox'></i>
                                         <p>No hay ventas registradas en el período seleccionado</p>
                                     </td>
@@ -973,6 +999,8 @@
                                 <tr>
                                     <th>Vendedor</th>
                                     <th>Cantidad de Ventas</th>
+                                    <th>Contado</th>
+                                    <th>Crédito</th>
                                     <th>Monto Total</th>
                                     <th>Ticket Promedio</th>
                                     <th>% del Total</th>
@@ -989,6 +1017,16 @@
                                         </strong>
                                     </td>
                                     <td>{{ resumen.cantidad_ventas }}</td>
+                                    <td>
+                                        <span class="badge badge-success">{{ resumen.ventas_contado }}</span>
+                                        <br>
+                                        <small>${{ resumen.monto_contado|floatformat:2|intcomma }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-warning">{{ resumen.ventas_credito }}</span>
+                                        <br>
+                                        <small>${{ resumen.monto_credito|floatformat:2|intcomma }}</small>
+                                    </td>
                                     <td>${{ resumen.monto_total|floatformat:2|intcomma }}</td>
                                     <td>${{ resumen.ticket_promedio|floatformat:2|intcomma }}</td>
                                     <td>
@@ -1007,7 +1045,7 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="6" class="empty-state">
+                                    <td colspan="8" class="empty-state">
                                         <p>No hay datos para mostrar</p>
                                     </td>
                                 </tr>
@@ -1292,6 +1330,16 @@
             const filtroProducto = document.getElementById('filtroProducto');
             if (filtroProducto) {
                 filtroProducto.addEventListener('change', function() {
+                    if (this.value) {
+                        document.querySelector('form').submit();
+                    }
+                });
+            }
+            
+            // Agregar funcionalidad de búsqueda rápida por tipo de venta
+            const filtroTipoVenta = document.getElementById('filtroTipoVenta');
+            if (filtroTipoVenta) {
+                filtroTipoVenta.addEventListener('change', function() {
                     if (this.value) {
                         document.querySelector('form').submit();
                     }

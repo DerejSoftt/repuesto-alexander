@@ -1526,9 +1526,8 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <script>
-      // Datos reales del sistema (se llenarán desde Django)
+<script>
+  // Datos reales del sistema (se llenarán desde Django)
 let dashboardData = {
     sales: {
         daily: 0,
@@ -2197,7 +2196,7 @@ function imprimirTodosCuadres() {
 }
 
 // =============================================
-// FUNCIONES PARA MOVIMIENTOS DE INVENTARIO
+// FUNCIONES PARA MOVIMIENTOS DE INVENTARIO - CORREGIDAS COMPLETAMENTE
 // =============================================
 
 // Función para actualizar la vista de movimientos
@@ -2213,7 +2212,7 @@ function updateMovimientosView() {
     buscarMovimientos();
 }
 
-// Función para buscar movimientos
+// Función para buscar movimientos - VERSIÓN COMPLETAMENTE CORREGIDA
 function buscarMovimientos() {
     const fechaDesde = document.getElementById('fechaDesde').value;
     const fechaHasta = document.getElementById('fechaHasta').value;
@@ -2230,9 +2229,17 @@ function buscarMovimientos() {
         url += '?' + params.toString();
     }
     
+    // Mostrar loading
+    const tbody = document.querySelector('#tablaMovimientos tbody');
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem;"><i class="bx bx-loader bx-spin"></i> Cargando...</td></tr>';
+    
+    console.log("Buscando movimientos con URL:", url);
+    
     fetch(url)
         .then(response => response.json())
         .then(data => {
+            console.log("Datos de movimientos recibidos:", data);
+            
             const tbody = document.querySelector('#tablaMovimientos tbody');
             const mensajeVacio = document.getElementById('mensajeVacioMovimientos');
             
@@ -2249,7 +2256,7 @@ function buscarMovimientos() {
             
             mensajeVacio.style.display = 'none';
             
-            // Calcular estadísticas
+            // Calcular estadísticas - LÓGICA COMPLETAMENTE REVISADA
             let totalEntradas = 0;
             let totalSalidas = 0;
             
@@ -2257,11 +2264,27 @@ function buscarMovimientos() {
                 const row = document.createElement('tr');
                 const tipoBadge = getTipoMovimientoBadge(mov.tipo_movimiento);
                 
+                // REVISIÓN DE LÓGICA: Usar tipo_operacion del backend en lugar de recalcularlo
+                // El backend ya ha calculado correctamente si es entrada o salida
+                const esEntrada = mov.tipo_operacion === 'entrada';
+                
+                // Acumular estadísticas usando tipo_operacion del backend
+                if (esEntrada) {
+                    totalEntradas += Math.abs(mov.cantidad);
+                } else {
+                    totalSalidas += Math.abs(mov.cantidad);
+                }
+                
+                // Mostrar cantidad con signo y color apropiado
+                const cantidadDisplay = esEntrada ? `+${mov.cantidad}` : `${mov.cantidad}`;
+                
                 row.innerHTML = `
                     <td>${mov.fecha_movimiento}</td>
                     <td>${mov.producto}</td>
                     <td>${tipoBadge}</td>
-                    <td>${mov.cantidad}</td>
+                    <td style="color: ${esEntrada ? '#28a745' : '#dc3545'}; font-weight: bold;">
+                        ${cantidadDisplay}
+                    </td>
                     <td>${mov.cantidad_anterior}</td>
                     <td>${mov.cantidad_nueva}</td>
                     <td>${mov.motivo}</td>
@@ -2269,19 +2292,23 @@ function buscarMovimientos() {
                     <td>${mov.referencia || ''}</td>
                 `;
                 tbody.appendChild(row);
-                
-                // Acumular estadísticas
-                if (mov.tipo_movimiento === 'entrada') {
-                    totalEntradas += mov.cantidad;
-                } else if (['salida', 'venta'].includes(mov.tipo_movimiento)) {
-                    totalSalidas += mov.cantidad;
-                }
             });
             
             // Actualizar estadísticas
             document.getElementById('totalEntradas').textContent = totalEntradas;
             document.getElementById('totalSalidas').textContent = totalSalidas;
             document.getElementById('totalMovimientos').textContent = data.movimientos.length;
+            
+            // Mostrar información de depuración en consola
+            console.log(`Estadísticas calculadas: Entradas=${totalEntradas}, Salidas=${totalSalidas}, Total=${data.movimientos.length}`);
+            console.log(`Detalle de tipos de operación:`, 
+                data.movimientos.map(m => ({ 
+                    producto: m.producto, 
+                    tipo_mov: m.tipo_movimiento, 
+                    tipo_op: m.tipo_operacion, 
+                    cantidad: m.cantidad 
+                }))
+            );
         })
         .catch(error => {
             console.error('Error al buscar movimientos:', error);
@@ -2289,14 +2316,18 @@ function buscarMovimientos() {
         });
 }
 
-// Función para obtener el badge del tipo de movimiento
+// Función para obtener el badge del tipo de movimiento - ACTUALIZADA
 function getTipoMovimientoBadge(tipo) {
     const badges = {
         'entrada': '<span class="badge badge-success">Entrada</span>',
         'salida': '<span class="badge badge-danger">Salida</span>',
         'venta': '<span class="badge badge-primary">Venta</span>',
         'ajuste': '<span class="badge badge-warning">Ajuste</span>',
-        'devolucion': '<span class="badge badge-info">Devolución</span>'
+        'devolucion': '<span class="badge badge-info">Devolución</span>',
+        'compra': '<span class="badge badge-success">Compra</span>',
+        'merma': '<span class="badge badge-danger">Merma</span>',
+        'robo': '<span class="badge badge-danger">Robo</span>',
+        'consumo': '<span class="badge badge-warning">Consumo</span>'
     };
     return badges[tipo] || `<span class="badge badge-secondary">${tipo}</span>`;
 }
@@ -2464,6 +2495,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 300);
     });
 });
-    </script>
+</script>
 </body>
 </html>
