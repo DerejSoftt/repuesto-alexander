@@ -2490,95 +2490,8 @@ def ventas(request):
 #         transaction.set_rollback(True)
 #         return JsonResponse({'success': False, 'message': f'Error al procesar la venta: {str(e)}'})
 
-def safe_decimal(value, default=0):
-    """
-    Convierte de forma segura un valor a Decimal.
-    Maneja strings, números, y valores nulos/vacíos.
-    """
-    if value is None or value == '':
-        return Decimal(default)
-    
-    try:
-        # Convertir a string y reemplazar comas por puntos
-        value_str = str(value).strip().replace(',', '.')
-        # Eliminar caracteres no numéricos excepto punto y signo negativo
-        value_str = ''.join(c for c in value_str if c.isdigit() or c in ['.', '-'])
-        return Decimal(value_str)
-    except (InvalidOperation, ValueError, TypeError):
-        return Decimal(default)
-
-def safe_int(value, default=0):
-    """
-    Convierte de forma segura un valor a entero.
-    Maneja strings vacíos, None, y valores inválidos.
-    """
-    if value is None:
-        return default
-    
-    if isinstance(value, int):
-        return value
-    
-    if isinstance(value, float):
-        return int(value)
-    
-    value_str = str(value).strip()
-    if not value_str:
-        return default
-    
-    try:
-        # Eliminar caracteres no numéricos excepto signo negativo
-        cleaned_str = ''.join(c for c in value_str if c.isdigit() or c == '-')
-        if cleaned_str and cleaned_str != '-':
-            return int(cleaned_str)
-        return default
-    except (ValueError, TypeError):
-        return default
 
 
-
-def safe_decimal(value, default=0):
-    """
-    Convierte de forma segura un valor a Decimal.
-    Maneja strings, números, y valores nulos/vacíos.
-    """
-    if value is None or value == '':
-        return Decimal(default)
-    
-    try:
-        # Convertir a string y reemplazar comas por puntos
-        value_str = str(value).strip().replace(',', '.')
-        # Eliminar caracteres no numéricos excepto punto y signo negativo
-        value_str = ''.join(c for c in value_str if c.isdigit() or c in ['.', '-'])
-        return Decimal(value_str)
-    except (InvalidOperation, ValueError, TypeError):
-        return Decimal(default)
-
-def safe_int(value, default=0):
-    """
-    Convierte de forma segura un valor a entero.
-    Maneja strings vacíos, None, y valores inválidos.
-    """
-    if value is None:
-        return default
-    
-    if isinstance(value, int):
-        return value
-    
-    if isinstance(value, float):
-        return int(value)
-    
-    value_str = str(value).strip()
-    if not value_str:
-        return default
-    
-    try:
-        # Eliminar caracteres no numéricos excepto signo negativo
-        cleaned_str = ''.join(c for c in value_str if c.isdigit() or c == '-')
-        if cleaned_str and cleaned_str != '-':
-            return int(cleaned_str)
-        return default
-    except (ValueError, TypeError):
-        return default
 
 
 # @csrf_exempt
@@ -2838,6 +2751,79 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.units import inch
 
+
+# Funciones auxiliares
+def safe_decimal(value, default=0):
+    """
+    Convierte de forma segura un valor a Decimal.
+    Maneja strings, números, y valores nulos/vacíos.
+    """
+    if value is None:
+        return Decimal(default)
+    
+    # Si ya es Decimal, devolverlo
+    if isinstance(value, Decimal):
+        return value
+    
+    # Convertir a string y limpiar
+    value_str = str(value).strip()
+    
+    # Si está vacío, retornar default
+    if not value_str:
+        return Decimal(default)
+    
+    try:
+        # Reemplazar comas por puntos
+        value_str = value_str.replace(',', '.')
+        
+        # Eliminar caracteres no numéricos excepto punto, signo negativo y exponente
+        # Permitir formato científico si es necesario
+        cleaned_chars = []
+        for c in value_str:
+            if c.isdigit() or c in ['.', '-']:
+                cleaned_chars.append(c)
+        value_str = ''.join(cleaned_chars)
+        
+        # Si después de limpiar está vacío, retornar default
+        if not value_str or value_str == '-':
+            return Decimal(default)
+            
+        return Decimal(value_str)
+    except (InvalidOperation, ValueError, TypeError):
+        # Log del error para debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"No se pudo convertir a Decimal: '{value}' (tipo: {type(value)})")
+        return Decimal(default)
+
+def safe_int(value, default=0):
+    """
+    Convierte de forma segura un valor a entero.
+    Maneja strings vacíos, None, y valores inválidos.
+    """
+    if value is None:
+        return default
+    
+    if isinstance(value, int):
+        return value
+    
+    if isinstance(value, float):
+        return int(value)
+    
+    value_str = str(value).strip()
+    if not value_str:
+        return default
+    
+    try:
+        # Eliminar caracteres no numéricos excepto signo negativo
+        cleaned_str = ''.join(c for c in value_str if c.isdigit() or c == '-')
+        if cleaned_str and cleaned_str != '-':
+            return int(cleaned_str)
+        return default
+    except (ValueError, TypeError):
+        return default
+
+
 @csrf_exempt
 @require_POST
 @transaction.atomic
@@ -2883,7 +2869,7 @@ def procesar_venta(request):
                     'message': 'No tiene permisos para aplicar descuentos. Solo el administrador puede hacerlo.'
                 })
         else:
-            # Para superusuarios, usar los valores recibidos
+            # Para superusuarios, usar los valores recibidos CON safe_decimal
             discount_percentage = safe_decimal(data.get('discount_percentage', 0))
             discount_amount = safe_decimal(data.get('discount_amount', 0))
 
@@ -3281,6 +3267,8 @@ Sistema de Ventas - Super Bestia
             'error_type': str(type(e).__name__),
             'traceback': error_traceback if settings.DEBUG else None
         })
+
+
 # ============================================
 # FUNCIÓN PARA GENERAR PDF (SIN CAMBIOS)
 # ============================================
