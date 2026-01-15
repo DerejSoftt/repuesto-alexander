@@ -1,17 +1,28 @@
-#entorno virtual
-venv/
-env/
-venv/
-telefono/
-# Base de datos mysql
-.cnf
-.env
 
-# Byte-compiled / optimized / DLL files
-*.py[cod]
-__pycache__/
-
-null/
-env/
 *.sqlite3
 *.sql
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtualenv
+venv/
+.env
+
+# Django
+staticfiles/
+media/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compresión / cache
+*.br
+*.gz

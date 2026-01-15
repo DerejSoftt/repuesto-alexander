@@ -62,7 +62,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 ROOT_URLCONF = 'sytem_phone.urls'
 
@@ -90,7 +90,8 @@ WSGI_APPLICATION = 'sytem_phone.wsgi.application'
 
 
 # settings.py
-TIME_ZONE = 'America/Santo_Domingo'  # Mantener para Django
+# TIME_ZONE = 'America/Santo_Domingo'  # Mantener para Django
+TIME_ZONE = 'UTC'
 USE_TZ = True
 
 # DATABASES = {
@@ -126,12 +127,13 @@ DATABASES = {
         'HOST': os.environ.get('DB_HOST'),
         'PORT': os.environ.get('DB_PORT'),
         'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'; SET time_zone = '-04:00';",
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES';",
             'charset': 'utf8mb4',
             'use_unicode': True,
         },
     }
 }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -161,7 +163,7 @@ LANGUAGE_CODE = 'en-us'
 
 USE_I18N = True
 
-USE_TZ = True
+# USE_TZ = True
 
 
 
@@ -209,10 +211,11 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 
 
-CELERY_BROKER_URL = 'redis://localhost:6379/0'  # O tu servidor Redis
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# CELERY_BROKER_URL = 'redis://localhost:6379/0'  # O tu servidor Redis
+# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'America/Santo_Domingo'  # Tu zona horaria
+CELERY_ENABLE_UTC = True
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
