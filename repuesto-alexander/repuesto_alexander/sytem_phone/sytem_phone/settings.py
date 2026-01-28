@@ -173,7 +173,7 @@ USE_I18N = True
 
 # Configuración de archivos estáticos
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / "facturacion" / "static"]
+STATICFILES_DIRS = [BASE_DIR /"static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"   # aquí se copiará todo
 
 
