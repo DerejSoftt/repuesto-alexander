@@ -1,0 +1,29 @@
+
+*.sqlite3
+*.sql
+.vscode/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtualenv
+venv/
+.env
+
+# Django
+staticfiles/
+mediafile/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compresión / cache
+*.br
+*.gz
+codigo.txt
