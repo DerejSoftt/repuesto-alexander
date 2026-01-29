@@ -829,6 +829,33 @@ class Devolucion(models.Model):
 
 
 
+class MovimientoCuentaPorCobrar(models.Model):
+    TIPOS_MOVIMIENTO = (
+        ('pago', 'Pago'),
+        ('devolucion', 'Devolución'),
+        ('ajuste', 'Ajuste'),
+        ('interes', 'Interés'),
+        ('descuento', 'Descuento'),
+    )
+    
+    cuenta = models.ForeignKey('CuentaPorCobrar', on_delete=models.CASCADE, related_name='movimientos')
+    fecha_movimiento = models.DateTimeField(auto_now_add=True)
+    tipo_movimiento = models.CharField(max_length=20, choices=TIPOS_MOVIMIENTO)
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    observaciones = models.TextField()
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    referencia = models.CharField(max_length=100, blank=True, null=True)
+    
+    class Meta:
+        db_table = 'movimientos_cuenta_por_cobrar'
+        ordering = ['-fecha_movimiento']
+        verbose_name = 'Movimiento de Cuenta por Cobrar'
+        verbose_name_plural = 'Movimientos de Cuentas por Cobrar'
+    
+    def __str__(self):
+        return f"Movimiento #{self.id} - {self.cuenta} - {self.tipo_movimiento} - {self.monto}"
+
+
 class ComprobantePago(models.Model):
     TIPOS_COMPROBANTE = (
         ('recibo', 'Recibo de Pago'),

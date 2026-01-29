@@ -924,7 +924,7 @@ def movimientos_stock(request):
                     usuario_nombre = entrada.creado_por.username
                 elif hasattr(entrada, 'proveedor') and entrada.proveedor:
                     # Si no hay usuario, al menos mostrar el proveedor
-                    usuario_nombre = f"Proveedor: {entrada.proveedor.nombre}"
+                    usuario_nombre = f"Proveedor: {entrada.proveedor}"
                 
                 # Obtener fecha
                 fecha_str = "Fecha no disponible"
@@ -5132,7 +5132,6 @@ def lista_comprobantes(request):
     
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
-
 @login_required
 def cuentaporcobrar(request):
     # Obtener parámetros de filtrado
@@ -5163,17 +5162,25 @@ def cuentaporcobrar(request):
     if date_to:
         cuentas = cuentas.filter(venta__fecha_venta__lte=date_to)
 
-    # Calcular estadísticas usando `total_a_pagar` de Venta (SIN ITBIS)
+    # Calcular estadísticas
     total_pendiente = Decimal('0.00')
     total_vencido = Decimal('0.00')
     total_por_cobrar = Decimal('0.00')
 
     for cuenta in cuentas:
-        # Usar `total_a_pagar` de Venta
-        monto_total_original = Decimal(str(cuenta.venta.total_a_pagar))
+        # Usar monto_total de la cuenta (que debería ser igual a total_a_pagar)
+        monto_total_original = Decimal(str(cuenta.monto_total))
 
-        # Calcular saldo pendiente (usando `total_a_pagar`)
+        # Calcular saldo pendiente
         saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
+
+        # Asegurar que no sea negativo
+        if saldo_pendiente < 0:
+            saldo_pendiente = Decimal('0.00')
+            # Ajustar monto_pagado si es necesario
+            if cuenta.monto_pagado > monto_total_original:
+                cuenta.monto_pagado = monto_total_original
+                cuenta.save()
 
         if cuenta.estado in ['pendiente', 'parcial']:
             total_pendiente += saldo_pendiente
@@ -5183,7 +5190,7 @@ def cuentaporcobrar(request):
         if cuenta.estado != 'pagada':
             total_por_cobrar += saldo_pendiente
 
-    # Pagos del mes actual (solo de cuentas no anuladas y no eliminadas)
+    # Pagos del mes actual
     mes_actual = timezone.now().month
     año_actual = timezone.now().year
     pagos_mes = PagoCuentaPorCobrar.objects.filter(
@@ -5196,15 +5203,15 @@ def cuentaporcobrar(request):
     # Preparar datos para el template
     cuentas_data = []
     for cuenta in cuentas:
-        # Usar `total_a_pagar` de Venta
-        monto_total_original = float(cuenta.venta.total_a_pagar)
+        # Usar monto_total de la cuenta
+        monto_total_original = float(cuenta.monto_total)
 
-        # Obtener productos de la venta (USANDO PRECIO SIN ITBIS)
+        # Obtener productos de la venta
         productos = []
         if cuenta.venta and hasattr(cuenta.venta, 'detalles'):
             for detalle in cuenta.venta.detalles.all():
                 nombre_producto = 'Servicio'
-                precio_sin_itbis = float(detalle.precio_unitario)  # Precio sin ITBIS
+                precio_sin_itbis = float(detalle.precio_unitario)
                 if hasattr(detalle, 'producto') and detalle.producto:
                     nombre_producto = detalle.producto.descripcion
                 elif hasattr(detalle, 'servicio') and detalle.servicio:
@@ -5219,7 +5226,7 @@ def cuentaporcobrar(request):
                 productos.append({
                     'nombre': nombre_producto,
                     'cantidad': cantidad,
-                    'precio': precio_sin_itbis,  # Precio sin ITBIS
+                    'precio': precio_sin_itbis,
                 })
 
         # Obtener información del cliente
@@ -5242,17 +5249,12 @@ def cuentaporcobrar(request):
         if cuenta.fecha_vencimiento:
             due_date = cuenta.fecha_vencimiento.strftime('%Y-%m-%d')
 
-        # Usar `total_a_pagar` para "Monto Original" y cálculos
         monto_pagado = float(cuenta.monto_pagado)
+        
+        # Calcular saldo pendiente
+        saldo_pendiente = max(0, monto_total_original - monto_pagado)
 
-        # Calcular saldo pendiente basado en `total_a_pagar`
-        saldo_pendiente = monto_total_original - monto_pagado
-
-        # Asegurarse de que el saldo pendiente no sea negativo
-        if saldo_pendiente < 0:
-            saldo_pendiente = 0
-
-        # Determinar si la cuenta puede ser eliminada (solo cuentas pagadas)
+        # Determinar si la cuenta puede ser eliminada
         puede_eliminar = cuenta.estado == 'pagada'
 
         cuentas_data.append({
@@ -5260,19 +5262,19 @@ def cuentaporcobrar(request):
             'invoiceNumber': invoice_number,
             'clientName': client_name,
             'clientPhone': client_phone,
-            'products': productos,  # Productos con precio sin ITBIS
+            'products': productos,
             'saleDate': sale_date,
             'dueDate': due_date,
-            'totalAmount': monto_total_original,  # Monto total sin ITBIS (total_a_pagar)
+            'totalAmount': monto_total_original,  # Usar monto_total de la cuenta
             'paidAmount': monto_pagado,
-            'pendingBalance': saldo_pendiente,  # Saldo pendiente basado en total_a_pagar
+            'pendingBalance': saldo_pendiente,
             'status': cuenta.estado,
             'observations': cuenta.observaciones or '',
             'puede_eliminar': puede_eliminar,
-            'totalConItbis': float(cuenta.venta.total),  # Solo para referencia (con ITBIS)
+            'totalConItbis': float(cuenta.venta.total) if cuenta.venta else 0,
         })
 
-    # Convertir a JSON para pasarlo al template
+    # Convertir a JSON
     cuentas_json = json.dumps(cuentas_data)
 
     context = {
@@ -5288,6 +5290,39 @@ def cuentaporcobrar(request):
     }
 
     return render(request, "facturacion/cuentaporcobrar.html", context)
+
+
+
+def sincronizar_cuentas_ventas():
+    """
+    Sincroniza todas las cuentas por cobrar con sus ventas correspondientes
+    Para corregir inconsistencias después de devoluciones
+    """
+    cuentas = CuentaPorCobrar.objects.filter(anulada=False, eliminada=False)
+    
+    for cuenta in cuentas:
+        if cuenta.venta:
+            # Actualizar monto_total de la cuenta con total_a_pagar de la venta
+            cuenta.monto_total = cuenta.venta.total_a_pagar
+            
+            # Recalcular estado
+            saldo_pendiente = cuenta.monto_total - cuenta.monto_pagado
+            
+            if saldo_pendiente <= 0:
+                cuenta.estado = 'pagada'
+                cuenta.monto_pagado = cuenta.monto_total
+            elif cuenta.monto_pagado > 0:
+                cuenta.estado = 'parcial'
+            else:
+                cuenta.estado = 'pendiente'
+            
+            # Verificar vencimiento
+            if cuenta.esta_vencida:
+                cuenta.estado = 'vencida'
+            
+            cuenta.save()
+    
+    return f"Sincronizadas {cuentas.count()} cuentas"
 
 @csrf_exempt
 def registrar_pago(request):
@@ -7096,6 +7131,30 @@ def buscar_factura_devolucion(request):
         traceback.print_exc()  # Esto imprimirá el error completo en la consola
         return JsonResponse({'error': f'Error interno al buscar la factura: {str(e)}'}, status=500)
 
+
+
+
+def registrar_movimiento_cuenta(cuenta, monto, tipo_movimiento, usuario, observaciones, referencia=None):
+    """
+    Registra un movimiento en la cuenta por cobrar para auditoría
+    """
+    from .models import MovimientoCuentaPorCobrar
+    
+    # Buscar si ya existe el modelo MovimientoCuentaPorCobrar
+    try:
+        MovimientoCuentaPorCobrar.objects.create(
+            cuenta=cuenta,
+            monto=monto,
+            tipo_movimiento=tipo_movimiento,
+            usuario=usuario,
+            observaciones=observaciones,
+            referencia=referencia
+        )
+    except:
+        # Si no existe el modelo, solo registrar en logs
+        print(f"Movimiento de Cuenta - {cuenta.id}: {observaciones}")
+
+
 @user_passes_test(is_superuser, login_url='/admin/login/')
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -7145,56 +7204,77 @@ def procesar_devolucion(request):
         # Recalcular totales de la venta
         detalles_restantes = DetalleVenta.objects.filter(venta=venta)
         venta.subtotal = sum(detalle.subtotal for detalle in detalles_restantes)
-        venta.total = venta.subtotal - venta.descuento_monto
+        
+        # Recalcular ITBIS basado en el nuevo subtotal
+        venta.itbis_monto = venta.subtotal * (venta.itbis_porcentaje / 100)
+        
+        # Recalcular total con ITBIS
+        venta.total = venta.subtotal + venta.itbis_monto - venta.descuento_monto
+        
+        # Recalcular total_a_pagar (sin ITBIS) - IMPORTANTE: Mantener sin ITBIS
+        venta.total_a_pagar = venta.subtotal - venta.descuento_monto
+        
         venta.save()
         
-        # ACTUALIZAR CUENTA POR COBRAR - Esta es la parte crítica
+        # ACTUALIZAR CUENTA POR COBRAR - CORRECCIÓN CRÍTICA
         try:
             cuenta = CuentaPorCobrar.objects.get(venta=venta, anulada=False, eliminada=False)
             
-            # Actualizar el monto total de la cuenta por cobrar
-            cuenta.monto_total = venta.total
+            # IMPORTANTE: Actualizar BOTH campos para mantener consistencia
+            cuenta.monto_total = venta.total_a_pagar  # SIN ITBIS
             
-            # Si ya se había pagado algo, ajustar el monto pagado
-            if cuenta.monto_pagado > cuenta.monto_total:
-                # Si el monto pagado es mayor que el nuevo total, reducir el monto pagado
-                cuenta.monto_pagado = cuenta.monto_total
+            # Recalcular el estado basado en el nuevo saldo
+            saldo_pendiente = cuenta.monto_total - cuenta.monto_pagado
+            
+            if saldo_pendiente <= 0:
                 cuenta.estado = 'pagada'
+                cuenta.monto_pagado = cuenta.monto_total  # Ajustar si pagado > total
+            elif cuenta.monto_pagado > 0:
+                cuenta.estado = 'parcial'
             else:
-                # Recalcular el estado basado en el nuevo saldo
-                saldo_pendiente = cuenta.monto_total - cuenta.monto_pagado
-                if saldo_pendiente == 0:
-                    cuenta.estado = 'pagada'
-                elif cuenta.monto_pagado > 0:
-                    cuenta.estado = 'parcial'
-                else:
-                    cuenta.estado = 'pendiente'
-                
-                # Verificar si está vencida
-                if cuenta.esta_vencida:
-                    cuenta.estado = 'vencida'
+                cuenta.estado = 'pendiente'
+            
+            # Verificar vencimiento
+            if cuenta.esta_vencida:
+                cuenta.estado = 'vencida'
             
             cuenta.save()
             
-            # Registrar el movimiento de la devolución en la cuenta
-            registrar_movimiento_cuenta(cuenta, monto_devolucion, 'devolucion', request.user, f"Devolución de {cantidad_devolver} unidades")
+            # Registrar movimiento de devolución
+            registrar_movimiento_cuenta(
+                cuenta, 
+                monto_devolucion, 
+                'devolucion', 
+                request.user, 
+                f"Devolución de {cantidad_devolver} unidades del producto {producto.descripcion}"
+            )
+            
+            # Devolver datos actualizados para actualización en tiempo real
+            return JsonResponse({
+                'success': True,
+                'mensaje': f'Devolución procesada correctamente. Se han devuelto {cantidad_devolver} unidades.',
+                'numero_devolucion': f'DEV-{timezone.now().strftime("%Y%m%d")}-{venta.id}',
+                'monto_devolucion': str(monto_devolucion),
+                'datos_actualizados': {
+                    'cuenta_id': cuenta.id,
+                    'nuevo_monto_total': float(cuenta.monto_total),
+                    'nuevo_saldo_pendiente': float(max(0, saldo_pendiente)),
+                    'nuevo_estado': cuenta.estado,
+                    'nuevo_total_venta': float(venta.total_a_pagar),
+                    'factura_numero': venta.numero_factura
+                }
+            })
             
         except CuentaPorCobrar.DoesNotExist:
-            # Si no existe cuenta por cobrar, no hay nada que actualizar
-            pass
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Devolución procesada correctamente. Se han devuelto {cantidad_devolver} unidades.',
-            'numero_devolucion': f'DEV-{timezone.now().strftime("%Y%m%d")}-{venta.id}',
-            'monto_devolucion': str(monto_devolucion)
-        })
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontró la cuenta por cobrar asociada a esta factura.'
+            })
     
     except Exception as e:
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': f'Error al procesar la devolución: {str(e)}'}, status=500)
-
 
 # Función para verificar si el usuario es superusuario
 # def is_superuser(user):

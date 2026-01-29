@@ -1203,1134 +1203,1184 @@
     </div>
     <!-- SweetAlert2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.12/dist/sweetalert2.all.min.js"></script>
-    <script>
-        // ===== CONFIGURACIÓN INICIAL =====
-        console.log('Inicializando sistema de cuentas por cobrar...');
+   <script>
+    // ===== CONFIGURACIÓN INICIAL =====
+    console.log('Inicializando sistema de cuentas por cobrar...');
 
-        // Obtener información del usuario desde Django
-        const isSuperuser = {{ user.is_superuser|yesno:"true,false" }};
-        console.log('Usuario es superusuario:', isSuperuser);
+    // Obtener información del usuario desde Django
+    const isSuperuser = {{ user.is_superuser|yesno:"true,false" }};
+    console.log('Usuario es superusuario:', isSuperuser);
 
-        // Cargar datos desde Django
-        let accounts = [];
+    // Cargar datos desde Django
+    let accounts = [];
+    try {
+        accounts = JSON.parse('{{ cuentas_json|escapejs }}');
+        console.log('Datos cargados:', accounts.length, 'cuentas');
+        console.log('Primera cuenta:', accounts[0]); // Para debug
+    } catch (error) {
+        console.error('Error al parsear datos:', error);
+        accounts = [];
+    }
+
+    let filteredAccounts = [...accounts];
+    let groupedClients = [];
+
+    // ===== FUNCIONES DEL SIDEBAR =====
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.querySelector('.sidebar-overlay');
+        sidebar.classList.toggle('active');
+        sidebarOverlay.classList.toggle('active');
+        if (window.innerWidth <= 768) {
+            document.body.classList.toggle('sidebar-open');
+        }
+    }
+
+    function closeSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.querySelector('.sidebar-overlay');
+        sidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+        document.body.classList.remove('sidebar-open');
+    }
+
+    // ===== FUNCIONES UTILITARIAS =====
+    function formatDate(dateString) {
+        if (!dateString) return 'N/A';
         try {
-            accounts = JSON.parse('{{ cuentas_json|escapejs }}');
-            console.log('Datos cargados:', accounts.length, 'cuentas');
-            console.log('Primera cuenta:', accounts[0]); // Para debug
+            const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+            return new Date(dateString).toLocaleDateString('es-DO', options);
         } catch (error) {
-            console.error('Error al parsear datos:', error);
-            accounts = [];
+            return 'Fecha inválida';
         }
+    }
 
-        let filteredAccounts = [...accounts];
-        let groupedClients = [];
+    function getStatusClass(status) {
+        const statusClasses = {
+            'pendiente': 'status-pending',
+            'vencida': 'status-overdue',
+            'pagada': 'status-paid',
+            'parcial': 'status-pending',
+            'anulada': 'status-overdue'
+        };
+        return statusClasses[status] || '';
+    }
 
-        // ===== FUNCIONES DEL SIDEBAR =====
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarOverlay = document.querySelector('.sidebar-overlay');
-            sidebar.classList.toggle('active');
-            sidebarOverlay.classList.toggle('active');
-            if (window.innerWidth <= 768) {
-                document.body.classList.toggle('sidebar-open');
-            }
-        }
+    function getStatusName(status) {
+        const statusNames = {
+            'pendiente': 'Pendiente',
+            'vencida': 'Vencida',
+            'pagada': 'Pagada',
+            'parcial': 'Pago Parcial',
+            'anulada': 'Anulada'
+        };
+        return statusNames[status] || status;
+    }
 
-        function closeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarOverlay = document.querySelector('.sidebar-overlay');
-            sidebar.classList.remove('active');
-            sidebarOverlay.classList.remove('active');
-            document.body.classList.remove('sidebar-open');
-        }
-
-        // ===== FUNCIONES UTILITARIAS =====
-        function formatDate(dateString) {
-            if (!dateString) return 'N/A';
-            try {
-                const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
-                return new Date(dateString).toLocaleDateString('es-DO', options);
-            } catch (error) {
-                return 'Fecha inválida';
-            }
-        }
-
-        function getStatusClass(status) {
-            const statusClasses = {
-                'pendiente': 'status-pending',
-                'vencida': 'status-overdue',
-                'pagada': 'status-paid',
-                'parcial': 'status-pending',
-                'anulada': 'status-overdue'
-            };
-            return statusClasses[status] || '';
-        }
-
-        function getStatusName(status) {
-            const statusNames = {
-                'pendiente': 'Pendiente',
-                'vencida': 'Vencida',
-                'pagada': 'Pagada',
-                'parcial': 'Pago Parcial',
-                'anulada': 'Anulada'
-            };
-            return statusNames[status] || status;
-        }
-
-        // Función para obtener el token CSRF
-        function getCSRFToken() {
-            const name = 'csrftoken';
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
+    // Función para obtener el token CSRF
+    function getCSRFToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
                 }
             }
-            return cookieValue;
         }
+        return cookieValue;
+    }
 
-        // Función para limpiar las observaciones eliminando la sección de financiamiento
-        function cleanObservations(observations) {
-            if (!observations) return 'N/A';
-            const financiamientoIndex = observations.indexOf('FINANCIAMIENTO:');
-            if (financiamientoIndex !== -1) {
-                return observations.substring(0, financiamientoIndex).trim();
-            }
-            return observations;
+    // Función para limpiar las observaciones eliminando la sección de financiamiento
+    function cleanObservations(observations) {
+        if (!observations) return 'N/A';
+        const financiamientoIndex = observations.indexOf('FINANCIAMIENTO:');
+        if (financiamientoIndex !== -1) {
+            return observations.substring(0, financiamientoIndex).trim();
         }
+        return observations;
+    }
 
-        // ===== FUNCIONES PARA AGRUPAR POR CLIENTE =====
-        function groupAccountsByClient(accountsData) {
-            const clientsMap = {};
-            accountsData.forEach(account => {
-                if (account.status === 'anulada' || account.eliminada) {
-                    return;
-                }
-                const clientKey = `${account.clientName}-${account.clientPhone}`;
-                if (!clientsMap[clientKey]) {
-                    clientsMap[clientKey] = {
-                        clientName: account.clientName,
-                        clientPhone: account.clientPhone,
-                        invoices: [],
-                        totalPending: 0,
-                        status: 'pagada',
-                        isExpanded: false
-                    };
-                }
-                // Calcular el saldo pendiente usando el monto total (SIN ITBIS)
-                const pendingBalance = account.totalAmount - account.paidAmount;
-                const existingInvoice = clientsMap[clientKey].invoices.find(inv => inv.id === account.id);
-                const isInvoiceExpanded = existingInvoice ? existingInvoice.isExpanded : false;
-                clientsMap[clientKey].invoices.push({
-                    id: account.id,
-                    invoiceNumber: account.invoiceNumber,
-                    products: account.products,
-                    saleDate: account.saleDate,
-                    dueDate: account.dueDate,
-                    totalAmount: account.totalAmount, // Monto total SIN ITBIS
-                    paidAmount: account.paidAmount,
-                    pendingBalance: pendingBalance, // Saldo pendiente SIN ITBIS
-                    status: account.status,
-                    observations: account.observations,
-                    isExpanded: isInvoiceExpanded,
-                    anulada: account.status === 'anulada',
-                    puede_eliminar: account.puede_eliminar || false
-                });
-                clientsMap[clientKey].totalPending += pendingBalance;
-                if (account.status === 'vencida') {
-                    clientsMap[clientKey].status = 'vencida';
-                } else if (account.status === 'pendiente' && clientsMap[clientKey].status !== 'vencida') {
-                    clientsMap[clientKey].status = 'pendiente';
-                } else if (account.status === 'parcial' && clientsMap[clientKey].status === 'pagada') {
-                    clientsMap[clientKey].status = 'parcial';
-                }
-            });
-            return Object.values(clientsMap);
-        }
-
-        // ===== FUNCIÓN PARA ACTUALIZAR ESTADÍSTICAS =====
-        function updateStats(accountsData = accounts) {
-            console.log('Actualizando estadísticas...');
-            let pendingAmount = 0;
-            let overdueAmount = 0;
-            let paidThisMonthAmount = 0;
-            let totalReceivableAmount = 0;
-            accountsData.forEach(account => {
-                if (account.status === 'anulada' || account.eliminada) {
-                    return;
-                }
-                const pendingBalance = account.totalAmount - account.paidAmount; // Sin ITBIS
-                totalReceivableAmount += pendingBalance;
-                if (account.status === 'pendiente') {
-                    pendingAmount += pendingBalance;
-                } else if (account.status === 'vencida') {
-                    overdueAmount += pendingBalance;
-                }
-                if (account.status === 'pagada') {
-                    const saleDate = new Date(account.saleDate);
-                    const now = new Date();
-                    if (saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear()) {
-                        paidThisMonthAmount += account.totalAmount; // Sin ITBIS
-                    }
-                }
-            });
-            document.getElementById('pendingAmount').textContent = `RD$ ${pendingAmount.toLocaleString('es-DO')}`;
-            document.getElementById('overdueAmount').textContent = `RD$ ${overdueAmount.toLocaleString('es-DO')}`;
-            document.getElementById('paidThisMonthAmount').textContent = `RD$ ${paidThisMonthAmount.toLocaleString('es-DO')}`;
-            document.getElementById('totalReceivableAmount').textContent = `RD$ ${totalReceivableAmount.toLocaleString('es-DO')}`;
-            console.log('Estadísticas actualizadas');
-        }
-
-        // ===== FUNCIÓN DE RENDERIZADO =====
-        function renderTable(data = accounts) {
-            console.log('Renderizando tabla agrupada por cliente...');
-            const tableBody = document.getElementById('tableBody');
-            const noDataMessage = document.getElementById('noDataMessage');
-            const validData = data.filter(account => account.status !== 'anulada' && !account.eliminada);
-
-            if (!validData || validData.length === 0) {
-                tableBody.innerHTML = '';
-                noDataMessage.style.display = 'block';
-                console.log('No hay datos para mostrar');
+    // ===== FUNCIONES PARA AGRUPAR POR CLIENTE =====
+    function groupAccountsByClient(accountsData) {
+        const clientsMap = {};
+        accountsData.forEach(account => {
+            if (account.status === 'anulada' || account.eliminada) {
                 return;
             }
-
-            noDataMessage.style.display = 'none';
-            const newGroupedClients = groupAccountsByClient(validData);
-
-            if (groupedClients.length > 0) {
-                newGroupedClients.forEach(newClient => {
-                    const existingClient = groupedClients.find(c =>
-                        c.clientName === newClient.clientName &&
-                        c.clientPhone === newClient.clientPhone
-                    );
-                    if (existingClient) {
-                        newClient.isExpanded = existingClient.isExpanded;
-                        newClient.invoices.forEach(newInvoice => {
-                            const existingInvoice = existingClient.invoices.find(i => i.id === newInvoice.id);
-                            if (existingInvoice) {
-                                newInvoice.isExpanded = existingInvoice.isExpanded;
-                            }
-                        });
-                    }
-                });
+            const clientKey = `${account.clientName}-${account.clientPhone}`;
+            if (!clientsMap[clientKey]) {
+                clientsMap[clientKey] = {
+                    clientName: account.clientName,
+                    clientPhone: account.clientPhone,
+                    invoices: [],
+                    totalPending: 0,
+                    status: 'pagada',
+                    isExpanded: false
+                };
             }
+            
+            // Calcular el saldo pendiente usando monto_total de la cuenta
+            const pendingBalance = account.pendingBalance;
+            const existingInvoice = clientsMap[clientKey].invoices.find(inv => inv.id === account.id);
+            const isInvoiceExpanded = existingInvoice ? existingInvoice.isExpanded : false;
+            
+            clientsMap[clientKey].invoices.push({
+                id: account.id,
+                invoiceNumber: account.invoiceNumber,
+                products: account.products,
+                saleDate: account.saleDate,
+                dueDate: account.dueDate,
+                totalAmount: account.totalAmount, // Monto total SIN ITBIS
+                paidAmount: account.paidAmount,
+                pendingBalance: pendingBalance, // Saldo pendiente
+                status: account.status,
+                observations: account.observations,
+                isExpanded: isInvoiceExpanded,
+                anulada: account.status === 'anulada',
+                puede_eliminar: account.puede_eliminar || false
+            });
+            
+            clientsMap[clientKey].totalPending += pendingBalance;
+            
+            // Determinar estado general del cliente
+            if (account.status === 'vencida') {
+                clientsMap[clientKey].status = 'vencida';
+            } else if (account.status === 'pendiente' && clientsMap[clientKey].status !== 'vencida') {
+                clientsMap[clientKey].status = 'pendiente';
+            } else if (account.status === 'parcial' && clientsMap[clientKey].status === 'pagada') {
+                clientsMap[clientKey].status = 'parcial';
+            } else if (account.status === 'pagada' && clientsMap[clientKey].status === 'pagada') {
+                // Mantener pagada
+            } else {
+                clientsMap[clientKey].status = 'pendiente';
+            }
+        });
+        
+        return Object.values(clientsMap);
+    }
 
-            groupedClients = newGroupedClients;
-            let tableRowsHTML = '';
+    // ===== FUNCIÓN PARA ACTUALIZAR ESTADÍSTICAS =====
+    function updateStats(accountsData = accounts) {
+        console.log('Actualizando estadísticas...');
+        let pendingAmount = 0;
+        let overdueAmount = 0;
+        let paidThisMonthAmount = 0;
+        let totalReceivableAmount = 0;
+        
+        accountsData.forEach(account => {
+            if (account.status === 'anulada' || account.eliminada) {
+                return;
+            }
+            
+            const pendingBalance = account.pendingBalance;
+            totalReceivableAmount += pendingBalance;
+            
+            if (account.status === 'pendiente' || account.status === 'parcial') {
+                pendingAmount += pendingBalance;
+            } else if (account.status === 'vencida') {
+                overdueAmount += pendingBalance;
+            }
+            
+            if (account.status === 'pagada') {
+                const saleDate = new Date(account.saleDate);
+                const now = new Date();
+                if (saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear()) {
+                    paidThisMonthAmount += account.totalAmount;
+                }
+            }
+        });
+        
+        document.getElementById('pendingAmount').textContent = `RD$ ${pendingAmount.toLocaleString('es-DO')}`;
+        document.getElementById('overdueAmount').textContent = `RD$ ${overdueAmount.toLocaleString('es-DO')}`;
+        document.getElementById('paidThisMonthAmount').textContent = `RD$ ${paidThisMonthAmount.toLocaleString('es-DO')}`;
+        document.getElementById('totalReceivableAmount').textContent = `RD$ ${totalReceivableAmount.toLocaleString('es-DO')}`;
+        console.log('Estadísticas actualizadas');
+    }
 
-            groupedClients.forEach(client => {
-                const isClientExpanded = client.isExpanded;
-                tableRowsHTML += `
-                    <tr class="client-row" data-client-key="${client.clientName}-${client.clientPhone}">
-                        <td><strong>${client.clientName}</strong></td>
-                        <td>${client.clientPhone}</td>
-                        <td>${client.invoices.length} factura(s)</td>
-                        <td class="currency"><strong>RD$ ${client.totalPending.toLocaleString('es-DO')}</strong></td>
-                        <td>
-                            <span class="status-badge ${getStatusClass(client.status)}">
-                                ${getStatusName(client.status)}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="actions">
-                                <button class="btn btn-info" onclick="toggleClientInvoices('${client.clientName}-${client.clientPhone}')" title="${isClientExpanded ? 'Ocultar' : 'Mostrar'} facturas">
-                                    <i class='bx bx-${isClientExpanded ? 'minus' : 'plus'}'></i>
-                                    ${isClientExpanded ? 'Ocultar' : 'Mostrar'}
-                                </button>
-                                <button class="btn btn-success" onclick="payAllInvoices('${client.clientName}-${client.clientPhone}')" title="Pagar todas" ${client.totalPending <= 0 ? 'disabled' : ''}>
-                                    <i class='bx bx-dollar'></i>
-                                    Pagar Todo
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
+    // ===== FUNCIÓN DE RENDERIZADO =====
+    function renderTable(data = accounts) {
+        console.log('Renderizando tabla agrupada por cliente...');
+        const tableBody = document.getElementById('tableBody');
+        const noDataMessage = document.getElementById('noDataMessage');
+        const validData = data.filter(account => account.status !== 'anulada' && !account.eliminada);
 
-                if (isClientExpanded) {
-                    client.invoices.forEach(invoice => {
-                        const isInvoiceExpanded = invoice.isExpanded;
-                        const hasMultipleProducts = invoice.products && invoice.products.length > 1;
-                        tableRowsHTML += `
-                            <tr class="invoice-row expanded" data-client-key="${client.clientName}-${client.clientPhone}" data-invoice-id="${invoice.id}">
-                                <td colspan="2"></td>
-                                <td>
-                                    <strong>Factura: ${invoice.invoiceNumber}</strong>
-                                    ${hasMultipleProducts ? `
-                                        <button class="product-toggle-btn" onclick="toggleInvoiceProducts(${invoice.id}, '${client.clientName}-${client.clientPhone}')">
-                                            <i class='bx bx-${isInvoiceExpanded ? 'minus' : 'plus'}'></i>
-                                        </button>
+        if (!validData || validData.length === 0) {
+            tableBody.innerHTML = '';
+            noDataMessage.style.display = 'block';
+            console.log('No hay datos para mostrar');
+            return;
+        }
+
+        noDataMessage.style.display = 'none';
+        const newGroupedClients = groupAccountsByClient(validData);
+
+        // Preservar estado de expansión
+        if (groupedClients.length > 0) {
+            newGroupedClients.forEach(newClient => {
+                const existingClient = groupedClients.find(c =>
+                    c.clientName === newClient.clientName &&
+                    c.clientPhone === newClient.clientPhone
+                );
+                if (existingClient) {
+                    newClient.isExpanded = existingClient.isExpanded;
+                    newClient.invoices.forEach(newInvoice => {
+                        const existingInvoice = existingClient.invoices.find(i => i.id === newInvoice.id);
+                        if (existingInvoice) {
+                            newInvoice.isExpanded = existingInvoice.isExpanded;
+                        }
+                    });
+                }
+            });
+        }
+
+        groupedClients = newGroupedClients;
+        let tableRowsHTML = '';
+
+        groupedClients.forEach(client => {
+            const isClientExpanded = client.isExpanded;
+            tableRowsHTML += `
+                <tr class="client-row" data-client-key="${client.clientName}-${client.clientPhone}">
+                    <td><strong>${client.clientName}</strong></td>
+                    <td>${client.clientPhone}</td>
+                    <td>${client.invoices.length} factura(s)</td>
+                    <td class="currency"><strong>RD$ ${client.totalPending.toLocaleString('es-DO')}</strong></td>
+                    <td>
+                        <span class="status-badge ${getStatusClass(client.status)}">
+                            ${getStatusName(client.status)}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="actions">
+                            <button class="btn btn-info" onclick="toggleClientInvoices('${client.clientName}-${client.clientPhone}')" title="${isClientExpanded ? 'Ocultar' : 'Mostrar'} facturas">
+                                <i class='bx bx-${isClientExpanded ? 'minus' : 'plus'}'></i>
+                                ${isClientExpanded ? 'Ocultar' : 'Mostrar'}
+                            </button>
+                            <button class="btn btn-success" onclick="payAllInvoices('${client.clientName}-${client.clientPhone}')" title="Pagar todas" ${client.totalPending <= 0 ? 'disabled' : ''}>
+                                <i class='bx bx-dollar'></i>
+                                Pagar Todo
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            if (isClientExpanded) {
+                client.invoices.forEach(invoice => {
+                    const isInvoiceExpanded = invoice.isExpanded;
+                    const hasMultipleProducts = invoice.products && invoice.products.length > 1;
+                    tableRowsHTML += `
+                        <tr class="invoice-row expanded" data-client-key="${client.clientName}-${client.clientPhone}" data-invoice-id="${invoice.id}">
+                            <td colspan="2"></td>
+                            <td>
+                                <strong>Factura: ${invoice.invoiceNumber}</strong>
+                                ${hasMultipleProducts ? `
+                                    <button class="product-toggle-btn" onclick="toggleInvoiceProducts(${invoice.id}, '${client.clientName}-${client.clientPhone}')">
+                                        <i class='bx bx-${isInvoiceExpanded ? 'minus' : 'plus'}'></i>
+                                    </button>
+                                ` : ''}
+                            </td>
+                            <td class="currency">RD$ ${invoice.pendingBalance.toLocaleString('es-DO')}</td>
+                            <td>
+                                <span class="status-badge ${getStatusClass(invoice.status)}">
+                                    ${getStatusName(invoice.status)}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="actions">
+                                    <button class="btn btn-info" onclick="viewDetails(${invoice.id})" title="Ver Detalles">
+                                        <i class='bx bx-info-circle'></i>
+                                    </button>
+                                    ${invoice.pendingBalance > 0 ? `
+                                    <button class="btn btn-success" onclick="openPaymentModal(${invoice.id})" title="Registrar Pago">
+                                        <i class='bx bx-dollar'></i>
+                                    </button>
                                     ` : ''}
-                                </td>
-                                <td class="currency">RD$ ${invoice.pendingBalance.toLocaleString('es-DO')}</td>
-                                <td>
-                                    <span class="status-badge ${getStatusClass(invoice.status)}">
-                                        ${getStatusName(invoice.status)}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="actions">
-                                        <button class="btn btn-info" onclick="viewDetails(${invoice.id})" title="Ver Detalles">
-                                            <i class='bx bx-info-circle'></i>
-                                        </button>
-                                        ${invoice.pendingBalance > 0 ? `
-                                        <button class="btn btn-success" onclick="openPaymentModal(${invoice.id})" title="Registrar Pago">
-                                            <i class='bx bx-dollar'></i>
-                                        </button>
-                                        ` : ''}
-                                        ${invoice.status === 'pagada' ? `
-                                        <button class="btn btn-danger" onclick="eliminarCuentaPagada(${invoice.id})" title="Eliminar Cuenta Pagada">
-                                            <i class='bx bx-trash'></i>
-                                        </button>
-                                        ` : `
-                                        ${isSuperuser ? `
-                                        <button class="btn btn-danger" onclick="anularCuenta(${invoice.id})" title="Anular Cuenta">
-                                            <i class='bx bx-x-circle'></i>
-                                        </button>
-                                        ` : ''}
-                                        `}
-                                    </div>
+                                    ${invoice.status === 'pagada' ? `
+                                    <button class="btn btn-danger" onclick="eliminarCuentaPagada(${invoice.id})" title="Eliminar Cuenta Pagada">
+                                        <i class='bx bx-trash'></i>
+                                    </button>
+                                    ` : `
+                                    ${isSuperuser ? `
+                                    <button class="btn btn-danger" onclick="anularCuenta(${invoice.id})" title="Anular Cuenta">
+                                        <i class='bx bx-x-circle'></i>
+                                    </button>
+                                    ` : ''}
+                                    `}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+
+                    if (hasMultipleProducts && isInvoiceExpanded) {
+                        tableRowsHTML += `
+                            <tr class="product-row expanded" data-invoice-id="${invoice.id}">
+                                <td colspan="6" class="product-list-cell">
+                                    <strong>Productos de la Factura ${invoice.invoiceNumber}:</strong>
+                                    <ul>
+                                        ${invoice.products.map(p => `
+                                            <li>${p.nombre} (x${p.cantidad}) - RD$ ${p.precio.toLocaleString('es-DO')}</li>
+                                        `).join('')}
+                                    </ul>
                                 </td>
                             </tr>
                         `;
-
-                        if (hasMultipleProducts && isInvoiceExpanded) {
-                            tableRowsHTML += `
-                                <tr class="product-row expanded" data-invoice-id="${invoice.id}">
-                                    <td colspan="6" class="product-list-cell">
-                                        <strong>Productos de la Factura ${invoice.invoiceNumber}:</strong>
-                                        <ul>
-                                            ${invoice.products.map(p => `
-                                                <li>${p.nombre} (x${p.cantidad}) - RD$ ${p.precio.toLocaleString('es-DO')}</li>
-                                            `).join('')}
-                                        </ul>
-                                    </td>
-                                </tr>
-                            `;
-                        }
-                    });
-                }
-            });
-
-            tableBody.innerHTML = tableRowsHTML;
-            console.log('Tabla renderizada:', groupedClients.length, 'clientes');
-        }
-
-        function toggleClientInvoices(clientKey) {
-            console.log('Toggle client:', clientKey);
-            const clientIndex = groupedClients.findIndex(c => `${c.clientName}-${c.clientPhone}` === clientKey);
-            if (clientIndex !== -1) {
-                groupedClients[clientIndex].isExpanded = !groupedClients[clientIndex].isExpanded;
-                console.log('Client expanded:', groupedClients[clientIndex].isExpanded);
-                renderTable(filteredAccounts);
-            } else {
-                console.error('Cliente no encontrado:', clientKey);
-            }
-        }
-
-        function toggleInvoiceProducts(invoiceId, clientKey) {
-            console.log('Toggle invoice:', invoiceId, 'for client:', clientKey);
-            const clientIndex = groupedClients.findIndex(c => `${c.clientName}-${c.clientPhone}` === clientKey);
-            if (clientIndex !== -1) {
-                const invoiceIndex = groupedClients[clientIndex].invoices.findIndex(i => i.id === invoiceId);
-                if (invoiceIndex !== -1) {
-                    groupedClients[clientIndex].invoices[invoiceIndex].isExpanded =
-                        !groupedClients[clientIndex].invoices[invoiceIndex].isExpanded;
-                    console.log('Invoice expanded:', groupedClients[clientIndex].invoices[invoiceIndex].isExpanded);
-                    renderTable(filteredAccounts);
-                } else {
-                    console.error('Factura no encontrada:', invoiceId);
-                }
-            } else {
-                console.error('Cliente no encontrado:', clientKey);
-            }
-        }
-
-        function payAllInvoices(clientKey) {
-            const client = groupedClients.find(c => `${c.clientName}-${c.clientPhone}` === clientKey);
-            if (client) {
-                Swal.fire({
-                    title: '¿Pagar todas las facturas?',
-                    text: `¿Está seguro de que desea pagar todas las facturas pendientes de ${client.clientName} por un total de RD$ ${client.totalPending.toLocaleString('es-DO')}?`,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#28a745',
-                    cancelButtonColor: '#6c757d',
-                    confirmButtonText: 'Sí, pagar todo',
-                    cancelButtonText: 'Cancelar'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        Swal.fire({
-                            title: 'Función en desarrollo',
-                            text: `Funcionalidad de pago total para ${client.clientName} será implementada próximamente.`,
-                            icon: 'info',
-                            confirmButtonColor: '#667eea'
-                        });
                     }
                 });
             }
-        }
+        });
 
-        // ===== FUNCIÓN PARA ELIMINAR CUENTAS PAGADAS =====
-        function eliminarCuentaPagada(id) {
-            const account = accounts.find(acc => acc.id === id);
-            if (!account) return;
-            Swal.fire({
-                title: '¿Eliminar cuenta pagada?',
-                html: `
-                    <div style="text-align: left; margin: 15px 0;">
-                        <p><strong>Cliente:</strong> ${account.clientName}</p>
-                        <p><strong>Factura:</strong> ${account.invoiceNumber}</p>
-                        <p><strong>Monto Total:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
-                        <p><strong>Estado:</strong> <span class="status-badge status-paid">Pagada</span></p>
-                    </div>
-                    <p style="color: #dc3545; font-weight: bold;">
-                        ⚠️ Esta acción eliminará permanentemente el registro de esta cuenta pagada.
-                    </p>
-                    <p style="color: #666; font-size: 0.9rem;">
-                        Nota: Los registros de pagos asociados se mantendrán en el sistema para auditoría.
-                    </p>
-                `,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, eliminar permanentemente',
-                cancelButtonText: 'Cancelar',
-                reverseButtons: true
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    Swal.fire({
-                        title: 'Eliminando cuenta...',
-                        text: 'Por favor espere',
-                        icon: 'info',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        allowEnterKey: false,
-                        showConfirmButton: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
-                    });
-                    fetch(`/eliminar-cuenta-pagada/${id}/`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': getCSRFToken(),
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            Swal.fire({
-                                title: '¡Cuenta Eliminada!',
-                                text: data.message,
-                                icon: 'success',
-                                confirmButtonColor: '#28a745'
-                            }).then(() => {
-                                window.location.reload();
-                            });
-                        } else {
-                            Swal.fire({
-                                title: 'Error al eliminar cuenta',
-                                text: data.message,
-                                icon: 'error',
-                                confirmButtonColor: '#dc3545'
-                            });
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        Swal.fire({
-                            title: 'Error de conexión',
-                            text: 'Error al eliminar la cuenta. Verifique su conexión e intente nuevamente.',
-                            icon: 'error',
-                            confirmButtonColor: '#dc3545'
-                        });
-                    });
-                }
-            });
-        }
+        tableBody.innerHTML = tableRowsHTML;
+        console.log('Tabla renderizada:', groupedClients.length, 'clientes');
+    }
 
-        function applyFilters() {
-            console.log('Aplicando filtros...');
-            const searchTerm = document.getElementById('searchClient').value.toLowerCase().trim();
-            const statusFilter = document.getElementById('statusFilter').value;
-            const dateFrom = document.getElementById('dateFrom').value;
-            const dateTo = document.getElementById('dateTo').value;
-
-            filteredAccounts = accounts.filter(account => {
-                if (account.status === 'anulada' || account.eliminada) {
-                    return false;
-                }
-                const matchesSearch = !searchTerm ||
-                    account.clientName.toLowerCase().includes(searchTerm) ||
-                    account.invoiceNumber.toLowerCase().includes(searchTerm) ||
-                    (account.products && account.products.some(p => p.nombre.toLowerCase().includes(searchTerm))) ||
-                    account.clientPhone.toLowerCase().includes(searchTerm);
-                const matchesStatus = !statusFilter || account.status === statusFilter;
-                let matchesDateFrom = true;
-                let matchesDateTo = true;
-                if (dateFrom && account.saleDate) {
-                    matchesDateFrom = new Date(account.saleDate) >= new Date(dateFrom);
-                }
-                if (dateTo && account.saleDate) {
-                    matchesDateTo = new Date(account.saleDate) <= new Date(dateTo);
-                }
-                return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo;
-            });
-
+    function toggleClientInvoices(clientKey) {
+        console.log('Toggle client:', clientKey);
+        const clientIndex = groupedClients.findIndex(c => `${c.clientName}-${c.clientPhone}` === clientKey);
+        if (clientIndex !== -1) {
+            groupedClients[clientIndex].isExpanded = !groupedClients[clientIndex].isExpanded;
+            console.log('Client expanded:', groupedClients[clientIndex].isExpanded);
             renderTable(filteredAccounts);
-            updateStats(filteredAccounts);
-            console.log('Filtros aplicados:', filteredAccounts.length, 'resultados');
+        } else {
+            console.error('Cliente no encontrado:', clientKey);
         }
+    }
 
-        function viewDetails(id) {
-            console.log('Viendo detalles de cuenta:', id);
-            const account = accounts.find(acc => acc.id === id);
-            if (!account) {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Cuenta no encontrada',
-                    icon: 'error',
-                    confirmButtonColor: '#dc3545'
-                });
-                return;
+    function toggleInvoiceProducts(invoiceId, clientKey) {
+        console.log('Toggle invoice:', invoiceId, 'for client:', clientKey);
+        const clientIndex = groupedClients.findIndex(c => `${c.clientName}-${c.clientPhone}` === clientKey);
+        if (clientIndex !== -1) {
+            const invoiceIndex = groupedClients[clientIndex].invoices.findIndex(i => i.id === invoiceId);
+            if (invoiceIndex !== -1) {
+                groupedClients[clientIndex].invoices[invoiceIndex].isExpanded =
+                    !groupedClients[clientIndex].invoices[invoiceIndex].isExpanded;
+                console.log('Invoice expanded:', groupedClients[clientIndex].invoices[invoiceIndex].isExpanded);
+                renderTable(filteredAccounts);
+            } else {
+                console.error('Factura no encontrada:', invoiceId);
             }
-
-            document.getElementById('detailId').textContent = account.id;
-            document.getElementById('detailInvoiceNumber').textContent = account.invoiceNumber;
-            document.getElementById('detailClientName').textContent = account.clientName;
-            document.getElementById('detailClientPhone').textContent = account.clientPhone;
-
-            const productListUl = document.getElementById('detailProductList');
-            productListUl.innerHTML = account.products.map(p => `
-                <li>${p.nombre} (x${p.cantidad}) - RD$ ${p.precio.toLocaleString('es-DO')}</li>
-            `).join('');
-
-            document.getElementById('detailSaleDate').textContent = formatDate(account.saleDate);
-            document.getElementById('detailDueDate').textContent = formatDate(account.dueDate);
-
-            // Monto Total Original (SIN ITBIS - subtotal)
-            document.getElementById('detailTotalAmount').textContent = `RD$ ${account.totalAmount.toLocaleString('es-DO')}`;
-
-            // Monto Pagado
-            document.getElementById('detailPaidAmount').textContent = `RD$ ${account.paidAmount.toLocaleString('es-DO')}`;
-
-            // Monto Pendiente (SIN ITBIS - subtotal)
-            const pendingBalance = account.totalAmount - account.paidAmount;
-            document.getElementById('detailPendingAmount').textContent = `RD$ ${pendingBalance.toLocaleString('es-DO')}`;
-
-            document.getElementById('detailStatus').textContent = getStatusName(account.status);
-            document.getElementById('detailStatus').className = `detail-value status-badge ${getStatusClass(account.status)}`;
-
-            document.getElementById('detailObservations').textContent = cleanObservations(account.observations);
-
-            const payButton = document.getElementById('payFromDetailsBtn');
-            payButton.setAttribute('data-account-id', account.id);
-            payButton.style.display = pendingBalance <= 0 || account.status === 'anulada' ? 'none' : 'inline-flex';
-
-            const modalBody = document.querySelector('#detailsModal .modal-body');
-            const existingProgress = modalBody.querySelector('.payment-progress');
-            if (existingProgress) {
-                existingProgress.remove();
-            }
-
-            const progressPercentage = (account.paidAmount / account.totalAmount) * 100;
-            const progressBar = document.createElement('div');
-            progressBar.className = 'payment-progress';
-            progressBar.style.cssText = 'margin: 20px 0; padding: 0;';
-            progressBar.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                    <span style="font-weight: 600; color: #333;">Progreso de Pago</span>
-                    <span style="font-weight: 600; color: #28a745;">${progressPercentage.toFixed(1)}%</span>
-                </div>
-                <div style="background: #e9ecef; border-radius: 10px; height: 20px; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #28a745 0%, #20c997 100%); height: 100%; width: ${progressPercentage}%; transition: width 0.3s ease;"></div>
-                </div>
-            `;
-
-            const lastDetailItem = modalBody.querySelector('.detail-item:last-child');
-            lastDetailItem.insertAdjacentElement('afterend', progressBar);
-
-            document.getElementById('detailsModal').classList.add('active');
-            document.body.style.overflow = 'hidden';
+        } else {
+            console.error('Cliente no encontrado:', clientKey);
         }
+    }
 
-        function closeDetailsModal() {
-            document.getElementById('detailsModal').classList.remove('active');
-            document.body.style.overflow = 'auto';
-        }
-
-        function openPaymentModal(id) {
-            console.log('Abriendo modal de pago para cuenta:', id);
-            const account = accounts.find(acc => acc.id === id);
-            if (!account) return;
-
-            if (account.status === 'anulada') {
-                Swal.fire({
-                    title: 'Cuenta Anulada',
-                    text: 'No se puede realizar pagos en una cuenta anulada',
-                    icon: 'error',
-                    confirmButtonColor: '#dc3545'
-                });
-                return;
-            }
-
-            // Calcular el saldo pendiente (SIN ITBIS)
-            const currentPendingBalance = account.totalAmount - account.paidAmount;
-
-            if (currentPendingBalance <= 0) {
-                Swal.fire({
-                    title: 'Cuenta Pagada',
-                    text: 'Esta cuenta ya está completamente pagada',
-                    icon: 'info',
-                    confirmButtonColor: '#28a745'
-                });
-                return;
-            }
-
-            document.getElementById('paymentModalPendingAmount').textContent = `RD$ ${currentPendingBalance.toLocaleString('es-DO')}`;
-            document.getElementById('paymentAccountId').value = id;
-
-            // Prellenar con el saldo pendiente completo
-            document.getElementById('paymentAmountInput').value = currentPendingBalance.toFixed(2);
-            document.getElementById('paymentAmountInput').max = currentPendingBalance.toFixed(2);
-            document.getElementById('paymentAmountError').style.display = 'none';
-
-            const modalBody = document.querySelector('#paymentModal .modal-body');
-            const existingInfo = modalBody.querySelector('.account-info');
-            if (existingInfo) {
-                existingInfo.remove();
-            }
-
-            const accountInfo = document.createElement('div');
-            accountInfo.className = 'account-info';
-            accountInfo.style.cssText = 'background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #007bff;';
-            accountInfo.innerHTML = `
-                <h5 style="margin: 0 0 10px 0; color: #333;">Información de la Cuenta</h5>
-                <p style="margin: 5px 0;"><strong>Cliente:</strong> ${account.clientName}</p>
-                <p style="margin: 5px 0;"><strong>Factura:</strong> ${account.invoiceNumber}</p>
-                <p style="margin: 5px 0;"><strong>Monto Total Original:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
-                <p style="margin: 5px 0;"><strong>Monto Ya Pagado:</strong> RD$ ${account.paidAmount.toLocaleString('es-DO')}</p>
-                <p style="margin: 0;"><strong>Saldo Pendiente:</strong> RD$ ${currentPendingBalance.toLocaleString('es-DO')}</p>
-            `;
-
-            const paymentInfo = modalBody.querySelector('.payment-info');
-            modalBody.insertBefore(accountInfo, paymentInfo);
-
-            document.getElementById('paymentModal').classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function openPaymentModalFromDetails() {
-            const accountId = document.getElementById('payFromDetailsBtn').getAttribute('data-account-id');
-            openPaymentModal(parseInt(accountId));
-            closeDetailsModal();
-        }
-
-        function closePaymentModal() {
-            document.getElementById('paymentModal').classList.remove('active');
-            document.body.style.overflow = 'auto';
-            document.getElementById('paymentForm').reset();
-        }
-
-        function submitPayment() {
-            const accountId = document.getElementById('paymentAccountId').value;
-            const amount = parseFloat(document.getElementById('paymentAmountInput').value);
-            const method = document.getElementById('paymentMethod').value;
-            const reference = document.getElementById('paymentReference').value;
-            const observations = document.getElementById('paymentObservations').value;
-
-            if (!amount || amount <= 0) {
-                document.getElementById('paymentAmountError').textContent = 'Ingrese un monto válido mayor a 0.';
-                document.getElementById('paymentAmountError').style.display = 'block';
-                return;
-            }
-
-            if (!method) {
-                Swal.fire({
-                    title: 'Campo requerido',
-                    text: 'Seleccione un método de pago',
-                    icon: 'warning',
-                    confirmButtonColor: '#ffc107'
-                });
-                return;
-            }
-
-            const currentAccount = accounts.find(acc => acc.id == accountId);
-            if (!currentAccount) {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Cuenta no encontrada',
-                    icon: 'error',
-                    confirmButtonColor: '#dc3545'
-                });
-                return;
-            }
-
-            const currentPendingBalance = currentAccount.totalAmount - currentAccount.paidAmount;
-            if (amount > currentPendingBalance) {
-                document.getElementById('paymentAmountError').textContent = `El monto excede el saldo pendiente de RD$ ${currentPendingBalance.toLocaleString('es-DO')}`;
-                document.getElementById('paymentAmountError').style.display = 'block';
-                return;
-            }
-
+    function payAllInvoices(clientKey) {
+        const client = groupedClients.find(c => `${c.clientName}-${c.clientPhone}` === clientKey);
+        if (client) {
             Swal.fire({
-                title: 'Confirmar Pago',
-                html: `
-                    <div style="text-align: left; margin: 10px 0;">
-                        <p><strong>Cliente:</strong> ${currentAccount.clientName}</p>
-                        <p><strong>Factura:</strong> ${currentAccount.invoiceNumber}</p>
-                        <p><strong>Monto a Pagar:</strong> RD$ ${amount.toLocaleString('es-DO')}</p>
-                        <p><strong>Método de Pago:</strong> ${method}</p>
-                        ${reference ? `<p><strong>Referencia:</strong> ${reference}</p>` : ''}
-                        <p><strong>Saldo pendiente después del pago:</strong> RD$ ${(currentPendingBalance - amount).toLocaleString('es-DO')}</p>
-                    </div>
-                    <p>¿Desea confirmar este pago?</p>
-                `,
+                title: '¿Pagar todas las facturas?',
+                text: `¿Está seguro de que desea pagar todas las facturas pendientes de ${client.clientName} por un total de RD$ ${client.totalPending.toLocaleString('es-DO')}?`,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#28a745',
                 cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, registrar pago',
+                confirmButtonText: 'Sí, pagar todo',
                 cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) {
                     Swal.fire({
-                        title: 'Procesando pago...',
-                        text: 'Por favor espere',
+                        title: 'Función en desarrollo',
+                        text: `Funcionalidad de pago total para ${client.clientName} será implementada próximamente.`,
                         icon: 'info',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        allowEnterKey: false,
-                        showConfirmButton: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
+                        confirmButtonColor: '#667eea'
                     });
+                }
+            });
+        }
+    }
 
-                    fetch('registrar-pago/', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': getCSRFToken(),
-                        },
-                        body: JSON.stringify({
-                            cuenta_id: accountId,
-                            monto: amount,
-                            metodo_pago: method,
-                            referencia: reference,
-                            observaciones: observations
-                        })
+    // ===== FUNCIÓN PARA ELIMINAR CUENTAS PAGADAS =====
+    function eliminarCuentaPagada(id) {
+        const account = accounts.find(acc => acc.id === id);
+        if (!account) return;
+        Swal.fire({
+            title: '¿Eliminar cuenta pagada?',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Cliente:</strong> ${account.clientName}</p>
+                    <p><strong>Factura:</strong> ${account.invoiceNumber}</p>
+                    <p><strong>Monto Total:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
+                    <p><strong>Estado:</strong> <span class="status-badge status-paid">Pagada</span></p>
+                </div>
+                <p style="color: #dc3545; font-weight: bold;">
+                    ⚠️ Esta acción eliminará permanentemente el registro de esta cuenta pagada.
+                </p>
+                <p style="color: #666; font-size: 0.9rem;">
+                    Nota: Los registros de pagos asociados se mantendrán en el sistema para auditoría.
+                </p>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar permanentemente',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Eliminando cuenta...',
+                    text: 'Por favor espere',
+                    icon: 'info',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    allowEnterKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                fetch(`/eliminar-cuenta-pagada/${id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: '¡Cuenta Eliminada!',
+                            text: data.message,
+                            icon: 'success',
+                            confirmButtonColor: '#28a745'
+                        }).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            title: 'Error al eliminar cuenta',
+                            text: data.message,
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        title: 'Error de conexión',
+                        text: 'Error al eliminar la cuenta. Verifique su conexión e intente nuevamente.',
+                        icon: 'error',
+                        confirmButtonColor: '#dc3545'
+                    });
+                });
+            }
+        });
+    }
+
+    function applyFilters() {
+        console.log('Aplicando filtros...');
+        const searchTerm = document.getElementById('searchClient').value.toLowerCase().trim();
+        const statusFilter = document.getElementById('statusFilter').value;
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+
+        filteredAccounts = accounts.filter(account => {
+            if (account.status === 'anulada' || account.eliminada) {
+                return false;
+            }
+            const matchesSearch = !searchTerm ||
+                account.clientName.toLowerCase().includes(searchTerm) ||
+                account.invoiceNumber.toLowerCase().includes(searchTerm) ||
+                (account.products && account.products.some(p => p.nombre.toLowerCase().includes(searchTerm))) ||
+                account.clientPhone.toLowerCase().includes(searchTerm);
+            const matchesStatus = !statusFilter || account.status === statusFilter;
+            let matchesDateFrom = true;
+            let matchesDateTo = true;
+            if (dateFrom && account.saleDate) {
+                matchesDateFrom = new Date(account.saleDate) >= new Date(dateFrom);
+            }
+            if (dateTo && account.saleDate) {
+                matchesDateTo = new Date(account.saleDate) <= new Date(dateTo);
+            }
+            return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo;
+        });
+
+        renderTable(filteredAccounts);
+        updateStats(filteredAccounts);
+        console.log('Filtros aplicados:', filteredAccounts.length, 'resultados');
+    }
+
+    function viewDetails(id) {
+        console.log('Viendo detalles de cuenta:', id);
+        const account = accounts.find(acc => acc.id === id);
+        if (!account) {
+            Swal.fire({
+                title: 'Error',
+                text: 'Cuenta no encontrada',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+
+        document.getElementById('detailId').textContent = account.id;
+        document.getElementById('detailInvoiceNumber').textContent = account.invoiceNumber;
+        document.getElementById('detailClientName').textContent = account.clientName;
+        document.getElementById('detailClientPhone').textContent = account.clientPhone;
+
+        const productListUl = document.getElementById('detailProductList');
+        productListUl.innerHTML = account.products.map(p => `
+            <li>${p.nombre} (x${p.cantidad}) - RD$ ${p.precio.toLocaleString('es-DO')}</li>
+        `).join('');
+
+        document.getElementById('detailSaleDate').textContent = formatDate(account.saleDate);
+        document.getElementById('detailDueDate').textContent = formatDate(account.dueDate);
+
+        // Monto Total Original (SIN ITBIS)
+        document.getElementById('detailTotalAmount').textContent = `RD$ ${account.totalAmount.toLocaleString('es-DO')}`;
+
+        // Monto Pagado
+        document.getElementById('detailPaidAmount').textContent = `RD$ ${account.paidAmount.toLocaleString('es-DO')}`;
+
+        // Monto Pendiente
+        document.getElementById('detailPendingAmount').textContent = `RD$ ${account.pendingBalance.toLocaleString('es-DO')}`;
+
+        document.getElementById('detailStatus').textContent = getStatusName(account.status);
+        document.getElementById('detailStatus').className = `detail-value status-badge ${getStatusClass(account.status)}`;
+
+        document.getElementById('detailObservations').textContent = cleanObservations(account.observations);
+
+        const payButton = document.getElementById('payFromDetailsBtn');
+        payButton.setAttribute('data-account-id', account.id);
+        payButton.style.display = account.pendingBalance <= 0 || account.status === 'anulada' ? 'none' : 'inline-flex';
+
+        const modalBody = document.querySelector('#detailsModal .modal-body');
+        const existingProgress = modalBody.querySelector('.payment-progress');
+        if (existingProgress) {
+            existingProgress.remove();
+        }
+
+        const progressPercentage = (account.paidAmount / account.totalAmount) * 100;
+        const progressBar = document.createElement('div');
+        progressBar.className = 'payment-progress';
+        progressBar.style.cssText = 'margin: 20px 0; padding: 0;';
+        progressBar.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="font-weight: 600; color: #333;">Progreso de Pago</span>
+                <span style="font-weight: 600; color: #28a745;">${progressPercentage.toFixed(1)}%</span>
+            </div>
+            <div style="background: #e9ecef; border-radius: 10px; height: 20px; overflow: hidden;">
+                <div style="background: linear-gradient(90deg, #28a745 0%, #20c997 100%); height: 100%; width: ${progressPercentage}%; transition: width 0.3s ease;"></div>
+            </div>
+        `;
+
+        const lastDetailItem = modalBody.querySelector('.detail-item:last-child');
+        lastDetailItem.insertAdjacentElement('afterend', progressBar);
+
+        document.getElementById('detailsModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeDetailsModal() {
+        document.getElementById('detailsModal').classList.remove('active');
+        document.body.style.overflow = 'auto';
+    }
+
+    function openPaymentModal(id) {
+        console.log('Abriendo modal de pago para cuenta:', id);
+        const account = accounts.find(acc => acc.id === id);
+        if (!account) return;
+
+        if (account.status === 'anulada') {
+            Swal.fire({
+                title: 'Cuenta Anulada',
+                text: 'No se puede realizar pagos en una cuenta anulada',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+
+        const currentPendingBalance = account.pendingBalance;
+
+        if (currentPendingBalance <= 0) {
+            Swal.fire({
+                title: 'Cuenta Pagada',
+                text: 'Esta cuenta ya está completamente pagada',
+                icon: 'info',
+                confirmButtonColor: '#28a745'
+            });
+            return;
+        }
+
+        document.getElementById('paymentModalPendingAmount').textContent = `RD$ ${currentPendingBalance.toLocaleString('es-DO')}`;
+        document.getElementById('paymentAccountId').value = id;
+
+        // Prellenar con el saldo pendiente completo
+        document.getElementById('paymentAmountInput').value = currentPendingBalance.toFixed(2);
+        document.getElementById('paymentAmountInput').max = currentPendingBalance.toFixed(2);
+        document.getElementById('paymentAmountError').style.display = 'none';
+
+        const modalBody = document.querySelector('#paymentModal .modal-body');
+        const existingInfo = modalBody.querySelector('.account-info');
+        if (existingInfo) {
+            existingInfo.remove();
+        }
+
+        const accountInfo = document.createElement('div');
+        accountInfo.className = 'account-info';
+        accountInfo.style.cssText = 'background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #007bff;';
+        accountInfo.innerHTML = `
+            <h5 style="margin: 0 0 10px 0; color: #333;">Información de la Cuenta</h5>
+            <p style="margin: 5px 0;"><strong>Cliente:</strong> ${account.clientName}</p>
+            <p style="margin: 5px 0;"><strong>Factura:</strong> ${account.invoiceNumber}</p>
+            <p style="margin: 5px 0;"><strong>Monto Total Original:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
+            <p style="margin: 5px 0;"><strong>Monto Ya Pagado:</strong> RD$ ${account.paidAmount.toLocaleString('es-DO')}</p>
+            <p style="margin: 0;"><strong>Saldo Pendiente:</strong> RD$ ${currentPendingBalance.toLocaleString('es-DO')}</p>
+        `;
+
+        const paymentInfo = modalBody.querySelector('.payment-info');
+        modalBody.insertBefore(accountInfo, paymentInfo);
+
+        document.getElementById('paymentModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function openPaymentModalFromDetails() {
+        const accountId = document.getElementById('payFromDetailsBtn').getAttribute('data-account-id');
+        openPaymentModal(parseInt(accountId));
+        closeDetailsModal();
+    }
+
+    function closePaymentModal() {
+        document.getElementById('paymentModal').classList.remove('active');
+        document.body.style.overflow = 'auto';
+        document.getElementById('paymentForm').reset();
+    }
+
+    function submitPayment() {
+        const accountId = document.getElementById('paymentAccountId').value;
+        const amount = parseFloat(document.getElementById('paymentAmountInput').value);
+        const method = document.getElementById('paymentMethod').value;
+        const reference = document.getElementById('paymentReference').value;
+        const observations = document.getElementById('paymentObservations').value;
+
+        if (!amount || amount <= 0) {
+            document.getElementById('paymentAmountError').textContent = 'Ingrese un monto válido mayor a 0.';
+            document.getElementById('paymentAmountError').style.display = 'block';
+            return;
+        }
+
+        if (!method) {
+            Swal.fire({
+                title: 'Campo requerido',
+                text: 'Seleccione un método de pago',
+                icon: 'warning',
+                confirmButtonColor: '#ffc107'
+            });
+            return;
+        }
+
+        const currentAccount = accounts.find(acc => acc.id == accountId);
+        if (!currentAccount) {
+            Swal.fire({
+                title: 'Error',
+                text: 'Cuenta no encontrada',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+
+        const currentPendingBalance = currentAccount.pendingBalance;
+        if (amount > currentPendingBalance) {
+            document.getElementById('paymentAmountError').textContent = `El monto excede el saldo pendiente de RD$ ${currentPendingBalance.toLocaleString('es-DO')}`;
+            document.getElementById('paymentAmountError').style.display = 'block';
+            return;
+        }
+
+        Swal.fire({
+            title: 'Confirmar Pago',
+            html: `
+                <div style="text-align: left; margin: 10px 0;">
+                    <p><strong>Cliente:</strong> ${currentAccount.clientName}</p>
+                    <p><strong>Factura:</strong> ${currentAccount.invoiceNumber}</p>
+                    <p><strong>Monto a Pagar:</strong> RD$ ${amount.toLocaleString('es-DO')}</p>
+                    <p><strong>Método de Pago:</strong> ${method}</p>
+                    ${reference ? `<p><strong>Referencia:</strong> ${reference}</p>` : ''}
+                    <p><strong>Saldo pendiente después del pago:</strong> RD$ ${(currentPendingBalance - amount).toLocaleString('es-DO')}</p>
+                </div>
+                <p>¿Desea confirmar este pago?</p>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, registrar pago',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Procesando pago...',
+                    text: 'Por favor espere',
+                    icon: 'info',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    allowEnterKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                fetch('registrar-pago/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    },
+                    body: JSON.stringify({
+                        cuenta_id: accountId,
+                        monto: amount,
+                        metodo_pago: method,
+                        referencia: reference,
+                        observaciones: observations
                     })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            const comprobanteMensaje = data.comprobante_numero ? 
-                                `\nComprobante generado: ${data.comprobante_numero}` : '';
-                            const saldoMensaje = data.nuevo_saldo_pendiente !== undefined ? 
-                                `\nNuevo saldo pendiente: RD$ ${data.nuevo_saldo_pendiente.toLocaleString('es-DO')}` : '';
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const comprobanteMensaje = data.comprobante_numero ? 
+                            `\nComprobante generado: ${data.comprobante_numero}` : '';
+                        const saldoMensaje = data.nuevo_saldo_pendiente !== undefined ? 
+                            `\nNuevo saldo pendiente: RD$ ${data.nuevo_saldo_pendiente.toLocaleString('es-DO')}` : '';
 
-                            if (data.comprobante_id) {
-                                Swal.fire({
-                                    title: '¡Pago Registrado!',
-                                    html: `
-                                        <div style="text-align: left; margin: 15px 0;">
-                                            <p>${data.message}</p>
-                                            ${data.comprobante_numero ? `<p><strong>Comprobante:</strong> ${data.comprobante_numero}</p>` : ''}
-                                            ${data.nuevo_saldo_pendiente !== undefined ? `<p><strong>Nuevo saldo pendiente:</strong> RD$ ${data.nuevo_saldo_pendiente.toLocaleString('es-DO')}</p>` : ''}
-                                        </div>
-                                        <p>¿Desea ver el comprobante?</p>
-                                    `,
-                                    icon: 'success',
-                                    showCancelButton: true,
-                                    confirmButtonColor: '#28a745',
-                                    cancelButtonColor: '#6c757d',
-                                    confirmButtonText: 'Ver comprobante',
-                                    cancelButtonText: 'Cerrar'
-                                }).then((result) => {
-                                    if (result.isConfirmed) {
-                                        window.open(`/generar-comprobante-pdf/${data.comprobante_id}/`, '_blank');
-                                    }
-                                    updateLocalAccountData(accountId, amount, data);
-                                    closePaymentModal();
+                        if (data.comprobante_id) {
+                            Swal.fire({
+                                title: '¡Pago Registrado!',
+                                html: `
+                                    <div style="text-align: left; margin: 15px 0;">
+                                        <p>${data.message}</p>
+                                        ${data.comprobante_numero ? `<p><strong>Comprobante:</strong> ${data.comprobante_numero}</p>` : ''}
+                                        ${data.nuevo_saldo_pendiente !== undefined ? `<p><strong>Nuevo saldo pendiente:</strong> RD$ ${data.nuevo_saldo_pendiente.toLocaleString('es-DO')}</p>` : ''}
+                                    </div>
+                                    <p>¿Desea ver el comprobante?</p>
+                                `,
+                                icon: 'success',
+                                showCancelButton: true,
+                                confirmButtonColor: '#28a745',
+                                cancelButtonColor: '#6c757d',
+                                confirmButtonText: 'Ver comprobante',
+                                cancelButtonText: 'Cerrar'
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    window.open(`/generar-comprobante-pdf/${data.comprobante_id}/`, '_blank');
+                                }
+                                // Forzar recarga completa para reflejar cambios de devoluciones
+                                setTimeout(() => {
                                     window.location.reload();
-                                });
-                            } else {
-                                Swal.fire({
-                                    title: '¡Pago Registrado!',
-                                    html: `
-                                        <div style="text-align: left; margin: 15px 0;">
-                                            <p>${data.message}</p>
-                                            ${comprobanteMensaje ? `<p>${comprobanteMensaje}</p>` : ''}
-                                            ${saldoMensaje ? `<p>${saldoMensaje}</p>` : ''}
-                                        </div>
-                                    `,
-                                    icon: 'success',
-                                    confirmButtonColor: '#28a745'
-                                }).then(() => {
-                                    updateLocalAccountData(accountId, amount, data);
-                                    closePaymentModal();
-                                    window.location.reload();
-                                });
-                            }
+                                }, 500);
+                            });
                         } else {
                             Swal.fire({
-                                title: 'Error al registrar pago',
+                                title: '¡Pago Registrado!',
+                                html: `
+                                    <div style="text-align: left; margin: 15px 0;">
+                                        <p>${data.message}</p>
+                                        ${comprobanteMensaje ? `<p>${comprobanteMensaje}</p>` : ''}
+                                        ${saldoMensaje ? `<p>${saldoMensaje}</p>` : ''}
+                                    </div>
+                                `,
+                                icon: 'success',
+                                confirmButtonColor: '#28a745'
+                            }).then(() => {
+                                // Forzar recarga completa para reflejar cambios de devoluciones
+                                window.location.reload();
+                            });
+                        }
+                    } else {
+                        Swal.fire({
+                            title: 'Error al registrar pago',
+                            text: data.message,
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        title: 'Error de conexión',
+                        text: 'Error al registrar el pago. Verifique su conexión e intente nuevamente.',
+                        icon: 'error',
+                        confirmButtonColor: '#dc3545'
+                    });
+                });
+            }
+        });
+    }
+
+    function updateLocalAccountData(accountId, paymentAmount, serverResponse) {
+        const accountIndex = accounts.findIndex(acc => acc.id == accountId);
+        if (accountIndex !== -1) {
+            accounts[accountIndex].paidAmount += paymentAmount;
+            accounts[accountIndex].pendingBalance = accounts[accountIndex].totalAmount - accounts[accountIndex].paidAmount;
+            
+            if (serverResponse.estado_actual) {
+                accounts[accountIndex].status = serverResponse.estado_actual;
+            } else {
+                if (accounts[accountIndex].pendingBalance <= 0) {
+                    accounts[accountIndex].status = 'pagada';
+                } else if (accounts[accountIndex].paidAmount > 0) {
+                    accounts[accountIndex].status = 'parcial';
+                } else {
+                    accounts[accountIndex].status = 'pendiente';
+                }
+            }
+            
+            if (serverResponse.nuevo_saldo_pendiente !== undefined) {
+                accounts[accountIndex].pendingBalance = serverResponse.nuevo_saldo_pendiente;
+            }
+            
+            if (serverResponse.monto_pagado_total !== undefined) {
+                accounts[accountIndex].paidAmount = serverResponse.monto_pagado_total;
+                accounts[accountIndex].pendingBalance = accounts[accountIndex].totalAmount - accounts[accountIndex].paidAmount;
+            }
+        }
+        
+        const filteredIndex = filteredAccounts.findIndex(acc => acc.id == accountId);
+        if (filteredIndex !== -1) {
+            filteredAccounts[filteredIndex] = {...accounts[accountIndex]};
+        }
+        
+        updateStats();
+        renderTable(filteredAccounts);
+    }
+
+    function anularCuenta(id) {
+        const account = accounts.find(acc => acc.id === id);
+        if (!account) return;
+        
+        // Verificar si ya está anulada
+        if (account.status === 'anulada') {
+            Swal.fire({
+                title: 'Cuenta ya anulada',
+                text: 'Esta cuenta ya se encuentra anulada',
+                icon: 'info',
+                confirmButtonColor: '#667eea'
+            });
+            return;
+        }
+        
+        // Verificar si tiene pagos
+        if (account.paidAmount > 0) {
+            Swal.fire({
+                title: 'Cuenta con pagos',
+                html: `
+                    <div style="text-align: left; margin: 15px 0;">
+                        <p>Esta cuenta tiene pagos registrados por <strong>RD$ ${account.paidAmount.toLocaleString('es-DO')}</strong></p>
+                        <p style="color: #dc3545; margin-top: 10px;">No se puede anular una cuenta con pagos parciales.</p>
+                    </div>
+                `,
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+        
+        Swal.fire({
+            title: '¿Anular cuenta?',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p><strong>Cliente:</strong> ${account.clientName}</p>
+                    <p><strong>Factura:</strong> ${account.invoiceNumber}</p>
+                    <p><strong>Monto Total:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
+                    <p><strong>Estado Actual:</strong> <span class="status-badge ${getStatusClass(account.status)}">${getStatusName(account.status)}</span></p>
+                </div>
+                <p style="color: #dc3545; font-weight: bold; margin-top: 15px;">
+                    ⚠️ Esta acción marcará la cuenta como anulada y no se podrá deshacer.
+                </p>
+                <p style="color: #666; font-size: 0.9rem;">
+                    Solo el superusuario puede realizar esta acción.
+                </p>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, anular cuenta',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Anulando cuenta...',
+                    text: 'Por favor espere',
+                    icon: 'info',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    allowEnterKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                fetch(`/anular-cuenta/${id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error en la respuesta del servidor');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: '¡Cuenta Anulada!',
+                            text: data.message,
+                            icon: 'success',
+                            confirmButtonColor: '#28a745'
+                        }).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        // Mostrar mensaje de error específico para permisos
+                        if (data.message.includes('No tiene permisos') || data.message.includes('superusuario')) {
+                            Swal.fire({
+                                title: 'Permiso denegado',
+                                html: `
+                                    <div style="text-align: left; margin: 15px 0;">
+                                        <p style="color: #dc3545; font-weight: bold;">${data.message}</p>
+                                        <p style="color: #666; margin-top: 10px;">
+                                            Esta acción requiere permisos de superusuario. 
+                                            Contacte al administrador del sistema.
+                                        </p>
+                                    </div>
+                                `,
+                                icon: 'error',
+                                confirmButtonColor: '#dc3545'
+                            });
+                        } else {
+                            Swal.fire({
+                                title: 'No se pudo anular',
                                 text: data.message,
                                 icon: 'error',
                                 confirmButtonColor: '#dc3545'
                             });
                         }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        Swal.fire({
-                            title: 'Error de conexión',
-                            text: 'Error al registrar el pago. Verifique su conexión e intente nuevamente.',
-                            icon: 'error',
-                            confirmButtonColor: '#dc3545'
-                        });
-                    });
-                }
-            });
-        }
-
-        function updateLocalAccountData(accountId, paymentAmount, serverResponse) {
-            const accountIndex = accounts.findIndex(acc => acc.id == accountId);
-            if (accountIndex !== -1) {
-                accounts[accountIndex].paidAmount += paymentAmount;
-                if (serverResponse.estado_actual) {
-                    accounts[accountIndex].status = serverResponse.estado_actual;
-                } else {
-                    const newPendingBalance = accounts[accountIndex].totalAmount - accounts[accountIndex].paidAmount;
-                    if (newPendingBalance <= 0) {
-                        accounts[accountIndex].status = 'pagada';
-                    } else {
-                        accounts[accountIndex].status = 'parcial';
                     }
-                }
-                if (serverResponse.nuevo_saldo_pendiente !== undefined) {
-                    accounts[accountIndex].paidAmount = accounts[accountIndex].totalAmount - serverResponse.nuevo_saldo_pendiente;
-                }
-                if (serverResponse.monto_pagado_total !== undefined) {
-                    accounts[accountIndex].paidAmount = serverResponse.monto_pagado_total;
-                }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        title: 'Error de conexión',
+                        text: 'Error al anular la cuenta. Verifique su conexión e intente nuevamente.',
+                        icon: 'error',
+                        confirmButtonColor: '#dc3545'
+                    });
+                });
             }
-            const filteredIndex = filteredAccounts.findIndex(acc => acc.id == accountId);
+        });
+    }
+
+    function exportData() {
+        console.log('Exportando datos...');
+        const validAccounts = accounts.filter(account => account.status !== 'anulada' && !account.eliminada);
+        if (validAccounts.length === 0) {
+            Swal.fire({
+                title: 'Sin datos',
+                text: 'No hay datos para exportar',
+                icon: 'warning',
+                confirmButtonColor: '#ffc107'
+            });
+            return;
+        }
+        let csvContent = "data:text/csv;charset=utf-8,";
+        const headers = ["Cliente", "Teléfono", "Factura", "Productos", "Fecha Venta", "Vencimiento", "Monto Total", "Monto Pagado", "Monto Pendiente", "Estado", "Observaciones"];
+        csvContent += headers.join(";") + "\n";
+        validAccounts.forEach(account => {
+            const pendingBalance = account.pendingBalance;
+            const productos = account.products.map(p => `${p.nombre} (x${p.cantidad}) - RD$ ${p.precio.toLocaleString('es-DO')}`).join(" | ");
+            let row = [
+                account.clientName,
+                account.clientPhone,
+                account.invoiceNumber,
+                productos,
+                formatDate(account.saleDate),
+                formatDate(account.dueDate),
+                account.totalAmount.toLocaleString('es-DO'),
+                account.paidAmount.toLocaleString('es-DO'),
+                pendingBalance.toLocaleString('es-DO'),
+                getStatusName(account.status),
+                cleanObservations(account.observations).replace(/(\r\n|\n|\r)/gm, " ").replace(/;/g, ",")
+            ];
+            csvContent += row.join(";") + "\n";
+        });
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "cuentas_por_cobrar.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        Swal.fire({
+            title: '¡Exportación exitosa!',
+            text: 'Datos exportados a cuentas_por_cobrar.csv',
+            icon: 'success',
+            confirmButtonColor: '#28a745',
+            timer: 2000
+        });
+    }
+
+    // ===== FUNCIÓN PARA IMPRIMIR REPORTE DE DEUDAS =====
+    function imprimirReporteDeudas() {
+        console.log('Generando reporte de deudas...');
+        
+        // Obtener valores actuales de los filtros
+        const searchTerm = document.getElementById('searchClient').value;
+        const statusFilter = document.getElementById('statusFilter').value;
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+        
+        // Construir URL con parámetros de filtro
+        let url = '/generar-reporte-deudas-pdf/';
+        const params = [];
+        
+        if (searchTerm) params.push(`search=${encodeURIComponent(searchTerm)}`);
+        if (statusFilter) params.push(`status=${statusFilter}`);
+        if (dateFrom) params.push(`date_from=${dateFrom}`);
+        if (dateTo) params.push(`date_to=${dateTo}`);
+        
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+        
+        // Mostrar mensaje de confirmación
+        Swal.fire({
+            title: '¿Generar reporte de deudas?',
+            html: `
+                <div style="text-align: left; margin: 15px 0;">
+                    <p>Se generará un reporte en formato PDF con los siguientes filtros:</p>
+                    <ul style="margin-left: 20px;">
+                        ${searchTerm ? `<li><strong>Búsqueda:</strong> ${searchTerm}</li>` : ''}
+                        ${statusFilter ? `<li><strong>Estado:</strong> ${statusFilter}</li>` : ''}
+                        ${dateFrom ? `<li><strong>Desde:</strong> ${dateFrom}</li>` : ''}
+                        ${dateTo ? `<li><strong>Hasta:</strong> ${dateTo}</li>` : ''}
+                        ${!searchTerm && !statusFilter && !dateFrom && !dateTo ? `<li>Todos los registros</li>` : ''}
+                    </ul>
+                    <p style="color: #28a745; margin-top: 10px;">
+                        <i class='bx bx-info-circle'></i> El reporte se descargará automáticamente.
+                    </p>
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#17a2b8',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, generar reporte',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Mostrar mensaje de procesamiento
+                Swal.fire({
+                    title: 'Generando reporte...',
+                    text: 'Por favor espere mientras se genera el PDF.',
+                    icon: 'info',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    allowEnterKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                // Crear un enlace temporal y hacer clic en él
+                const link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Cerrar el loading después de un momento
+                setTimeout(() => {
+                    Swal.close();
+                    Swal.fire({
+                        title: '¡Reporte generado!',
+                        text: 'El reporte se ha generado correctamente y se ha iniciado la descarga.',
+                        icon: 'success',
+                        confirmButtonColor: '#28a745',
+                        timer: 3000,
+                        timerProgressBar: true
+                    });
+                }, 1500);
+            }
+        });
+    }
+
+    // ===== FUNCIÓN PARA ACTUALIZAR CUENTA DESPUÉS DE DEVOLUCIÓN =====
+    function actualizarCuentaDespuesDevolucion(cuentaId, nuevosDatos) {
+        const accountIndex = accounts.findIndex(acc => acc.id == cuentaId);
+        if (accountIndex !== -1) {
+            // Actualizar todos los campos de la cuenta
+            accounts[accountIndex].totalAmount = nuevosDatos.nuevo_total_venta || accounts[accountIndex].totalAmount;
+            accounts[accountIndex].pendingBalance = nuevosDatos.nuevo_saldo_pendiente || 
+                (accounts[accountIndex].totalAmount - accounts[accountIndex].paidAmount);
+            accounts[accountIndex].status = nuevosDatos.nuevo_estado || accounts[accountIndex].status;
+            
+            // Actualizar también en filteredAccounts
+            const filteredIndex = filteredAccounts.findIndex(acc => acc.id == cuentaId);
             if (filteredIndex !== -1) {
                 filteredAccounts[filteredIndex] = {...accounts[accountIndex]};
             }
+            
+            // Re-renderizar la tabla y estadísticas
             updateStats();
+            renderTable(filteredAccounts);
+            
+            console.log('Cuenta actualizada después de devolución:', cuentaId);
         }
+    }
 
-        function anularCuenta(id) {
-            const account = accounts.find(acc => acc.id === id);
-            if (!account) return;
-            
-            // Verificar si ya está anulada
-            if (account.status === 'anulada') {
-                Swal.fire({
-                    title: 'Cuenta ya anulada',
-                    text: 'Esta cuenta ya se encuentra anulada',
-                    icon: 'info',
-                    confirmButtonColor: '#667eea'
-                });
-                return;
-            }
-            
-            // Verificar si tiene pagos
-            if (account.paidAmount > 0) {
-                Swal.fire({
-                    title: 'Cuenta con pagos',
-                    html: `
-                        <div style="text-align: left; margin: 15px 0;">
-                            <p>Esta cuenta tiene pagos registrados por <strong>RD$ ${account.paidAmount.toLocaleString('es-DO')}</strong></p>
-                            <p style="color: #dc3545; margin-top: 10px;">No se puede anular una cuenta con pagos parciales.</p>
-                        </div>
-                    `,
-                    icon: 'error',
-                    confirmButtonColor: '#dc3545'
-                });
-                return;
-            }
-            
-            Swal.fire({
-                title: '¿Anular cuenta?',
-                html: `
-                    <div style="text-align: left; margin: 15px 0;">
-                        <p><strong>Cliente:</strong> ${account.clientName}</p>
-                        <p><strong>Factura:</strong> ${account.invoiceNumber}</p>
-                        <p><strong>Monto Total:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
-                        <p><strong>Estado Actual:</strong> <span class="status-badge ${getStatusClass(account.status)}">${getStatusName(account.status)}</span></p>
-                    </div>
-                    <p style="color: #dc3545; font-weight: bold; margin-top: 15px;">
-                        ⚠️ Esta acción marcará la cuenta como anulada y no se podrá deshacer.
-                    </p>
-                    <p style="color: #666; font-size: 0.9rem;">
-                        Solo el superusuario puede realizar esta acción.
-                    </p>
-                `,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc3545',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, anular cuenta',
-                cancelButtonText: 'Cancelar',
-                reverseButtons: true
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    Swal.fire({
-                        title: 'Anulando cuenta...',
-                        text: 'Por favor espere',
-                        icon: 'info',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        allowEnterKey: false,
-                        showConfirmButton: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
-                    });
-                    
-                    fetch(`/anular-cuenta/${id}/`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': getCSRFToken(),
-                        }
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Error en la respuesta del servidor');
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.success) {
-                            Swal.fire({
-                                title: '¡Cuenta Anulada!',
-                                text: data.message,
-                                icon: 'success',
-                                confirmButtonColor: '#28a745'
-                            }).then(() => {
-                                window.location.reload();
-                            });
-                        } else {
-                            // Mostrar mensaje de error específico para permisos
-                            if (data.message.includes('No tiene permisos') || data.message.includes('superusuario')) {
-                                Swal.fire({
-                                    title: 'Permiso denegado',
-                                    html: `
-                                        <div style="text-align: left; margin: 15px 0;">
-                                            <p style="color: #dc3545; font-weight: bold;">${data.message}</p>
-                                            <p style="color: #666; margin-top: 10px;">
-                                                Esta acción requiere permisos de superusuario. 
-                                                Contacte al administrador del sistema.
-                                            </p>
-                                        </div>
-                                    `,
-                                    icon: 'error',
-                                    confirmButtonColor: '#dc3545'
-                                });
-                            } else {
-                                Swal.fire({
-                                    title: 'No se pudo anular',
-                                    text: data.message,
-                                    icon: 'error',
-                                    confirmButtonColor: '#dc3545'
-                                });
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        Swal.fire({
-                            title: 'Error de conexión',
-                            text: 'Error al anular la cuenta. Verifique su conexión e intente nuevamente.',
-                            icon: 'error',
-                            confirmButtonColor: '#dc3545'
-                        });
-                    });
-                }
-            });
-        }
+    // ===== INICIALIZACIÓN =====
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM cargado, inicializando...');
 
-        function exportData() {
-            console.log('Exportando datos...');
-            const validAccounts = accounts.filter(account => account.status !== 'anulada' && !account.eliminada);
-            if (validAccounts.length === 0) {
-                Swal.fire({
-                    title: 'Sin datos',
-                    text: 'No hay datos para exportar',
-                    icon: 'warning',
-                    confirmButtonColor: '#ffc107'
-                });
-                return;
-            }
-            let csvContent = "data:text/csv;charset=utf-8,";
-            const headers = ["Cliente", "Teléfono", "Factura", "Productos", "Fecha Venta", "Vencimiento", "Monto Total", "Monto Pagado", "Monto Pendiente", "Estado", "Observaciones"];
-            csvContent += headers.join(";") + "\n";
-            validAccounts.forEach(account => {
-                const pendingBalance = account.totalAmount - account.paidAmount;
-                const productos = account.products.map(p => `${p.nombre} (x${p.cantidad}) - RD$ ${p.precio.toLocaleString('es-DO')}`).join(" | ");
-                let row = [
-                    account.clientName,
-                    account.clientPhone,
-                    account.invoiceNumber,
-                    productos,
-                    formatDate(account.saleDate),
-                    formatDate(account.dueDate),
-                    account.totalAmount.toLocaleString('es-DO'), // Monto total SIN ITBIS
-                    account.paidAmount.toLocaleString('es-DO'),
-                    pendingBalance.toLocaleString('es-DO'), // Saldo pendiente SIN ITBIS
-                    getStatusName(account.status),
-                    cleanObservations(account.observations).replace(/(\r\n|\n|\r)/gm, " ").replace(/;/g, ",")
-                ];
-                csvContent += row.join(";") + "\n";
-            });
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "cuentas_por_cobrar.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            Swal.fire({
-                title: '¡Exportación exitosa!',
-                text: 'Datos exportados a cuentas_por_cobrar.csv',
-                icon: 'success',
-                confirmButtonColor: '#28a745',
-                timer: 2000
-            });
-        }
+        document.getElementById('searchClient').addEventListener('input', applyFilters);
+        document.getElementById('statusFilter').addEventListener('change', applyFilters);
+        document.getElementById('dateFrom').addEventListener('change', applyFilters);
+        document.getElementById('dateTo').addEventListener('change', applyFilters);
 
-        // ===== FUNCIÓN PARA IMPRIMIR REPORTE DE DEUDAS =====
-        function imprimirReporteDeudas() {
-            console.log('Generando reporte de deudas...');
-            
-            // Obtener valores actuales de los filtros
-            const searchTerm = document.getElementById('searchClient').value;
-            const statusFilter = document.getElementById('statusFilter').value;
-            const dateFrom = document.getElementById('dateFrom').value;
-            const dateTo = document.getElementById('dateTo').value;
-            
-            // Construir URL con parámetros de filtro
-            let url = '/generar-reporte-deudas-pdf/';
-            const params = [];
-            
-            if (searchTerm) params.push(`search=${encodeURIComponent(searchTerm)}`);
-            if (statusFilter) params.push(`status=${statusFilter}`);
-            if (dateFrom) params.push(`date_from=${dateFrom}`);
-            if (dateTo) params.push(`date_to=${dateTo}`);
-            
-            if (params.length > 0) {
-                url += '?' + params.join('&');
-            }
-            
-            // Mostrar mensaje de confirmación
-            Swal.fire({
-                title: '¿Generar reporte de deudas?',
-                html: `
-                    <div style="text-align: left; margin: 15px 0;">
-                        <p>Se generará un reporte en formato PDF con los siguientes filtros:</p>
-                        <ul style="margin-left: 20px;">
-                            ${searchTerm ? `<li><strong>Búsqueda:</strong> ${searchTerm}</li>` : ''}
-                            ${statusFilter ? `<li><strong>Estado:</strong> ${statusFilter}</li>` : ''}
-                            ${dateFrom ? `<li><strong>Desde:</strong> ${dateFrom}</li>` : ''}
-                            ${dateTo ? `<li><strong>Hasta:</strong> ${dateTo}</li>` : ''}
-                            ${!searchTerm && !statusFilter && !dateFrom && !dateTo ? `<li>Todos los registros</li>` : ''}
-                        </ul>
-                        <p style="color: #28a745; margin-top: 10px;">
-                            <i class='bx bx-info-circle'></i> El reporte se descargará automáticamente.
-                        </p>
-                    </div>
-                `,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#17a2b8',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, generar reporte',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Mostrar mensaje de procesamiento
-                    Swal.fire({
-                        title: 'Generando reporte...',
-                        text: 'Por favor espere mientras se genera el PDF.',
-                        icon: 'info',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        allowEnterKey: false,
-                        showConfirmButton: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
-                    });
-                    
-                    // Crear un enlace temporal y hacer clic en él (sin iframe)
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.target = '_blank';
-                    link.style.display = 'none';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    
-                    // Cerrar el loading después de un momento
-                    setTimeout(() => {
-                        Swal.close();
-                        Swal.fire({
-                            title: '¡Reporte generado!',
-                            text: 'El reporte se ha generado correctamente y se ha iniciado la descarga.',
-                            icon: 'success',
-                            confirmButtonColor: '#28a745',
-                            timer: 3000,
-                            timerProgressBar: true
-                        });
-                    }, 1500);
-                }
-            });
-        }
-
-        // ===== INICIALIZACIÓN =====
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM cargado, inicializando...');
-
-            document.getElementById('searchClient').addEventListener('input', applyFilters);
-            document.getElementById('statusFilter').addEventListener('change', applyFilters);
-            document.getElementById('dateFrom').addEventListener('change', applyFilters);
-            document.getElementById('dateTo').addEventListener('change', applyFilters);
-
-            const paymentAmountInput = document.getElementById('paymentAmountInput');
-            if (paymentAmountInput) {
-                paymentAmountInput.addEventListener('input', function() {
-                    const amount = parseFloat(this.value);
-                    const accountId = document.getElementById('paymentAccountId').value;
-                    const account = accounts.find(acc => acc.id == accountId);
-                    if (account) {
-                        const maxAmount = account.totalAmount - account.paidAmount;
-                        const errorElement = document.getElementById('paymentAmountError');
-                        if (amount > maxAmount) {
-                            errorElement.textContent = `El monto no puede exceder RD$ ${maxAmount.toLocaleString('es-DO')}`;
-                            errorElement.style.display = 'block';
-                        } else if (amount <= 0) {
-                            errorElement.textContent = 'El monto debe ser mayor a 0';
-                            errorElement.style.display = 'block';
-                        } else {
-                            errorElement.style.display = 'none';
-                        }
+        const paymentAmountInput = document.getElementById('paymentAmountInput');
+        if (paymentAmountInput) {
+            paymentAmountInput.addEventListener('input', function() {
+                const amount = parseFloat(this.value);
+                const accountId = document.getElementById('paymentAccountId').value;
+                const account = accounts.find(acc => acc.id == accountId);
+                if (account) {
+                    const maxAmount = account.pendingBalance;
+                    const errorElement = document.getElementById('paymentAmountError');
+                    if (amount > maxAmount) {
+                        errorElement.textContent = `El monto no puede exceder RD$ ${maxAmount.toLocaleString('es-DO')}`;
+                        errorElement.style.display = 'block';
+                    } else if (amount <= 0) {
+                        errorElement.textContent = 'El monto debe ser mayor a 0';
+                        errorElement.style.display = 'block';
+                    } else {
+                        errorElement.style.display = 'none';
                     }
-                });
-            }
+                }
+            });
+        }
 
-            document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
+        // Manejar cierre de sesión
+        const logoutLink = document.querySelector("a[href='{% url 'index' %}']");
+        if (logoutLink) {
+            logoutLink.addEventListener("click", function(e) {
                 e.preventDefault();
                 Swal.fire({
                     title: '¿Cerrar Sesión?',
@@ -2348,26 +2398,37 @@
                     }
                 });
             });
+        }
 
-            document.getElementById('detailsModal').addEventListener('click', function(e) {
-                if (e.target === this) closeDetailsModal();
-            });
-
-            document.getElementById('paymentModal').addEventListener('click', function(e) {
-                if (e.target === this) closePaymentModal();
-            });
-
-            renderTable();
-            updateStats();
-            console.log('Sistema inicializado correctamente');
+        // Cerrar modales al hacer clic fuera
+        document.getElementById('detailsModal').addEventListener('click', function(e) {
+            if (e.target === this) closeDetailsModal();
         });
 
-        // Manejar redimensionamiento de ventana
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 768) {
-                closeSidebar();
+        document.getElementById('paymentModal').addEventListener('click', function(e) {
+            if (e.target === this) closePaymentModal();
+        });
+
+        // Cerrar modales con tecla Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDetailsModal();
+                closePaymentModal();
             }
         });
-    </script>
+
+        // Cargar datos iniciales
+        renderTable();
+        updateStats();
+        console.log('Sistema inicializado correctamente');
+    });
+
+    // Manejar redimensionamiento de ventana
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 768) {
+            closeSidebar();
+        }
+    });
+</script>
 </body>
 </html>

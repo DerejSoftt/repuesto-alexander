@@ -1,7 +1,7 @@
 
 *.sqlite3
 *.sql
-
+.vscode/
 # Python
 __pycache__/
 *.pyc
@@ -14,7 +14,7 @@ venv/
 
 # Django
 staticfiles/
-media/
+mediafile/
 
 # Logs
 *.log
@@ -26,3 +26,4 @@ Thumbs.db
 # Compresión / cache
 *.br
 *.gz
+codigo.txt

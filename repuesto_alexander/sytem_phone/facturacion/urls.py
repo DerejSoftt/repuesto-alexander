@@ -48,6 +48,7 @@ urlpatterns = [
     path('reavastecer', views.reavastecer, name='reavastecer'),
     path('actualizar-stock/', views.actualizar_stock, name='actualizar_stock'),
     path('devoluciones', views.devoluciones, name='devoluciones'),
+    path('sincronizar-cuentas/', views.sincronizar_cuentas_ventas, name='sincronizar_cuentas'),
     path('roles', views.roles, name='roles'),
     path('anular', views.anular, name='anular'),
     path('buscar-factura/', views.buscar_factura, name='buscar_factura'),
