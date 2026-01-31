@@ -3176,7 +3176,7 @@ Productos:
                 if recipient_list:
                     # Importar la función de generar PDF
                     try:
-                        from .utils import generar_pdf_venta
+                        # from .utils import generar_pdf_venta
                         pdf_buffer = generar_pdf_venta(venta)
                         
                         subject = f'Factura de Venta - {venta.numero_factura}'
