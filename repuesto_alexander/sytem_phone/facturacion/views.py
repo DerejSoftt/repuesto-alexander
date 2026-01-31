@@ -6280,204 +6280,207 @@ def cierredecaja(request):
 
 @login_required
 def procesar_cierre_caja(request):
-    if request.method == 'POST':
-        logger.info(f"==== INICIANDO PROCESO DE CIERRE ====")
-        logger.info(f"Usuario: {request.user.username}")
-        logger.info(f"Datos POST: {dict(request.POST)}")
-        
-        # Verificar si es un cierre automático
-        es_automatico = request.POST.get('es_automatico') == 'true'
-        logger.info(f"Es cierre automático: {es_automatico}")
-        
-        # Obtener la caja abierta actual
-        caja_abierta = Caja.objects.filter(usuario=request.user, estado='abierta').first()
-        
-        if not caja_abierta:
-            error_msg = 'No hay una caja abierta para cerrar.'
+    # Solo POST
+    if request.method != 'POST':
+        logger.warning("Intento de acceso a procesar_cierre_caja con método GET")
+        return redirect('cierredecaja')
+
+    logger.info("==== INICIANDO PROCESO DE CIERRE ====")
+    logger.info(f"Usuario: {request.user.username}")
+    logger.info(f"Datos POST: {dict(request.POST)}")
+
+    # Verificar si es un cierre automático
+    es_automatico = request.POST.get('es_automatico') == 'true'
+    logger.info(f"Es cierre automático: {es_automatico}")
+
+    # Helper para detectar AJAX
+    es_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    # Obtener la caja abierta actual
+    caja_abierta = Caja.objects.filter(usuario=request.user, estado='abierta').first()
+
+    if not caja_abierta:
+        error_msg = "No hay una caja abierta para cerrar."
+        logger.error(error_msg)
+
+        if es_ajax or es_automatico:
+            return JsonResponse({'success': False, 'message': error_msg})
+
+        messages.error(request, error_msg)
+        return redirect('cierredecaja')
+
+    logger.info(f"Caja encontrada: ID={caja_abierta.id}, Fecha apertura={caja_abierta.fecha_apertura}")
+
+    # Obtener ventas desde la apertura de caja
+    ventas_periodo = Venta.objects.filter(
+        vendedor=request.user,
+        fecha_venta__gte=caja_abierta.fecha_apertura,
+        completada=True,
+        anulada=False
+    )
+
+    logger.info(f"Total ventas en período: {ventas_periodo.count()}")
+
+    # ==========
+    # CÁLCULOS
+    # ==========
+
+    # VENTAS AL CONTADO - total final
+    ventas_contado_efectivo = ventas_periodo.filter(
+        tipo_venta='contado', metodo_pago='efectivo'
+    ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+
+    ventas_contado_tarjeta = ventas_periodo.filter(
+        tipo_venta='contado', metodo_pago='tarjeta'
+    ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+
+    ventas_contado_transferencia = ventas_periodo.filter(
+        tipo_venta='contado', metodo_pago='transferencia'
+    ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+
+    # VENTAS A CRÉDITO - solo monto inicial
+    ventas_credito_efectivo = ventas_periodo.filter(
+        tipo_venta='credito', metodo_pago='efectivo'
+    ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
+
+    ventas_credito_tarjeta = ventas_periodo.filter(
+        tipo_venta='credito', metodo_pago='tarjeta'
+    ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
+
+    ventas_credito_transferencia = ventas_periodo.filter(
+        tipo_venta='credito', metodo_pago='transferencia'
+    ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
+
+    # Total esperado
+    total_esperado = (
+        ventas_contado_efectivo + ventas_contado_tarjeta + ventas_contado_transferencia +
+        ventas_credito_efectivo + ventas_credito_tarjeta + ventas_credito_transferencia
+    )
+
+    logger.info(f"Total esperado calculado: RD${total_esperado}")
+
+    # ==========
+    # MONTO REAL
+    # ==========
+
+    if es_automatico:
+        monto_efectivo_real = ventas_contado_efectivo + ventas_credito_efectivo
+        monto_tarjeta_real = ventas_contado_tarjeta + ventas_credito_tarjeta
+        observaciones = f"Cierre automático a las {timezone.localtime(timezone.now()).strftime('%H:%M:%S')}"
+        logger.info(f"Cierre automático - Montos: Efectivo={monto_efectivo_real}, Tarjeta={monto_tarjeta_real}")
+    else:
+        # Obtener datos del formulario
+        monto_efectivo_real = request.POST.get('cash-amount', '0')
+        monto_tarjeta_real = request.POST.get('card-amount', '0')
+        observaciones = request.POST.get('observations', '')
+
+        logger.info(f"Cierre manual - Montos recibidos: Efectivo={monto_efectivo_real}, Tarjeta={monto_tarjeta_real}")
+
+        # Convertir a Decimal
+        try:
+            monto_efectivo_real = Decimal(str(monto_efectivo_real))
+            monto_tarjeta_real = Decimal(str(monto_tarjeta_real))
+        except (ValueError, InvalidOperation) as e:
+            error_msg = f"Los montos deben ser valores numéricos válidos. Error: {str(e)}"
             logger.error(error_msg)
-            
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or es_automatico:
-                return JsonResponse({
-                    'success': False,
-                    'message': error_msg
-                })
+
+            if es_ajax:
+                return JsonResponse({'success': False, 'message': error_msg})
+
             messages.error(request, error_msg)
             return redirect('cierredecaja')
-        
-        logger.info(f"Caja encontrada: ID={caja_abierta.id}, Fecha apertura={caja_abierta.fecha_apertura}")
-        
-        # Obtener ventas desde la apertura de caja
-        ventas_periodo = Venta.objects.filter(
-            vendedor=request.user,
-            fecha_venta__gte=caja_abierta.fecha_apertura,
-            completada=True,
-            anulada=False
+
+    # ==========
+    # RESULTADOS
+    # ==========
+
+    total_real = monto_efectivo_real + monto_tarjeta_real
+    diferencia = total_real - total_esperado
+
+    logger.info(f"Total real: RD${total_real}, Diferencia: RD${diferencia}")
+
+    # Actualizar la caja
+    now = timezone.now()
+    hora_actual = timezone.localtime(now).time()
+
+    caja_abierta.monto_final = total_real
+    caja_abierta.fecha_cierre = now
+    caja_abierta.estado = 'cerrada'
+    caja_abierta.tipo_cierre = 'automatico' if es_automatico else 'manual'
+    caja_abierta.observaciones = observaciones
+    caja_abierta.hora_cierre_exacta = hora_actual
+
+    logger.info(f"Actualizando caja: Estado=cerrada, Tipo={caja_abierta.tipo_cierre}, Hora={hora_actual}")
+
+    try:
+        caja_abierta.save()
+        logger.info(f"Caja actualizada exitosamente. ID: {caja_abierta.id}")
+    except Exception as e:
+        error_msg = f"Error al actualizar la caja: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+
+        if es_ajax:
+            return JsonResponse({'success': False, 'message': error_msg})
+
+        messages.error(request, error_msg)
+        return redirect('cierredecaja')
+
+    # Crear registro de cierre en CierreCaja
+    logger.info("Creando registro en CierreCaja...")
+
+    try:
+        cierre = CierreCaja.objects.create(
+            caja=caja_abierta,
+            monto_efectivo_real=monto_efectivo_real,
+            monto_tarjeta_real=monto_tarjeta_real,
+            total_esperado=total_esperado,
+            diferencia=diferencia,
+            observaciones=observaciones,
+            tipo_cierre='automatico' if es_automatico else 'manual',
+            hora_cierre_exacta=hora_actual
         )
-        
-        logger.info(f"Total ventas en período: {ventas_periodo.count()}")
-        
-        # VENTAS AL CONTADO - Usamos el TOTAL FINAL
-        ventas_contado_efectivo = ventas_periodo.filter(
-            tipo_venta='contado',
-            metodo_pago='efectivo'
-        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        
-        ventas_contado_tarjeta = ventas_periodo.filter(
-            tipo_venta='contado',
-            metodo_pago='tarjeta'
-        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        
-        ventas_contado_transferencia = ventas_periodo.filter(
-            tipo_venta='contado',
-            metodo_pago='transferencia'
-        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        
-        # VENTAS A CRÉDITO - Usamos solo el MONTO INICIAL
-        ventas_credito_efectivo = ventas_periodo.filter(
-            tipo_venta='credito',
-            metodo_pago='efectivo'
-        ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
-        
-        ventas_credito_tarjeta = ventas_periodo.filter(
-            tipo_venta='credito',
-            metodo_pago='tarjeta'
-        ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
-        
-        ventas_credito_transferencia = ventas_periodo.filter(
-            tipo_venta='credito',
-            metodo_pago='transferencia'
-        ).aggregate(total=Sum('montoinicial'))['total'] or Decimal('0.00')
-        
-        # Calcular total esperado (igual que en cierredecaja)
-        total_esperado = (ventas_contado_efectivo + ventas_contado_tarjeta + ventas_contado_transferencia +
-                         ventas_credito_efectivo + ventas_credito_tarjeta + ventas_credito_transferencia)
-        
-        logger.info(f"Total esperado calculado: RD${total_esperado}")
-        
-        # Si es cierre automático, usar montos de ventas
-        if es_automatico:
-            monto_efectivo_real = ventas_contado_efectivo + ventas_credito_efectivo
-            monto_tarjeta_real = ventas_contado_tarjeta + ventas_credito_tarjeta
-            observaciones = f"Cierre automático a las {timezone.localtime(timezone.now()).strftime('%H:%M:%S')}"
-            logger.info(f"Cierre automático - Montos: Efectivo={monto_efectivo_real}, Tarjeta={monto_tarjeta_real}")
-        else:
-            # Obtener datos del formulario
-            monto_efectivo_real = request.POST.get('cash-amount', '0')
-            monto_tarjeta_real = request.POST.get('card-amount', '0')
-            observaciones = request.POST.get('observations', '')
-            
-            logger.info(f"Cierre manual - Montos recibidos: Efectivo={monto_efectivo_real}, Tarjeta={monto_tarjeta_real}")
-            
-            # Convertir a Decimal
-            try:
-                monto_efectivo_real = Decimal(monto_efectivo_real)
-                monto_tarjeta_real = Decimal(monto_tarjeta_real)
-            except (ValueError, InvalidOperation) as e:
-                error_msg = f'Los montos deben ser valores numéricos válidos. Error: {str(e)}'
-                logger.error(error_msg)
-                
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({
-                        'success': False,
-                        'message': error_msg
-                    })
-                messages.error(request, error_msg)
-                return redirect('cierredecaja')
-        
-        # Calcular total real y diferencia
-        total_real = monto_efectivo_real + monto_tarjeta_real
-        diferencia = total_real - total_esperado
-        
-        logger.info(f"Total real: RD${total_real}, Diferencia: RD${diferencia}")
-        
-        # Actualizar la caja
-        now = timezone.now()
-        hora_actual = timezone.localtime(now).time()
-        
-        caja_abierta.monto_final = total_real
-        caja_abierta.fecha_cierre = now
-        caja_abierta.estado = 'cerrada'
-        caja_abierta.tipo_cierre = 'automatico' if es_automatico else 'manual'
-        caja_abierta.observaciones = observaciones
-        caja_abierta.hora_cierre_exacta = hora_actual
-        
-        logger.info(f"Actualizando caja: Estado=cerrada, Tipo={caja_abierta.tipo_cierre}, Hora={hora_actual}")
-        
-        try:
-            caja_abierta.save()
-            logger.info(f"Caja actualizada exitosamente. ID: {caja_abierta.id}")
-        except Exception as e:
-            error_msg = f'Error al actualizar la caja: {str(e)}'
-            logger.error(error_msg, exc_info=True)
-            
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({
-                    'success': False,
-                    'message': error_msg
-                })
-            messages.error(request, error_msg)
-            return redirect('cierredecaja')
-        
-        # Crear registro de cierre en la tabla CierreCaja
-        logger.info(f"Creando registro en CierreCaja...")
-        
-        try:
-            cierre = CierreCaja.objects.create(
-                caja=caja_abierta,
-                monto_efectivo_real=monto_efectivo_real,
-                monto_tarjeta_real=monto_tarjeta_real,
-                total_esperado=total_esperado,
-                diferencia=diferencia,
-                observaciones=observaciones,
-                tipo_cierre='automatico' if es_automatico else 'manual',
-                hora_cierre_exacta=hora_actual
-            )
-            
-            logger.info(f"¡CierreCaja creado exitosamente! ID: {cierre.id}")
-            logger.info(f"Datos guardados: Efectivo=RD${monto_efectivo_real}, "
-                       f"Tarjeta=RD${monto_tarjeta_real}, "
-                       f"Esperado=RD${total_esperado}, "
-                       f"Diferencia=RD${diferencia}")
-            
-        except Exception as e:
-            error_msg = f'Error al crear registro de cierre: {str(e)}'
-            logger.error(error_msg, exc_info=True)
-            
-            # Aunque falle el registro detallado, la caja ya está cerrada
-            # Continuamos pero registramos el error
-        
-        # Si es cierre automático o petición AJAX, responder con JSON
-        if es_automatico or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            response_data = {
-                'success': True,
-                'message': 'Caja cerrada exitosamente',
-                'redirect_url': reverse('iniciocaja')
-            }
-            logger.info(f"Respondiendo con JSON: {response_data}")
-            return JsonResponse(response_data)
-        
-        # Para cierre manual normal, crear información para la sesión
-        request.session['cierre_info'] = {
-            'fecha': now.date().strftime('%d/%m/%Y'),
-            'hora_cierre': now.strftime('%H:%M:%S'),
-            'monto_efectivo_real': float(monto_efectivo_real),
-            'monto_tarjeta_real': float(monto_tarjeta_real),
-            'total_esperado': float(total_esperado),
-            'diferencia': float(diferencia),
-            'observaciones': observaciones,
-            'ventas_count': ventas_periodo.count(),
-            'clientes_count': Cliente.objects.filter(
-                venta__in=ventas_periodo
-            ).distinct().count()
+
+        logger.info(f"¡CierreCaja creado exitosamente! ID: {cierre.id}")
+        logger.info(
+            f"Datos guardados: Efectivo=RD${monto_efectivo_real}, "
+            f"Tarjeta=RD${monto_tarjeta_real}, "
+            f"Esperado=RD${total_esperado}, "
+            f"Diferencia=RD${diferencia}"
+        )
+
+    except Exception as e:
+        # No detenemos el proceso porque la caja ya está cerrada
+        logger.error(f"Error al crear registro de cierre: {str(e)}", exc_info=True)
+
+    # Respuesta JSON para automático o AJAX
+    if es_automatico or es_ajax:
+        response_data = {
+            'success': True,
+            'message': 'Caja cerrada exitosamente',
+            'redirect_url': reverse('iniciocaja')
         }
-        
-        success_msg = f'Caja cerrada exitosamente. Diferencia: RD${diferencia:,.2f}'
-        logger.info(success_msg)
-        messages.success(request, success_msg)
-        return redirect('cuadre')
-    
-    logger.warning("Intento de acceso a procesar_cierre_caja con método GET")
-    return redirect('cierredecaja')
+        logger.info(f"Respondiendo con JSON: {response_data}")
+        return JsonResponse(response_data)
+
+    # Guardar información para la sesión (manual normal)
+    request.session['cierre_info'] = {
+        'fecha': now.date().strftime('%d/%m/%Y'),
+        'hora_cierre': now.strftime('%H:%M:%S'),
+        'monto_efectivo_real': float(monto_efectivo_real),
+        'monto_tarjeta_real': float(monto_tarjeta_real),
+        'total_esperado': float(total_esperado),
+        'diferencia': float(diferencia),
+        'observaciones': observaciones,
+        'ventas_count': ventas_periodo.count(),
+        'clientes_count': Cliente.objects.filter(
+            venta__in=ventas_periodo
+        ).distinct().count()
+    }
+
+    success_msg = f'Caja cerrada exitosamente. Diferencia: RD${diferencia:,.2f}'
+    logger.info(success_msg)
+    messages.success(request, success_msg)
+    return redirect('cuadre')
 
 
 
