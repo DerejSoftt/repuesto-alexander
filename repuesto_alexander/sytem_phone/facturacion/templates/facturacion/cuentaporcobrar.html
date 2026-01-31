@@ -1797,7 +1797,8 @@
             return;
         }
 
-        const currentPendingBalance = account.pendingBalance;
+        // FIX: Usar valores precisos con toFixed(2)
+        const currentPendingBalance = parseFloat(account.pendingBalance);
 
         if (currentPendingBalance <= 0) {
             Swal.fire({
@@ -1809,12 +1810,18 @@
             return;
         }
 
-        document.getElementById('paymentModalPendingAmount').textContent = `RD$ ${currentPendingBalance.toLocaleString('es-DO')}`;
+        document.getElementById('paymentModalPendingAmount').textContent = `RD$ ${currentPendingBalance.toFixed(2)}`;
         document.getElementById('paymentAccountId').value = id;
 
-        // Prellenar con el saldo pendiente completo
+        // FIX: Usar .toFixed(2) para asegurar precisión
         document.getElementById('paymentAmountInput').value = currentPendingBalance.toFixed(2);
-        document.getElementById('paymentAmountInput').max = currentPendingBalance.toFixed(2);
+        
+        // FIX: Establecer el máximo con precisión
+        document.getElementById('paymentAmountInput').max = currentPendingBalance;
+        
+        // FIX: Establecer el step para permitir centavos
+        document.getElementById('paymentAmountInput').step = "0.01";
+        
         document.getElementById('paymentAmountError').style.display = 'none';
 
         const modalBody = document.querySelector('#paymentModal .modal-body');
@@ -1830,9 +1837,9 @@
             <h5 style="margin: 0 0 10px 0; color: #333;">Información de la Cuenta</h5>
             <p style="margin: 5px 0;"><strong>Cliente:</strong> ${account.clientName}</p>
             <p style="margin: 5px 0;"><strong>Factura:</strong> ${account.invoiceNumber}</p>
-            <p style="margin: 5px 0;"><strong>Monto Total Original:</strong> RD$ ${account.totalAmount.toLocaleString('es-DO')}</p>
-            <p style="margin: 5px 0;"><strong>Monto Ya Pagado:</strong> RD$ ${account.paidAmount.toLocaleString('es-DO')}</p>
-            <p style="margin: 0;"><strong>Saldo Pendiente:</strong> RD$ ${currentPendingBalance.toLocaleString('es-DO')}</p>
+            <p style="margin: 5px 0;"><strong>Monto Total Original:</strong> RD$ ${account.totalAmount.toFixed(2)}</p>
+            <p style="margin: 5px 0;"><strong>Monto Ya Pagado:</strong> RD$ ${account.paidAmount.toFixed(2)}</p>
+            <p style="margin: 0;"><strong>Saldo Pendiente:</strong> RD$ ${currentPendingBalance.toFixed(2)}</p>
         `;
 
         const paymentInfo = modalBody.querySelector('.payment-info');
@@ -1888,12 +1895,26 @@
             return;
         }
 
-        const currentPendingBalance = currentAccount.pendingBalance;
-        if (amount > currentPendingBalance) {
-            document.getElementById('paymentAmountError').textContent = `El monto excede el saldo pendiente de RD$ ${currentPendingBalance.toLocaleString('es-DO')}`;
+        // FIX: Usar comparación con tolerancia para decimales
+        const currentPendingBalance = parseFloat(currentAccount.pendingBalance);
+        
+        // Crear una tolerancia de 0.01 para manejar errores de redondeo
+        const tolerance = 0.001; // Tolerancia de 0.1 centavo
+        
+        // Redondear ambos valores a 2 decimales para comparar
+        const amountRounded = Math.round(amount * 100) / 100;
+        const pendingRounded = Math.round(currentPendingBalance * 100) / 100;
+        
+        // Comparación mejorada con tolerancia
+        if (Math.abs(amount - currentPendingBalance) > tolerance) {
+            document.getElementById('paymentAmountError').textContent = `El monto (${amount.toFixed(2)}) excede el saldo pendiente de RD$ ${currentPendingBalance.toFixed(2)}`;
             document.getElementById('paymentAmountError').style.display = 'block';
             return;
         }
+
+        // Si estamos aquí, el monto es válido (dentro de la tolerancia)
+        // Para asegurar que no enviamos más del saldo, ajustamos al mínimo
+        const amountToSend = Math.min(amount, currentPendingBalance);
 
         Swal.fire({
             title: 'Confirmar Pago',
@@ -1901,10 +1922,10 @@
                 <div style="text-align: left; margin: 10px 0;">
                     <p><strong>Cliente:</strong> ${currentAccount.clientName}</p>
                     <p><strong>Factura:</strong> ${currentAccount.invoiceNumber}</p>
-                    <p><strong>Monto a Pagar:</strong> RD$ ${amount.toLocaleString('es-DO')}</p>
+                    <p><strong>Monto a Pagar:</strong> RD$ ${amountToSend.toFixed(2)}</p>
                     <p><strong>Método de Pago:</strong> ${method}</p>
                     ${reference ? `<p><strong>Referencia:</strong> ${reference}</p>` : ''}
-                    <p><strong>Saldo pendiente después del pago:</strong> RD$ ${(currentPendingBalance - amount).toLocaleString('es-DO')}</p>
+                    <p><strong>Saldo pendiente después del pago:</strong> RD$ ${(currentPendingBalance - amountToSend).toFixed(2)}</p>
                 </div>
                 <p>¿Desea confirmar este pago?</p>
             `,
@@ -1937,7 +1958,7 @@
                     },
                     body: JSON.stringify({
                         cuenta_id: accountId,
-                        monto: amount,
+                        monto: amountToSend,
                         metodo_pago: method,
                         referencia: reference,
                         observaciones: observations
@@ -1949,7 +1970,7 @@
                         const comprobanteMensaje = data.comprobante_numero ? 
                             `\nComprobante generado: ${data.comprobante_numero}` : '';
                         const saldoMensaje = data.nuevo_saldo_pendiente !== undefined ? 
-                            `\nNuevo saldo pendiente: RD$ ${data.nuevo_saldo_pendiente.toLocaleString('es-DO')}` : '';
+                            `\nNuevo saldo pendiente: RD$ ${data.nuevo_saldo_pendiente.toFixed(2)}` : '';
 
                         if (data.comprobante_id) {
                             Swal.fire({
@@ -1958,7 +1979,7 @@
                                     <div style="text-align: left; margin: 15px 0;">
                                         <p>${data.message}</p>
                                         ${data.comprobante_numero ? `<p><strong>Comprobante:</strong> ${data.comprobante_numero}</p>` : ''}
-                                        ${data.nuevo_saldo_pendiente !== undefined ? `<p><strong>Nuevo saldo pendiente:</strong> RD$ ${data.nuevo_saldo_pendiente.toLocaleString('es-DO')}</p>` : ''}
+                                        ${data.nuevo_saldo_pendiente !== undefined ? `<p><strong>Nuevo saldo pendiente:</strong> RD$ ${data.nuevo_saldo_pendiente.toFixed(2)}</p>` : ''}
                                     </div>
                                     <p>¿Desea ver el comprobante?</p>
                                 `,
@@ -2362,13 +2383,17 @@
                 const accountId = document.getElementById('paymentAccountId').value;
                 const account = accounts.find(acc => acc.id == accountId);
                 if (account) {
-                    const maxAmount = account.pendingBalance;
+                    const maxAmount = parseFloat(account.pendingBalance);
                     const errorElement = document.getElementById('paymentAmountError');
-                    if (amount > maxAmount) {
-                        errorElement.textContent = `El monto no puede exceder RD$ ${maxAmount.toLocaleString('es-DO')}`;
-                        errorElement.style.display = 'block';
-                    } else if (amount <= 0) {
+                    
+                    // Usar tolerancia para decimales
+                    const tolerance = 0.001;
+                    
+                    if (isNaN(amount) || amount <= 0) {
                         errorElement.textContent = 'El monto debe ser mayor a 0';
+                        errorElement.style.display = 'block';
+                    } else if (amount - maxAmount > tolerance) {
+                        errorElement.textContent = `El monto excede el saldo pendiente de RD$ ${maxAmount.toFixed(2)}`;
                         errorElement.style.display = 'block';
                     } else {
                         errorElement.style.display = 'none';
