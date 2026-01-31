@@ -3176,7 +3176,7 @@ Productos:
                 if recipient_list:
                     # Importar la función de generar PDF
                     try:
-                        # from .utils import generar_pdf_venta
+                        from .utils import generar_pdf_venta
                         pdf_buffer = generar_pdf_venta(venta)
                         
                         subject = f'Factura de Venta - {venta.numero_factura}'
@@ -6292,7 +6292,7 @@ def procesar_cierre_caja(request):
         # Obtener la caja abierta actual
         caja_abierta = Caja.objects.filter(usuario=request.user, estado='abierta').first()
         
-        if not caja_abierta:  # ✅ CORRECTO - Indentado dentro del if POST
+        if not caja_abierta:
             error_msg = 'No hay una caja abierta para cerrar.'
             logger.error(error_msg)
             
