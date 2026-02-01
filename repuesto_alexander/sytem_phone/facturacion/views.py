@@ -32,7 +32,7 @@ from django.conf import settings
 import random
 import string
 
-
+#hola
 from django.urls import reverse
 # import time
 

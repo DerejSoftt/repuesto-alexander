@@ -996,3 +996,4 @@ class DetalleCuentaPorPagar(models.Model):
     @property
     def subtotal(self):
         return self.cantidad * self.costo_unitario
+#
