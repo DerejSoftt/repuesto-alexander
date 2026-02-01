@@ -641,6 +641,7 @@ class CuentaPorCobrar(models.Model):
         ('parcial', 'Pago Parcial'),
         ('anulada', 'Anulada'),
     )
+
     venta = models.OneToOneField('Venta', on_delete=models.CASCADE, related_name='cuenta_por_cobrar')
     cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE, related_name='cuentas_por_cobrar')
     monto_total = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Monto Total")
@@ -663,6 +664,11 @@ class CuentaPorCobrar(models.Model):
         ordering = ['-fecha_creacion']
 
     def save(self, *args, **kwargs):
+        # Asegurar que los valores decimales estén redondeados a 2 decimales
+        if self.monto_total:
+            self.monto_total = Decimal(str(self.monto_total)).quantize(Decimal('0.01'))
+        if self.monto_pagado:
+            self.monto_pagado = Decimal(str(self.monto_pagado)).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -672,7 +678,9 @@ class CuentaPorCobrar(models.Model):
     def saldo_pendiente(self):
         if self.anulada or self.eliminada:
             return Decimal('0.00')
-        return self.monto_total - self.monto_pagado
+        # Calcular saldo pendiente con redondeo a 2 decimales
+        saldo = (Decimal(str(self.monto_total)) - Decimal(str(self.monto_pagado))).quantize(Decimal('0.01'))
+        return max(saldo, Decimal('0.00'))  # Nunca retornar valores negativos
 
     @property
     def esta_vencida(self):
@@ -690,7 +698,6 @@ class CuentaPorCobrar(models.Model):
         self.eliminada = True
         self.fecha_eliminacion = timezone.now()
         self.save()
-
 
 class PagoCuentaPorCobrar(models.Model):
     METODOS_PAGO = (

@@ -26,12 +26,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-xf0=u@=4-_d7kd4xsv+p6&9cmc#&7oiv$v2$cogh#eg$@*ui_h'
-# SECRET_KEY = os.environ.get('SECRET_KEY')
+# SECRET_KEY = 'django-insecure-xf0=u@=4-_d7kd4xsv+p6&9cmc#&7oiv$v2$cogh#eg$@*ui_h'
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG = True
 # ALLOWED_HOSTS = ['*']
 
+# Obtener configuraciones sensibles desde variables de entorno
+SECRET_KEY = os.environ.get('SECRET_KEY')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
@@ -90,9 +91,6 @@ WSGI_APPLICATION = 'sytem_phone.wsgi.application'
 
 
 # settings.py
-# TIME_ZONE = 'America/Santo_Domingo'  # Mantener para Django
-TIME_ZONE = 'UTC'
-USE_TZ = True
 
 # DATABASES = {
 #     "default": {
@@ -115,8 +113,7 @@ USE_TZ = True
 # }
 
 
-
-        #  BASE DE DATS DE PRODUCCION
+#  BASE DE DATS DE PRODUCCION
 
 DATABASES = {
     'default': {
@@ -158,13 +155,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
-# TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
-# USE_TZ = True
-
+# TIME_ZONE = 'America/Santo_Domingo'  # Mantener para Django
+TIME_ZONE = 'UTC'
+USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
@@ -191,13 +185,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # settings.py
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'  # O tu servidor SMTP
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = '' 
-EMAIL_HOST_PASSWORD = ''  
-DEFAULT_FROM_EMAIL = ''
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'  # O tu servidor SMTP
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = '' 
+# EMAIL_HOST_PASSWORD = ''  
+# DEFAULT_FROM_EMAIL = ''
 
 
 
@@ -211,8 +205,8 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 
 
-# CELERY_BROKER_URL = 'redis://localhost:6379/0'  # O tu servidor Redis
-# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # O tu servidor Redis
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

@@ -1304,6 +1304,11 @@
         return observations;
     }
 
+    // Función para redondear a 2 decimales (centavos)
+    function roundToTwoDecimals(value) {
+        return Math.round(parseFloat(value) * 100) / 100;
+    }
+
     // ===== FUNCIONES PARA AGRUPAR POR CLIENTE =====
     function groupAccountsByClient(accountsData) {
         const clientsMap = {};
@@ -1797,7 +1802,7 @@
             return;
         }
 
-        // FIX: Usar valores precisos con toFixed(2)
+        // Asegurar precisión decimal
         const currentPendingBalance = parseFloat(account.pendingBalance);
 
         if (currentPendingBalance <= 0) {
@@ -1813,15 +1818,15 @@
         document.getElementById('paymentModalPendingAmount').textContent = `RD$ ${currentPendingBalance.toFixed(2)}`;
         document.getElementById('paymentAccountId').value = id;
 
-        // FIX: Usar .toFixed(2) para asegurar precisión
+        // Establecer el valor del pago como el saldo pendiente exacto
         document.getElementById('paymentAmountInput').value = currentPendingBalance.toFixed(2);
+        document.getElementById('paymentAmountInput').placeholder = `Ej: ${currentPendingBalance.toFixed(2)}`;
         
-        // FIX: Establecer el máximo con precisión
+        // Permitir decimales (centavos)
         document.getElementById('paymentAmountInput').max = currentPendingBalance;
+        document.getElementById('paymentAmountInput').step = "0.01"; // Permitir centavos
         
-        // FIX: Establecer el step para permitir centavos
-        document.getElementById('paymentAmountInput').step = "0.01";
-        
+        // Limpiar errores anteriores
         document.getElementById('paymentAmountError').style.display = 'none';
 
         const modalBody = document.querySelector('#paymentModal .modal-body');
@@ -1868,7 +1873,7 @@
         const reference = document.getElementById('paymentReference').value;
         const observations = document.getElementById('paymentObservations').value;
 
-        if (!amount || amount <= 0) {
+        if (!amount || amount <= 0 || isNaN(amount)) {
             document.getElementById('paymentAmountError').textContent = 'Ingrese un monto válido mayor a 0.';
             document.getElementById('paymentAmountError').style.display = 'block';
             return;
@@ -1895,37 +1900,34 @@
             return;
         }
 
-        // FIX: Usar comparación con tolerancia para decimales
+        // Obtener saldo pendiente
         const currentPendingBalance = parseFloat(currentAccount.pendingBalance);
         
-        // Crear una tolerancia de 0.01 para manejar errores de redondeo
-        const tolerance = 0.001; // Tolerancia de 0.1 centavo
-        
-        // Redondear ambos valores a 2 decimales para comparar
-        const amountRounded = Math.round(amount * 100) / 100;
-        const pendingRounded = Math.round(currentPendingBalance * 100) / 100;
-        
-        // Comparación mejorada con tolerancia
-        if (Math.abs(amount - currentPendingBalance) > tolerance) {
-            document.getElementById('paymentAmountError').textContent = `El monto (${amount.toFixed(2)}) excede el saldo pendiente de RD$ ${currentPendingBalance.toFixed(2)}`;
+        // Validación: el monto no debe exceder el saldo pendiente
+        // Usar tolerancia de 0.01 centavos para manejar errores de redondeo
+        if (amount > currentPendingBalance + 0.01) {
+            document.getElementById('paymentAmountError').textContent = 
+                `El monto (${amount.toFixed(2)}) excede el saldo pendiente de RD$ ${currentPendingBalance.toFixed(2)}`;
             document.getElementById('paymentAmountError').style.display = 'block';
             return;
         }
+        
+        // Limpiar error si todo está bien
+        document.getElementById('paymentAmountError').style.display = 'none';
 
-        // Si estamos aquí, el monto es válido (dentro de la tolerancia)
-        // Para asegurar que no enviamos más del saldo, ajustamos al mínimo
-        const amountToSend = Math.min(amount, currentPendingBalance);
-
+        // Mostrar confirmación con diferencia
+        const exactDifference = currentPendingBalance - amount;
         Swal.fire({
             title: 'Confirmar Pago',
             html: `
                 <div style="text-align: left; margin: 10px 0;">
                     <p><strong>Cliente:</strong> ${currentAccount.clientName}</p>
                     <p><strong>Factura:</strong> ${currentAccount.invoiceNumber}</p>
-                    <p><strong>Monto a Pagar:</strong> RD$ ${amountToSend.toFixed(2)}</p>
+                    <p><strong>Monto a Pagar:</strong> RD$ ${amount.toFixed(2)}</p>
+                    <p><strong>Saldo pendiente exacto:</strong> RD$ ${currentPendingBalance.toFixed(2)}</p>
+                    <p><strong>Diferencia después del pago:</strong> RD$ ${exactDifference.toFixed(2)}</p>
                     <p><strong>Método de Pago:</strong> ${method}</p>
                     ${reference ? `<p><strong>Referencia:</strong> ${reference}</p>` : ''}
-                    <p><strong>Saldo pendiente después del pago:</strong> RD$ ${(currentPendingBalance - amountToSend).toFixed(2)}</p>
                 </div>
                 <p>¿Desea confirmar este pago?</p>
             `,
@@ -1958,7 +1960,7 @@
                     },
                     body: JSON.stringify({
                         cuenta_id: accountId,
-                        monto: amountToSend,
+                        monto: amount,
                         metodo_pago: method,
                         referencia: reference,
                         observaciones: observations
@@ -1980,6 +1982,7 @@
                                         <p>${data.message}</p>
                                         ${data.comprobante_numero ? `<p><strong>Comprobante:</strong> ${data.comprobante_numero}</p>` : ''}
                                         ${data.nuevo_saldo_pendiente !== undefined ? `<p><strong>Nuevo saldo pendiente:</strong> RD$ ${data.nuevo_saldo_pendiente.toFixed(2)}</p>` : ''}
+                                        <p><strong>Pago realizado: RD$ ${amount.toFixed(2)}</strong></p>
                                     </div>
                                     <p>¿Desea ver el comprobante?</p>
                                 `,
@@ -2006,6 +2009,7 @@
                                         <p>${data.message}</p>
                                         ${comprobanteMensaje ? `<p>${comprobanteMensaje}</p>` : ''}
                                         ${saldoMensaje ? `<p>${saldoMensaje}</p>` : ''}
+                                        <p><strong>Pago realizado: RD$ ${amount.toFixed(2)}</strong></p>
                                     </div>
                                 `,
                                 icon: 'success',
@@ -2040,13 +2044,19 @@
     function updateLocalAccountData(accountId, paymentAmount, serverResponse) {
         const accountIndex = accounts.findIndex(acc => acc.id == accountId);
         if (accountIndex !== -1) {
-            accounts[accountIndex].paidAmount += paymentAmount;
-            accounts[accountIndex].pendingBalance = accounts[accountIndex].totalAmount - accounts[accountIndex].paidAmount;
+            accounts[accountIndex].paidAmount = parseFloat(accounts[accountIndex].paidAmount) + parseFloat(paymentAmount);
+            accounts[accountIndex].pendingBalance = parseFloat(accounts[accountIndex].totalAmount) - parseFloat(accounts[accountIndex].paidAmount);
             
+            // Asegurar que no sea negativo
+            if (accounts[accountIndex].pendingBalance < 0) {
+                accounts[accountIndex].pendingBalance = 0;
+            }
+            
+            // Actualizar estado
             if (serverResponse.estado_actual) {
                 accounts[accountIndex].status = serverResponse.estado_actual;
             } else {
-                if (accounts[accountIndex].pendingBalance <= 0) {
+                if (accounts[accountIndex].pendingBalance <= 0.01) { // Tolerancia de 1 centavo
                     accounts[accountIndex].status = 'pagada';
                 } else if (accounts[accountIndex].paidAmount > 0) {
                     accounts[accountIndex].status = 'parcial';
@@ -2055,23 +2065,15 @@
                 }
             }
             
-            if (serverResponse.nuevo_saldo_pendiente !== undefined) {
-                accounts[accountIndex].pendingBalance = serverResponse.nuevo_saldo_pendiente;
+            // Actualizar filteredAccounts
+            const filteredIndex = filteredAccounts.findIndex(acc => acc.id == accountId);
+            if (filteredIndex !== -1) {
+                filteredAccounts[filteredIndex] = {...accounts[accountIndex]};
             }
             
-            if (serverResponse.monto_pagado_total !== undefined) {
-                accounts[accountIndex].paidAmount = serverResponse.monto_pagado_total;
-                accounts[accountIndex].pendingBalance = accounts[accountIndex].totalAmount - accounts[accountIndex].paidAmount;
-            }
+            updateStats();
+            renderTable(filteredAccounts);
         }
-        
-        const filteredIndex = filteredAccounts.findIndex(acc => acc.id == accountId);
-        if (filteredIndex !== -1) {
-            filteredAccounts[filteredIndex] = {...accounts[accountIndex]};
-        }
-        
-        updateStats();
-        renderTable(filteredAccounts);
     }
 
     function anularCuenta(id) {
@@ -2343,30 +2345,6 @@
         });
     }
 
-    // ===== FUNCIÓN PARA ACTUALIZAR CUENTA DESPUÉS DE DEVOLUCIÓN =====
-    function actualizarCuentaDespuesDevolucion(cuentaId, nuevosDatos) {
-        const accountIndex = accounts.findIndex(acc => acc.id == cuentaId);
-        if (accountIndex !== -1) {
-            // Actualizar todos los campos de la cuenta
-            accounts[accountIndex].totalAmount = nuevosDatos.nuevo_total_venta || accounts[accountIndex].totalAmount;
-            accounts[accountIndex].pendingBalance = nuevosDatos.nuevo_saldo_pendiente || 
-                (accounts[accountIndex].totalAmount - accounts[accountIndex].paidAmount);
-            accounts[accountIndex].status = nuevosDatos.nuevo_estado || accounts[accountIndex].status;
-            
-            // Actualizar también en filteredAccounts
-            const filteredIndex = filteredAccounts.findIndex(acc => acc.id == cuentaId);
-            if (filteredIndex !== -1) {
-                filteredAccounts[filteredIndex] = {...accounts[accountIndex]};
-            }
-            
-            // Re-renderizar la tabla y estadísticas
-            updateStats();
-            renderTable(filteredAccounts);
-            
-            console.log('Cuenta actualizada después de devolución:', cuentaId);
-        }
-    }
-
     // ===== INICIALIZACIÓN =====
     document.addEventListener('DOMContentLoaded', function() {
         console.log('DOM cargado, inicializando...');
@@ -2386,20 +2364,44 @@
                     const maxAmount = parseFloat(account.pendingBalance);
                     const errorElement = document.getElementById('paymentAmountError');
                     
-                    // Usar tolerancia para decimales
-                    const tolerance = 0.001;
-                    
+                    // Validación mejorada
                     if (isNaN(amount) || amount <= 0) {
                         errorElement.textContent = 'El monto debe ser mayor a 0';
                         errorElement.style.display = 'block';
-                    } else if (amount - maxAmount > tolerance) {
-                        errorElement.textContent = `El monto excede el saldo pendiente de RD$ ${maxAmount.toFixed(2)}`;
+                    } else if (amount > maxAmount + 0.01) { // Tolerancia de 1 centavo
+                        const diferencia = amount - maxAmount;
+                        errorElement.innerHTML = `
+                            El monto (${amount.toFixed(2)}) excede el saldo pendiente de RD$ ${maxAmount.toFixed(2)}<br>
+                            <small style="color: #ff6b6b;">
+                                Diferencia: RD$ ${diferencia.toFixed(2)}
+                            </small>
+                        `;
                         errorElement.style.display = 'block';
                     } else {
                         errorElement.style.display = 'none';
                     }
                 }
             });
+            
+            // Agregar botón para pagar saldo completo
+            const paymentFormGroup = paymentAmountInput.closest('.payment-form-group');
+            if (paymentFormGroup) {
+                const fullBalanceButton = document.createElement('button');
+                fullBalanceButton.type = 'button';
+                fullBalanceButton.className = 'btn btn-outline';
+                fullBalanceButton.style.cssText = 'margin-top: 8px; padding: 6px 12px; font-size: 0.85rem;';
+                fullBalanceButton.innerHTML = '<i class="bx bx-wallet"></i> Pagar saldo completo';
+                fullBalanceButton.onclick = function() {
+                    const accountId = document.getElementById('paymentAccountId').value;
+                    const account = accounts.find(acc => acc.id == accountId);
+                    if (account) {
+                        const pendingBalance = parseFloat(account.pendingBalance);
+                        paymentAmountInput.value = pendingBalance.toFixed(2);
+                        document.getElementById('paymentAmountError').style.display = 'none';
+                    }
+                };
+                paymentFormGroup.appendChild(fullBalanceButton);
+            }
         }
 
         // Manejar cierre de sesión
