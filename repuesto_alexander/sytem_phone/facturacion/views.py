@@ -5132,6 +5132,7 @@ def lista_comprobantes(request):
     
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
+
 @login_required
 def cuentaporcobrar(request):
     # Obtener parámetros de filtrado
@@ -5139,41 +5140,41 @@ def cuentaporcobrar(request):
     status_filter = request.GET.get('status', '')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
-
+    
     # Filtrar cuentas por cobrar (excluir anuladas y eliminadas)
     cuentas = CuentaPorCobrar.objects.select_related('venta', 'cliente').filter(
         anulada=False,
         eliminada=False
     )
-
+    
     if search:
         cuentas = cuentas.filter(
             Q(cliente__full_name__icontains=search) |
             Q(venta__numero_factura__icontains=search) |
             Q(cliente__identification_number__icontains=search)
         )
-
+    
     if status_filter:
         cuentas = cuentas.filter(estado=status_filter)
-
+    
     if date_from:
         cuentas = cuentas.filter(venta__fecha_venta__gte=date_from)
-
+    
     if date_to:
         cuentas = cuentas.filter(venta__fecha_venta__lte=date_to)
-
+    
     # Calcular estadísticas
     total_pendiente = Decimal('0.00')
     total_vencido = Decimal('0.00')
     total_por_cobrar = Decimal('0.00')
-
+    
     for cuenta in cuentas:
         # Usar monto_total de la cuenta (que debería ser igual a total_a_pagar)
         monto_total_original = Decimal(str(cuenta.monto_total))
-
+        
         # Calcular saldo pendiente
         saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
-
+        
         # Asegurar que no sea negativo
         if saldo_pendiente < 0:
             saldo_pendiente = Decimal('0.00')
@@ -5181,15 +5182,15 @@ def cuentaporcobrar(request):
             if cuenta.monto_pagado > monto_total_original:
                 cuenta.monto_pagado = monto_total_original
                 cuenta.save()
-
+        
         if cuenta.estado in ['pendiente', 'parcial']:
             total_pendiente += saldo_pendiente
         elif cuenta.estado == 'vencida':
             total_vencido += saldo_pendiente
-
+        
         if cuenta.estado != 'pagada':
             total_por_cobrar += saldo_pendiente
-
+    
     # Pagos del mes actual
     mes_actual = timezone.now().month
     año_actual = timezone.now().year
@@ -5199,43 +5200,44 @@ def cuentaporcobrar(request):
         cuenta__anulada=False,
         cuenta__eliminada=False
     ).aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
-
+    
     # Preparar datos para el template
     cuentas_data = []
     for cuenta in cuentas:
         # Usar monto_total de la cuenta
         monto_total_original = float(cuenta.monto_total)
-
+        
         # Obtener productos de la venta
         productos = []
         if cuenta.venta and hasattr(cuenta.venta, 'detalles'):
             for detalle in cuenta.venta.detalles.all():
                 nombre_producto = 'Servicio'
                 precio_sin_itbis = float(detalle.precio_unitario)
+                
                 if hasattr(detalle, 'producto') and detalle.producto:
                     nombre_producto = detalle.producto.descripcion
                 elif hasattr(detalle, 'servicio') and detalle.servicio:
                     nombre_producto = detalle.servicio.nombre
                 elif hasattr(detalle, 'descripcion') and detalle.descripcion:
                     nombre_producto = detalle.descripcion
-
+                
                 cantidad = 1
                 if hasattr(detalle, 'cantidad'):
                     cantidad = float(detalle.cantidad)
-
+                
                 productos.append({
                     'nombre': nombre_producto,
                     'cantidad': cantidad,
                     'precio': precio_sin_itbis,
                 })
-
+        
         # Obtener información del cliente
         client_name = 'Cliente no disponible'
         client_phone = 'N/A'
         if cuenta.cliente:
             client_name = cuenta.cliente.full_name or 'Cliente sin nombre'
             client_phone = cuenta.cliente.primary_phone or 'N/A'
-
+        
         # Obtener información de la factura
         invoice_number = 'N/A'
         sale_date = ''
@@ -5243,20 +5245,20 @@ def cuentaporcobrar(request):
             invoice_number = cuenta.venta.numero_factura or 'N/A'
             if cuenta.venta.fecha_venta:
                 sale_date = cuenta.venta.fecha_venta.strftime('%Y-%m-%d')
-
+        
         # Obtener fecha de vencimiento
         due_date = ''
         if cuenta.fecha_vencimiento:
             due_date = cuenta.fecha_vencimiento.strftime('%Y-%m-%d')
-
+        
         monto_pagado = float(cuenta.monto_pagado)
         
         # Calcular saldo pendiente
         saldo_pendiente = max(0, monto_total_original - monto_pagado)
-
+        
         # Determinar si la cuenta puede ser eliminada
         puede_eliminar = cuenta.estado == 'pagada'
-
+        
         cuentas_data.append({
             'id': cuenta.id,
             'invoiceNumber': invoice_number,
@@ -5273,10 +5275,10 @@ def cuentaporcobrar(request):
             'puede_eliminar': puede_eliminar,
             'totalConItbis': float(cuenta.venta.total) if cuenta.venta else 0,
         })
-
+    
     # Convertir a JSON
     cuentas_json = json.dumps(cuentas_data)
-
+    
     context = {
         'cuentas_json': cuentas_json,
         'total_pendiente': float(total_pendiente),
@@ -5288,9 +5290,8 @@ def cuentaporcobrar(request):
         'date_from': date_from,
         'date_to': date_to,
     }
-
+    
     return render(request, "facturacion/cuentaporcobrar.html", context)
-
 
 
 def sincronizar_cuentas_ventas():
@@ -5324,6 +5325,7 @@ def sincronizar_cuentas_ventas():
     
     return f"Sincronizadas {cuentas.count()} cuentas"
 
+
 @csrf_exempt
 def registrar_pago(request):
     if request.method == 'POST':
@@ -5344,18 +5346,32 @@ def registrar_pago(request):
                     'message': 'No se puede registrar pago en una cuenta anulada'
                 })
 
-            # Usar `total_a_pagar` de Venta
-            monto_total_original = Decimal(str(cuenta.venta.total_a_pagar))
-
-            # Calcular saldo pendiente (usando `total_a_pagar`)
-            saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
-
-            # Validar que el monto no exceda el saldo pendiente
-            if monto > saldo_pendiente:
+            # Usar `total_a_pagar` de Venta y asegurar 2 decimales
+            monto_total_original = Decimal(str(cuenta.venta.total_a_pagar)).quantize(Decimal('0.01'))
+            
+            # Calcular saldo pendiente (usando `total_a_pagar`) con 2 decimales
+            saldo_pendiente = (monto_total_original - Decimal(str(cuenta.monto_pagado))).quantize(Decimal('0.01'))
+            
+            # Redondear el monto del pago a 2 decimales
+            monto = monto.quantize(Decimal('0.01'))
+            
+            # Validar que el monto sea positivo
+            if monto <= 0:
                 return JsonResponse({
                     'success': False,
-                    'message': f'El monto excede el saldo pendiente de RD${saldo_pendiente}'
+                    'message': 'El monto del pago debe ser mayor a cero'
                 })
+            
+            # Validar que el monto no exceda el saldo pendiente (con tolerancia de 1 centavo)
+            if monto > saldo_pendiente + Decimal('0.01'):
+                return JsonResponse({
+                    'success': False,
+                    'message': f'El monto (RD${monto}) excede el saldo pendiente de RD${saldo_pendiente}'
+                })
+            
+            # Si el monto es muy cercano al saldo pendiente (diferencia <= 1 centavo), ajustarlo
+            if abs(monto - saldo_pendiente) <= Decimal('0.01'):
+                monto = saldo_pendiente
 
             # Crear el pago
             pago = PagoCuentaPorCobrar(
@@ -5368,15 +5384,16 @@ def registrar_pago(request):
             pago.save()
 
             # Actualizar monto pagado (sumar el nuevo pago)
-            cuenta.monto_pagado += monto
+            cuenta.monto_pagado = (Decimal(str(cuenta.monto_pagado)) + monto).quantize(Decimal('0.01'))
 
             # Calcular nuevo saldo (usando `total_a_pagar`)
-            nuevo_saldo = monto_total_original - Decimal(str(cuenta.monto_pagado))
+            nuevo_saldo = (monto_total_original - cuenta.monto_pagado).quantize(Decimal('0.01'))
 
             # Actualizar el estado basado en el nuevo saldo
-            if nuevo_saldo <= 0:
+            if nuevo_saldo <= Decimal('0.01'):  # Considerar pagada si el saldo es <= 1 centavo
                 cuenta.estado = 'pagada'
-                cuenta.monto_pagado = monto_total_original
+                cuenta.monto_pagado = monto_total_original  # Asegurar que sea exactamente el total
+                nuevo_saldo = Decimal('0.00')
             elif cuenta.monto_pagado > 0:
                 cuenta.estado = 'parcial'
             else:
@@ -5416,28 +5433,28 @@ def registrar_pago(request):
 def generar_comprobante_pdf(request, comprobante_id):
     try:
         comprobante = get_object_or_404(ComprobantePago, id=comprobante_id)
-
+        
         # Crear respuesta HTTP con tipo PDF
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="comprobante_{comprobante.numero_comprobante}.pdf"'
-
+        
         # Configurar el PDF en tamaño A4 (595 x 842 puntos)
         width, height = A4
         p = canvas.Canvas(response, pagesize=A4)
-
+        
         # Ruta absoluta del logo en STATIC_ROOT
         logo_path = os.path.join(settings.STATIC_ROOT, 'image', 'favicon12.ico')
-
+        
         # Verifica si el archivo existe
         if not os.path.exists(logo_path):
             raise FileNotFoundError(f"No se encontró el logo en la ruta: {logo_path}")
-
+        
         # Márgenes y posiciones iniciales
         margin_left = 50
         y_position = height - 50  # Iniciar 50 puntos desde el borde superior
         line_height = 14
         small_line_height = 10
-
+        
         # Función para centrar texto
         def draw_centered_text(text, y, font_size=12, bold=False):
             if bold:
@@ -5448,7 +5465,7 @@ def generar_comprobante_pdf(request, comprobante_id):
             x = (width - text_width) / 2
             p.drawString(x, y, text)
             return y - line_height
-
+        
         # Función para texto alineado a la izquierda
         def draw_left_text(text, y, font_size=10, bold=False):
             if bold:
@@ -5457,7 +5474,7 @@ def generar_comprobante_pdf(request, comprobante_id):
                 p.setFont("Helvetica", font_size)
             p.drawString(margin_left, y, text)
             return y - line_height
-
+        
         # Insertar logo en el encabezado
         logo_width = 150
         logo_height = 80
@@ -5465,28 +5482,29 @@ def generar_comprobante_pdf(request, comprobante_id):
         logo_y = y_position - logo_height
         p.drawImage(logo_path, logo_x, logo_y, width=logo_width, height=logo_height, preserveAspectRatio=True)
         y_position = logo_y - 20  # Espacio después del logo
-
+        
         # Encabezado del comprobante
         y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 16, True)
         y_position = draw_centered_text("COMPROBANTE DE PAGO", y_position, 14, True)
         y_position -= line_height / 2
-
+        
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height
-
+        
         # Información del comprobante
         y_position = draw_left_text(f"Comprobante: {comprobante.numero_comprobante}", y_position, 10)
         y_position = draw_left_text(f"Fecha: {comprobante.fecha_emision.strftime('%d/%m/%Y %H:%M')}", y_position, 10)
         y_position = draw_left_text(f"Cliente: {comprobante.cliente.full_name}", y_position, 10)
         if comprobante.cuenta.venta:
             y_position = draw_left_text(f"Factura: {comprobante.cuenta.venta.numero_factura}", y_position, 10)
+        
         y_position -= line_height / 2
-
+        
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height
-
+        
         # Información del pago
         y_position = draw_centered_text("DETALLE DEL PAGO", y_position, 12, True)
         y_position -= small_line_height
@@ -5494,42 +5512,44 @@ def generar_comprobante_pdf(request, comprobante_id):
         y_position = draw_left_text(f"Método: {comprobante.pago.get_metodo_pago_display()}", y_position, 10)
         if comprobante.pago.referencia:
             y_position = draw_left_text(f"Referencia: {comprobante.pago.referencia}", y_position, 9)
+        
         y_position -= line_height / 2
-
+        
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height
-
+        
         # Cálculo de montos
         monto_total_original = Decimal(str(comprobante.cuenta.venta.total_a_pagar))
         monto_total_con_itbis = comprobante.cuenta.venta.total if comprobante.cuenta.venta else comprobante.cuenta.monto_total
         saldo_pendiente = monto_total_original - Decimal(str(comprobante.cuenta.monto_pagado))
-
+        
         # Resumen de cuenta
         y_position = draw_centered_text("RESUMEN DE CUENTA", y_position, 12, True)
         y_position -= small_line_height
         y_position = draw_left_text(f"Monto Original: RD$ {monto_total_original:,.2f}", y_position, 10)
         y_position = draw_left_text(f"Pagado Acumulado: RD$ {comprobante.cuenta.monto_pagado:,.2f}", y_position, 10)
         y_position = draw_left_text(f"Saldo Pendiente: RD$ {saldo_pendiente:,.2f}", y_position, 10, True)
+        
         y_position -= line_height
-
+        
         # Línea separadora
         p.line(margin_left, y_position, width - margin_left, y_position)
         y_position -= line_height * 2
-
+        
         # Sección de firmas
         y_position = draw_centered_text("FIRMA DEL CLIENTE", y_position, 10, True)
         y_position -= small_line_height
         p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
         y_position -= line_height * 1.2
         y_position = draw_left_text("Cédula: _________________________", y_position, 9)
+        
         y_position -= line_height * 1.5
-
         y_position = draw_centered_text("FIRMA DE LA EMPRESA", y_position, 10, True)
         y_position -= small_line_height
         p.line(margin_left + 40, y_position, width - margin_left - 40, y_position)
         y_position -= line_height
-
+        
         # Pie de página
         y_position = draw_centered_text("REPUESTO SUPER BESTIA", y_position, 10, True)
         y_position -= line_height
@@ -5537,12 +5557,13 @@ def generar_comprobante_pdf(request, comprobante_id):
         y_position -= small_line_height
         y_position = draw_centered_text("Tel: (849) 353-5344", y_position, 9)
         y_position = draw_centered_text(f"Ref: {comprobante.numero_comprobante}", y_position, 8)
-
+        
         # Finalizar el PDF
         p.showPage()
         p.save()
+        
         return response
-
+        
     except FileNotFoundError as e:
         return JsonResponse({
             'success': False,
@@ -5554,40 +5575,42 @@ def generar_comprobante_pdf(request, comprobante_id):
             'message': f'Error al generar comprobante: {str(e)}'
         })
 
+
 def eliminar_cuenta_pagada(request, cuenta_id):
     if request.method == 'POST':
         try:
             cuenta = get_object_or_404(CuentaPorCobrar, id=cuenta_id)
-
+            
             # Verificar que la cuenta esté pagada
             if cuenta.estado != 'pagada':
                 return JsonResponse({
                     'success': False,
                     'message': 'Solo se pueden eliminar cuentas que estén completamente pagadas'
                 })
-
+            
             # Verificar que no esté ya eliminada
             if cuenta.eliminada:
                 return JsonResponse({
                     'success': False,
                     'message': 'Esta cuenta ya ha sido eliminada'
                 })
-
+            
             # Realizar soft delete
             cuenta.eliminar_cuenta()
-
+            
             return JsonResponse({
                 'success': True,
                 'message': f'Cuenta #{cuenta.id} - Factura {cuenta.venta.numero_factura} eliminada exitosamente'
             })
-
+            
         except Exception as e:
             return JsonResponse({
                 'success': False,
                 'message': f'Error al eliminar cuenta: {str(e)}'
             })
-
+    
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
+
 
 @csrf_exempt
 def anular_cuenta(request, cuenta_id):
@@ -5599,45 +5622,45 @@ def anular_cuenta(request, cuenta_id):
                     'success': False,
                     'message': 'No tiene permisos para anular cuentas. Solo el superusuario puede realizar esta acción.'
                 })
-
+            
             cuenta = get_object_or_404(CuentaPorCobrar, id=cuenta_id)
-
+            
             # Verificar que la cuenta no esté anulada
             if cuenta.anulada:
                 return JsonResponse({
                     'success': False,
                     'message': 'Esta cuenta ya se encuentra anulada'
                 })
-
+            
             # Verificar que no tenga pagos
             if cuenta.monto_pagado > 0:
                 return JsonResponse({
                     'success': False,
                     'message': 'No se puede anular una cuenta que tiene pagos registrados'
                 })
-
+            
             # Anular la cuenta
             cuenta.anulada = True
             cuenta.estado = 'anulada'
             cuenta.save()
-
+            
             return JsonResponse({
                 'success': True,
                 'message': f'Cuenta #{cuenta.id} - Factura {cuenta.venta.numero_factura} anulada exitosamente'
             })
-
+            
         except Exception as e:
             return JsonResponse({
                 'success': False,
                 'message': f'Error al anular cuenta: {str(e)}'
             })
-
+    
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
 def detalle_cuenta(request, cuenta_id):
     cuenta = get_object_or_404(
-        CuentaPorCobrar.objects.select_related('venta', 'cliente'), 
+        CuentaPorCobrar.objects.select_related('venta', 'cliente'),
         id=cuenta_id
     )
     
@@ -5682,7 +5705,6 @@ def detalle_cuenta(request, cuenta_id):
     }
     
     return JsonResponse(data)
-
 
 
 @login_required
