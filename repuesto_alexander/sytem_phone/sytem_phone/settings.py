@@ -173,7 +173,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"   # aquí se copiará todo
 
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafile')
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
 
