@@ -33,7 +33,7 @@ urlpatterns = [
     path('obtener-clientes/', views.obtener_clientes, name='obtener_clientes'),
     path('eliminar-cliente/<int:cliente_id>/', views.eliminar_cliente, name='eliminar_cliente'),
     path('editar-cliente/<int:cliente_id>/', views.editar_cliente, name='editar_cliente'),
-    path('iniciocaja', views.iniciocaja, name='iniciocaja'),
+    # path('iniciocaja', views.iniciocaja, name='iniciocaja'),
     path('ventas', views.ventas, name='ventas'),
     path('buscar-productos/', views.buscar_productos, name='buscar_productos'),
     path('procesar-venta/', views.procesar_venta, name='procesar_venta'),
@@ -96,6 +96,15 @@ urlpatterns = [
     path('reportes/vendedor/<int:vendedor_id>/', views.reporte_detallado_vendedor, name='reporte_vendedor'),
     path('reportes/exportar/csv/', views.exportar_reporte_csv, name='exportar_reporte_csv'),
     path('reportes/exportar-pdf/', views.exportar_reporte_pdf, name='exportar_reporte_pdf'),
+    
+    path('ventas-por-usuario/', views.ventas_por_usuario, name='ventas_por_usuario'),
+    path('ventas-por-usuario/pdf/', views.ventas_por_usuario_pdf, name='ventas_por_usuario_pdf'),
+    path('ventas-usuario/<int:usuario_id>/pdf/', views.ventas_usuario_pdf, name='ventas_usuario_pdf'),
+    path('usuarios/', views.get_usuarios, name='get_usuarios'),
+    path('reporte-ventas-usuario/', views.reporte_ventas_usuario_actual, name='reporte_ventas_usuario_actual'),
+    path('reporte-ventas-usuario-pdf/', views.reporte_ventas_usuario_actual_pdf, name='reporte_ventas_usuario_actual_pdf'),
+     path('reporte-ventas-usuario-actual-pdf/', views.reporte_ventas_usuario_actual_pdf, name='reporte_ventas_usuario_actual_pdf'),
+    path('reporte-ventas-usuario-actual/', views.reporte_ventas_usuario_actual, name='reporte_ventas_usuario_actual'),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
     
