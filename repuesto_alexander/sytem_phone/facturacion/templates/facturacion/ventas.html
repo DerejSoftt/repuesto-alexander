@@ -355,6 +355,17 @@
             justify-content: center;
             margin-left: 5px;
         }
+        /* Estilo para el botón de imprimir reporte */
+        .print-report-btn {
+            background: linear-gradient(135deg, #4cc9f0 0%, #4361ee 100%);
+            color: white;
+            box-shadow: 0 8px 20px rgba(76, 201, 240, 0.3);
+        }
+        .print-report-btn:hover {
+            background: linear-gradient(135deg, #4361ee 0%, #4cc9f0 100%);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 25px rgba(76, 201, 240, 0.4);
+        }
         .table {
             width: 100%;
             border-collapse: collapse;
@@ -783,7 +794,7 @@
         .print-receipt-btn:hover {
             background: linear-gradient(135deg, #4361ee 0%, #4cc9f0 100%);
         }
-        /* Estilo para el botón Cerrar Caja */
+        /* Estilo para el botón Cerrar Caja (ahora reemplazado, pero mantenemos por si acaso) */
         .close-register-btn {
             background: linear-gradient(135deg, #f72585 0%, #b5179e 100%);
             color: white;
@@ -1163,9 +1174,10 @@
                             <h1>Nueva Venta</h1>
                             <p class="text-muted">Agregue productos y complete la transacción</p>
                         </div>
-                        <button id="close-register-button" class="btn btn-danger close-register-btn">
-                            <i class='bx bx-lock-alt'></i>
-                            Cerrar Caja
+                        <!-- Botón reemplazado: ahora es Imprimir Reporte de Ventas -->
+                        <button id="print-sales-report-btn" class="btn btn-primary print-report-btn">
+                            <i class='bx bx-printer'></i>
+                            Imprimir Reporte de Ventas
                         </button>
                     </header>
                     <div class="sales-grid">
@@ -1397,7 +1409,7 @@
             </div>
         </div>
     </div>
-    <!-- Modal de Confirmación para Cerrar Caja -->
+    <!-- Modal de Confirmación para Cerrar Caja (ya no se usa pero se mantiene) -->
     <div id="close-register-modal" class="modal-overlay">
         <div class="modal-content confirm-modal">
             <div class="modal-body">
@@ -1411,6 +1423,46 @@
                     <button id="cancel-close-register" class="btn btn-outline">No</button>
                     <button id="confirm-close-register" class="btn btn-danger">Sí</button>
                 </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal para seleccionar fechas del reporte de ventas (MODIFICADO) -->
+    <div id="sales-report-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class='bx bx-calendar'></i>
+                    Reporte de Ventas
+                </h3>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px; color: #555;">Seleccione el período para generar el reporte:</p>
+                
+                <div class="form-group">
+                    <label for="report-fecha-desde" class="form-label">Fecha Desde</label>
+                    <input type="date" id="report-fecha-desde" class="form-control">
+                </div>
+                
+                <div class="form-group">
+                    <label for="report-fecha-hasta" class="form-label">Fecha Hasta</label>
+                    <input type="date" id="report-fecha-hasta" class="form-control">
+                </div>
+                
+                <!-- Eliminado el campo de selección de usuario -->
+                
+                <div id="report-preview" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                    <p style="margin: 0; color: #666;"><i class='bx bx-info-circle'></i> Seleccione las fechas para generar el reporte</p>
+                </div>
+            </div>
+            <div class="modal-footer" style="flex-direction: column; gap: 10px;">
+                <button id="generate-pdf-report" class="btn btn-primary" style="width: 100%;">
+                    <i class='bx bx-file-pdf'></i>
+                    Generar Reporte PDF
+                </button>
+                <!-- Eliminado el botón "Ver Detalle por Usuario" -->
+                <button id="cancel-report-modal" class="btn btn-outline" style="width: 100%;">
+                    Cancelar
+                </button>
             </div>
         </div>
     </div>
@@ -1504,7 +1556,8 @@
             cashPaymentFields: document.getElementById('cash-payment-fields'),
             cashReceivedInput: document.getElementById('cash-received'),
             changeAmountDisplay: document.getElementById('change-amount'),
-            closeRegisterButton: document.getElementById('close-register-button'),
+            // El botón de cerrar caja fue reemplazado, pero lo dejamos comentado por si acaso
+            // closeRegisterButton: document.getElementById('close-register-button'),
             closeRegisterModal: document.getElementById('close-register-modal'),
             cancelCloseRegister: document.getElementById('cancel-close-register'),
             confirmCloseRegister: document.getElementById('confirm-close-register'),
@@ -2105,7 +2158,7 @@
         };
 
         // ============================================
-        // EVENT LISTENERS
+        // EVENT LISTENERS (originales)
         // ============================================
         DOM.cashPaymentBtn.addEventListener('click', () => setPaymentType('contado'));
         DOM.creditPaymentBtn.addEventListener('click', () => setPaymentType('credito'));
@@ -2142,6 +2195,8 @@
         DOM.cashReceivedInput.addEventListener('input', calculateChange);
         DOM.completeSaleButton.addEventListener('click', completeSale);
         
+        // El botón de cerrar caja ya no existe, así que comentamos estos listeners
+        /*
         DOM.closeRegisterButton.addEventListener('click', () => {
             DOM.closeRegisterModal.classList.add('active');
         });
@@ -2153,6 +2208,7 @@
         DOM.confirmCloseRegister.addEventListener('click', () => {
             window.location.href = "{% url 'cierredecaja' %}";
         });
+        */
         
         DOM.alertOkButton.addEventListener('click', closeAlert);
         DOM.priceModalOkButton.addEventListener('click', () => {
@@ -2209,6 +2265,99 @@
 
         // Inicializar búsqueda de productos vacía
         searchProducts('');
+
+        // ============================================
+        // FUNCIONES PARA REPORTE DE VENTAS (MODIFICADAS)
+        // ============================================
+
+        // Actualizar preview del reporte
+        function updateReportPreview() {
+            const fechaDesde = document.getElementById('report-fecha-desde').value;
+            const fechaHasta = document.getElementById('report-fecha-hasta').value;
+            
+            const preview = document.getElementById('report-preview');
+            
+            if (!fechaDesde && !fechaHasta) {
+                preview.innerHTML = `
+                    <p style="margin: 0; color: #666;">
+                        <i class='bx bx-info-circle'></i> 
+                        Seleccione las fechas para generar el reporte
+                    </p>
+                `;
+                return;
+            }
+            
+            let periodoText = '';
+            if (fechaDesde && fechaHasta) {
+                periodoText = `${fechaDesde} al ${fechaHasta}`;
+            } else if (fechaDesde) {
+                periodoText = `Desde ${fechaDesde}`;
+            } else if (fechaHasta) {
+                periodoText = `Hasta ${fechaHasta}`;
+            }
+            
+            preview.innerHTML = `
+                <p style="margin: 0 0 5px 0; font-weight: 600; color: #333;">Resumen del reporte:</p>
+                <p style="margin: 0; font-size: 0.9rem; color: #666;">
+                    <i class='bx bx-calendar'></i> Período: ${periodoText}
+                </p>
+            `;
+        }
+
+        // Generar PDF de reporte de ventas para el usuario actual
+        function generateSalesReportPDF() {
+            const fechaDesde = document.getElementById('report-fecha-desde').value;
+            const fechaHasta = document.getElementById('report-fecha-hasta').value;
+            
+            let url = '/reporte-ventas-usuario-actual-pdf/';  // URL que debe coincidir con el backend
+            const params = new URLSearchParams();
+            
+            if (fechaDesde) params.append('fecha_desde', fechaDesde);
+            if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+            
+            if (params.toString()) {
+                url += '?' + params.toString();
+            }
+            
+            window.open(url, '_blank');
+            document.getElementById('sales-report-modal').classList.remove('active');
+        }
+
+        // Inicializar funciones de reporte
+        const printReportBtn = document.getElementById('print-sales-report-btn');
+        const reportModal = document.getElementById('sales-report-modal');
+        const cancelReportBtn = document.getElementById('cancel-report-modal');
+        const generatePdfBtn = document.getElementById('generate-pdf-report');
+        const fechaDesdeInput = document.getElementById('report-fecha-desde');
+        const fechaHastaInput = document.getElementById('report-fecha-hasta');
+
+        if (printReportBtn) {
+            printReportBtn.addEventListener('click', () => {
+                reportModal.classList.add('active');
+                // Limpiar preview
+                updateReportPreview();
+            });
+        }
+
+        if (cancelReportBtn) {
+            cancelReportBtn.addEventListener('click', () => {
+                reportModal.classList.remove('active');
+            });
+        }
+
+        // Cerrar al hacer clic fuera
+        reportModal.addEventListener('click', (e) => {
+            if (e.target === reportModal) {
+                reportModal.classList.remove('active');
+            }
+        });
+
+        if (fechaDesdeInput) fechaDesdeInput.addEventListener('change', updateReportPreview);
+        if (fechaHastaInput) fechaHastaInput.addEventListener('change', updateReportPreview);
+
+        if (generatePdfBtn) {
+            generatePdfBtn.addEventListener('click', generateSalesReportPDF);
+        }
     });
 
     // ============================================
@@ -2277,10 +2426,16 @@
             alertModal.classList.remove('active');
         }
         
-        // Modal de cerrar caja
+        // Modal de cerrar caja (aunque ya no se use)
         const closeRegisterModal = document.getElementById('close-register-modal');
         if (e.target === closeRegisterModal) {
             closeRegisterModal.classList.remove('active');
+        }
+
+        // Modal de reporte de ventas
+        const salesReportModal = document.getElementById('sales-report-modal');
+        if (e.target === salesReportModal) {
+            salesReportModal.classList.remove('active');
         }
     });
 </script>
