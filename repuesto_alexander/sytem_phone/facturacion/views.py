@@ -116,7 +116,7 @@ def index(request):
         
         if user is not None:
             login(request, user)
-            return redirect('iniciocaja')  # Asegúrate de tener esta URL configurada
+            return redirect('ventas')  # Asegúrate de tener esta URL configurada
         else:
             messages.error(request, 'Usuario o contraseña incorrectos')
     
@@ -1589,19 +1589,19 @@ def movimientos_stock_pdf(request):
 
 
 
-@login_required
-def get_usuarios(request):
-    """Obtener lista de usuarios para filtros"""
-    print("=== LLAMANDO GET_USUARIOS ===")  # Debug
-    try:
-        usuarios = User.objects.all().values('id', 'username')
-        print(f"Usuarios encontrados: {list(usuarios)}")  # Debug
-        return JsonResponse({'usuarios': list(usuarios)})
-    except Exception as e:
-        print(f"Error en get_usuarios: {e}")
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'error': str(e)}, status=500)
+# @login_required
+# def get_usuarios(request):
+#     """Obtener lista de usuarios para filtros"""
+#     print("=== LLAMANDO GET_USUARIOS ===")  # Debug
+#     try:
+#         usuarios = User.objects.all().values('id', 'username')
+#         print(f"Usuarios encontrados: {list(usuarios)}")  # Debug
+#         return JsonResponse({'usuarios': list(usuarios)})
+#     except Exception as e:
+#         print(f"Error en get_usuarios: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return JsonResponse({'error': str(e)}, status=500)
 
 
 @login_required
@@ -1819,6 +1819,843 @@ def generar_pdf_cuadre(request, cuadre_id):
         'caja': cuadre.caja
     }
     return render(request, "facturacion/reporte_cuadre.html", context)
+
+
+
+
+@login_required
+def ventas_por_usuario(request):
+    """Vista para mostrar ventas agrupadas por usuario"""
+    try:
+        # Obtener filtros
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        usuario_id = request.GET.get('usuario')
+        
+        # Query base de ventas no anuladas
+        ventas = Venta.objects.filter(anulada=False)
+        
+        # Aplicar filtros de fecha
+        if fecha_desde:
+            ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
+        if fecha_hasta:
+            ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
+        
+        # Obtener todos los usuarios
+        usuarios = User.objects.all().order_by('username')
+        
+        # Preparar datos para la plantilla
+        ventas_por_usuario = []
+        
+        for usuario in usuarios:
+            # Si hay filtro de usuario, solo mostrar ese
+            if usuario_id and str(usuario.id) != usuario_id:
+                continue
+                
+            # Ventas de este usuario
+            ventas_usuario = ventas.filter(vendedor=usuario)
+            
+            if not ventas_usuario.exists() and not usuario_id:
+                # Si no hay ventas y no hay filtro específico, no mostrar
+                continue
+            
+            # Calcular totales
+            total_ventas = ventas_usuario.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            cantidad_ventas = ventas_usuario.count()
+            
+            # Ventas por tipo
+            ventas_contado = ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            ventas_credito = ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            
+            # Ventas por método de pago (solo para ventas de contado)
+            ventas_efectivo = ventas_usuario.filter(
+                tipo_venta='contado', 
+                metodo_pago='efectivo'
+            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            
+            ventas_tarjeta = ventas_usuario.filter(
+                tipo_venta='contado', 
+                metodo_pago='tarjeta'
+            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            
+            # Promedio por venta
+            promedio_venta = total_ventas / cantidad_ventas if cantidad_ventas > 0 else 0
+            
+            ventas_por_usuario.append({
+                'usuario_id': usuario.id,
+                'usuario': usuario.username,
+                'cantidad_ventas': cantidad_ventas,
+                'total_ventas': float(total_ventas),
+                'total_contado': float(ventas_contado),
+                'total_credito': float(ventas_credito),
+                'total_efectivo': float(ventas_efectivo),
+                'total_tarjeta': float(ventas_tarjeta),
+                'promedio_venta': float(promedio_venta)
+            })
+        
+        # Ordenar por total de ventas (mayor a menor)
+        ventas_por_usuario.sort(key=lambda x: x['total_ventas'], reverse=True)
+        
+        # Preparar el contexto
+        context = {
+            'ventas_por_usuario': ventas_por_usuario,
+            'usuarios': usuarios,
+            'fecha_desde': fecha_desde,
+            'fecha_hasta': fecha_hasta,
+            'usuario_seleccionado': usuario_id,
+        }
+        
+        # Si es una petición AJAX, devolver JSON
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'ventas': ventas_por_usuario})
+        
+        # Si no, renderizar la plantilla (aunque en tu caso siempre será AJAX)
+        return render(request, 'facturacion/ventas_por_usuario.html', context)
+        
+    except Exception as e:
+        print(f"Error en ventas_por_usuario: {e}")
+        import traceback
+        traceback.print_exc()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'error': str(e)}, status=500)
+        return render(request, 'facturacion/error.html', {'error': str(e)})
+    
+
+
+
+
+
+@login_required
+def ventas_por_usuario(request):
+    """Vista para obtener ventas agrupadas por usuario (AJAX)"""
+    try:
+        # Obtener filtros
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        usuario_id = request.GET.get('usuario')
+        
+        # Query base de ventas no anuladas
+        ventas = Venta.objects.filter(anulada=False)
+        
+        # Aplicar filtros de fecha
+        if fecha_desde:
+            ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
+        if fecha_hasta:
+            ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
+        
+        # Obtener todos los usuarios
+        usuarios = User.objects.all()
+        
+        # Preparar datos para JSON
+        ventas_por_usuario = []
+        
+        for usuario in usuarios:
+            # Si hay filtro de usuario, solo mostrar ese
+            if usuario_id and str(usuario.id) != usuario_id:
+                continue
+                
+            # Ventas de este usuario
+            ventas_usuario = ventas.filter(vendedor=usuario)
+            
+            if not ventas_usuario.exists() and not usuario_id:
+                # Si no hay ventas y no hay filtro específico, no mostrar
+                continue
+            
+            # Calcular totales
+            cantidad_ventas = ventas_usuario.count()
+            
+            # Ventas por tipo - AHORA USAMOS EL TOTAL DE LA FACTURA PARA CRÉDITO TAMBIÉN
+            ventas_contado = ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            ventas_credito = ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            
+            # Total general (contado + crédito)
+            total_general = ventas_contado + ventas_credito
+            
+            # Ventas por método de pago (solo para ventas de contado)
+            ventas_efectivo = ventas_usuario.filter(
+                tipo_venta='contado', 
+                metodo_pago='efectivo'
+            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            
+            ventas_tarjeta = ventas_usuario.filter(
+                tipo_venta='contado', 
+                metodo_pago='tarjeta'
+            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            
+            ventas_transferencia = ventas_usuario.filter(
+                tipo_venta='contado', 
+                metodo_pago='transferencia'
+            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            
+            # Promedio por venta
+            promedio_venta = total_general / cantidad_ventas if cantidad_ventas > 0 else 0
+            
+            ventas_por_usuario.append({
+                'usuario_id': usuario.id,
+                'usuario': usuario.username,
+                'cantidad_ventas': cantidad_ventas,
+                'total_ventas': float(total_general),  # Total general (contado + crédito)
+                'total_contado': float(ventas_contado),
+                'total_credito': float(ventas_credito),  # AHORA ES EL TOTAL DE LA FACTURA
+                'total_efectivo': float(ventas_efectivo),
+                'total_tarjeta': float(ventas_tarjeta),
+                'total_transferencia': float(ventas_transferencia),
+                'promedio_venta': float(promedio_venta)
+            })
+        
+        # Ordenar por total de ventas (mayor a menor)
+        ventas_por_usuario.sort(key=lambda x: x['total_ventas'], reverse=True)
+        
+        return JsonResponse({'ventas': ventas_por_usuario})
+        
+    except Exception as e:
+        print(f"Error en ventas_por_usuario: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+@login_required
+def ventas_por_usuario_pdf(request):
+    """Generar PDF con resumen de ventas por usuario"""
+    try:
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.lib.units import inch
+        from reportlab.pdfgen import canvas
+        from io import BytesIO
+        
+        # Obtener filtros
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        usuario_id = request.GET.get('usuario')
+        
+        # Query base de ventas
+        ventas = Venta.objects.filter(anulada=False)
+        
+        if fecha_desde:
+            ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
+        if fecha_hasta:
+            ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
+        
+        # Obtener todos los usuarios
+        usuarios = User.objects.all()
+        
+        # Crear PDF en orientación horizontal
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=landscape(letter))
+        width, height = landscape(letter)
+        
+        # Título
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(1 * inch, height - 1 * inch, "Reporte de Ventas por Usuario")
+        
+        # Fecha del reporte
+        p.setFont("Helvetica", 10)
+        fecha_reporte = timezone.now().strftime('%d/%m/%Y %H:%M')
+        p.drawString(1 * inch, height - 1.3 * inch, f"Fecha de generación: {fecha_reporte}")
+        
+        # Período
+        periodo = "Todos los tiempos"
+        if fecha_desde and fecha_hasta:
+            periodo = f"{fecha_desde} al {fecha_hasta}"
+        elif fecha_desde:
+            periodo = f"Desde {fecha_desde}"
+        elif fecha_hasta:
+            periodo = f"Hasta {fecha_hasta}"
+        
+        p.drawString(1 * inch, height - 1.5 * inch, f"Período: {periodo}")
+        
+        # Tabla de resumen
+        y_position = height - 2.5 * inch
+        p.setFont("Helvetica-Bold", 9)
+        
+        # Encabezados - AÑADIMOS TRANSFERENCIA
+        headers = ['Usuario', 'Cantidad', 'Total', 'Contado', 'Crédito', 'Efectivo', 'Tarjeta', 'Transf.', 'Promedio']
+        col_positions = [1 * inch, 1.8 * inch, 2.8 * inch, 3.8 * inch, 4.8 * inch, 5.8 * inch, 6.8 * inch, 7.8 * inch, 8.8 * inch]
+        
+        for i, header in enumerate(headers):
+            p.drawString(col_positions[i], y_position, header)
+        
+        p.line(1 * inch, y_position - 0.1 * inch, 9.8 * inch, y_position - 0.1 * inch)
+        
+        y_position -= 0.3 * inch
+        p.setFont("Helvetica", 8)
+        
+        total_general = 0
+        total_cantidad = 0
+        
+        for usuario in usuarios:
+            # Si hay filtro de usuario, solo mostrar ese
+            if usuario_id and str(usuario.id) != usuario_id:
+                continue
+                
+            # Ventas de este usuario
+            ventas_usuario = ventas.filter(vendedor=usuario)
+            
+            if not ventas_usuario.exists() and not usuario_id:
+                continue
+            
+            if y_position < 1 * inch:
+                p.showPage()
+                y_position = height - 1 * inch
+                p.setFont("Helvetica-Bold", 9)
+                for i, header in enumerate(headers):
+                    p.drawString(col_positions[i], y_position, header)
+                p.line(1 * inch, y_position - 0.1 * inch, 9.8 * inch, y_position - 0.1 * inch)
+                y_position -= 0.3 * inch
+                p.setFont("Helvetica", 8)
+            
+            # Calcular totales
+            cantidad = ventas_usuario.count()
+            
+            # Ventas por tipo - USAMOS EL TOTAL DE LA FACTURA
+            contado = float(ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or 0)
+            credito = float(ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or 0)
+            
+            # Total general
+            total = contado + credito
+            
+            # Ventas por método de pago
+            efectivo = float(ventas_usuario.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or 0)
+            tarjeta = float(ventas_usuario.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or 0)
+            transferencia = float(ventas_usuario.filter(tipo_venta='contado', metodo_pago='transferencia').aggregate(total=Sum('total'))['total'] or 0)
+            
+            promedio = total / cantidad if cantidad > 0 else 0
+            
+            p.drawString(col_positions[0], y_position, usuario.username[:12])
+            p.drawString(col_positions[1], y_position, str(cantidad))
+            p.drawString(col_positions[2], y_position, f"${total:,.2f}")
+            p.drawString(col_positions[3], y_position, f"${contado:,.2f}")
+            p.drawString(col_positions[4], y_position, f"${credito:,.2f}")
+            p.drawString(col_positions[5], y_position, f"${efectivo:,.2f}")
+            p.drawString(col_positions[6], y_position, f"${tarjeta:,.2f}")
+            p.drawString(col_positions[7], y_position, f"${transferencia:,.2f}")
+            p.drawString(col_positions[8], y_position, f"${promedio:,.2f}")
+            
+            total_general += total
+            total_cantidad += cantidad
+            y_position -= 0.2 * inch
+        
+        # Totales
+        y_position -= 0.2 * inch
+        p.setFont("Helvetica-Bold", 9)
+        p.line(1 * inch, y_position, 9.8 * inch, y_position)
+        y_position -= 0.2 * inch
+        
+        p.drawString(col_positions[0], y_position, "TOTALES:")
+        p.drawString(col_positions[1], y_position, str(total_cantidad))
+        p.drawString(col_positions[2], y_position, f"${total_general:,.2f}")
+        
+        # Nota aclaratoria
+        y_position -= 0.4 * inch
+        p.setFont("Helvetica-Oblique", 7)
+        p.drawString(1 * inch, y_position, "Nota: Las ventas a crédito muestran el total de la factura, no solo los pagos recibidos.")
+        
+        p.showPage()
+        p.save()
+        
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        filename = f"ventas_por_usuario_{timezone.now().strftime('%Y%m%d')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error en ventas_por_usuario_pdf: {e}")
+        import traceback
+        traceback.print_exc()
+        return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
+
+
+
+@login_required
+def ventas_usuario_pdf(request, usuario_id):
+    """Generar PDF de ventas para un usuario específico"""
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from reportlab.pdfgen import canvas
+        from io import BytesIO
+        
+        # Obtener filtros
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        
+        # Obtener usuario
+        try:
+            usuario = User.objects.get(id=usuario_id)
+        except User.DoesNotExist:
+            return HttpResponse("Usuario no encontrado", status=404)
+        
+        # Query de ventas
+        ventas = Venta.objects.filter(
+            anulada=False,
+            vendedor=usuario
+        ).order_by('-fecha_venta')
+        
+        # Aplicar filtros de fecha
+        if fecha_desde:
+            ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
+        if fecha_hasta:
+            ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
+        
+        # Calcular totales
+        cantidad_ventas = ventas.count()
+        
+        # Ventas por tipo - USAMOS EL TOTAL DE LA FACTURA PARA CRÉDITO
+        ventas_contado = ventas.filter(tipo_venta='contado')
+        total_contado = ventas_contado.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        ventas_credito = ventas.filter(tipo_venta='credito')
+        total_credito = ventas_credito.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        # Ventas por método de pago
+        efectivo = ventas.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        tarjeta = ventas.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        transferencia = ventas.filter(tipo_venta='contado', metodo_pago='transferencia').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        # Total general
+        total_general = total_contado + total_credito
+        
+        # Crear PDF
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+        
+        # Título
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(1 * inch, height - 1 * inch, f"Reporte de Ventas - {usuario.username}")
+        
+        # Fecha del reporte
+        p.setFont("Helvetica", 10)
+        fecha_reporte = timezone.now().strftime('%d/%m/%Y %H:%M')
+        p.drawString(1 * inch, height - 1.3 * inch, f"Fecha de generación: {fecha_reporte}")
+        
+        # Período
+        periodo = "Todos los tiempos"
+        if fecha_desde and fecha_hasta:
+            periodo = f"{fecha_desde} al {fecha_hasta}"
+        elif fecha_desde:
+            periodo = f"Desde {fecha_desde}"
+        elif fecha_hasta:
+            periodo = f"Hasta {fecha_hasta}"
+        
+        p.drawString(1 * inch, height - 1.5 * inch, f"Período: {periodo}")
+        
+        # Resumen
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(1 * inch, height - 2 * inch, "Resumen:")
+        
+        p.setFont("Helvetica", 10)
+        p.drawString(1 * inch, height - 2.3 * inch, f"Total de ventas: {cantidad_ventas}")
+        p.drawString(1 * inch, height - 2.5 * inch, f"Ventas contado: ${float(total_contado):,.2f}")
+        p.drawString(1 * inch, height - 2.7 * inch, f"Ventas crédito: ${float(total_credito):,.2f}")
+        p.drawString(1 * inch, height - 2.9 * inch, f"Monto total general: ${float(total_general):,.2f}")
+        
+        # Desglose por método de pago
+        p.drawString(1 * inch, height - 3.2 * inch, "Desglose contado:")
+        p.drawString(1.2 * inch, height - 3.4 * inch, f"Efectivo: ${float(efectivo):,.2f}")
+        p.drawString(1.2 * inch, height - 3.6 * inch, f"Tarjeta: ${float(tarjeta):,.2f}")
+        p.drawString(1.2 * inch, height - 3.8 * inch, f"Transferencia: ${float(transferencia):,.2f}")
+        
+        if cantidad_ventas > 0:
+            promedio = float(total_general) / cantidad_ventas
+            p.drawString(1 * inch, height - 4.1 * inch, f"Promedio por venta: ${promedio:,.2f}")
+        
+        # Listado de ventas
+        y_position = height - 4.8 * inch
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(1 * inch, y_position, "Fecha")
+        p.drawString(2.2 * inch, y_position, "Factura")
+        p.drawString(3.8 * inch, y_position, "Cliente")
+        p.drawString(6 * inch, y_position, "Tipo")
+        p.drawString(7 * inch, y_position, "Total")
+        
+        p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
+        
+        y_position -= 0.3 * inch
+        p.setFont("Helvetica", 8)
+        
+        for venta in ventas[:50]:  # Limitar a 50 ventas para no saturar el PDF
+            if y_position < 1 * inch:
+                p.showPage()
+                y_position = height - 1 * inch
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(1 * inch, y_position, "Fecha")
+                p.drawString(2.2 * inch, y_position, "Factura")
+                p.drawString(3.8 * inch, y_position, "Cliente")
+                p.drawString(6 * inch, y_position, "Tipo")
+                p.drawString(7 * inch, y_position, "Total")
+                p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
+                y_position -= 0.3 * inch
+                p.setFont("Helvetica", 8)
+            
+            fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
+            p.drawString(1 * inch, y_position, fecha_str)
+            p.drawString(2.2 * inch, y_position, venta.numero_factura[:12])
+            
+            cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
+            p.drawString(3.8 * inch, y_position, cliente)
+            
+            p.drawString(6 * inch, y_position, venta.tipo_venta.capitalize())
+            p.drawRightString(7.5 * inch, y_position, f"${float(venta.total):,.2f}")
+            
+            y_position -= 0.15 * inch
+        
+        # Nota aclaratoria (opcional)
+        if ventas_credito.exists():
+            y_position -= 0.3 * inch
+            p.setFont("Helvetica-Oblique", 7)
+            p.drawString(1 * inch, y_position, "Las ventas a crédito muestran el total de la factura, no solo los pagos recibidos.")
+        
+        p.showPage()
+        p.save()
+        
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        filename = f"ventas_{usuario.username}_{timezone.now().strftime('%Y%m%d')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error en ventas_usuario_pdf: {e}")
+        import traceback
+        traceback.print_exc()
+        return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
+
+
+    
+@login_required
+def get_usuarios(request):
+    """Obtener lista de usuarios para filtros"""
+    try:
+        usuarios = User.objects.all().values('id', 'username')
+        return JsonResponse({'usuarios': list(usuarios)})
+    except Exception as e:
+        print(f"Error en get_usuarios: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+
+@login_required
+def reporte_ventas_usuario_actual(request):
+    """Vista para mostrar reporte de ventas del usuario actual"""
+    try:
+        # Obtener filtros de fecha del request
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        
+        # Query base de ventas del usuario actual no anuladas
+        ventas = Venta.objects.filter(
+            anulada=False,
+            vendedor=request.user
+        ).order_by('-fecha_venta')
+        
+        # Aplicar filtros de fecha
+        if fecha_desde:
+            ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
+        if fecha_hasta:
+            ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
+        
+        # Calcular totales
+        total_ventas = ventas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        cantidad_ventas = ventas.count()
+        
+        # Ventas por tipo
+        ventas_contado = ventas.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        ventas_credito = ventas.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        # Ventas por método de pago
+        ventas_efectivo = ventas.filter(
+            tipo_venta='contado', 
+            metodo_pago='efectivo'
+        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        ventas_tarjeta = ventas.filter(
+            tipo_venta='contado', 
+            metodo_pago='tarjeta'
+        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        ventas_transferencia = ventas.filter(
+            tipo_venta='contado', 
+            metodo_pago='transferencia'
+        ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        # Promedio por venta
+        promedio_venta = total_ventas / cantidad_ventas if cantidad_ventas > 0 else 0
+        
+        # Preparar datos para la respuesta
+        data = {
+            'success': True,
+            'usuario': request.user.username,
+            'usuario_id': request.user.id,
+            'cantidad_ventas': cantidad_ventas,
+            'total_ventas': float(total_ventas),
+            'total_contado': float(ventas_contado),
+            'total_credito': float(ventas_credito),
+            'total_efectivo': float(ventas_efectivo),
+            'total_tarjeta': float(ventas_tarjeta),
+            'total_transferencia': float(ventas_transferencia),
+            'promedio_venta': float(promedio_venta),
+            'fecha_desde': fecha_desde,
+            'fecha_hasta': fecha_hasta,
+        }
+        
+        # Si se solicita HTML (para modal), devolver template
+        if request.GET.get('format') == 'html':
+            ventas_list = list(ventas[:50])  # Últimas 50 ventas
+            return render(request, 'facturacion/reporte_ventas_usuario_modal.html', {
+                'usuario': request.user,
+                'ventas': ventas_list,
+                'resumen': data,
+                'fecha_desde': fecha_desde,
+                'fecha_hasta': fecha_hasta,
+            })
+        
+        # Si es AJAX, devolver JSON
+        return JsonResponse(data)
+        
+    except Exception as e:
+        print(f"Error en reporte_ventas_usuario_actual: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+
+
+
+
+@login_required
+def reporte_ventas_usuario_actual_pdf(request):
+    """Generar PDF con reporte de ventas del usuario actual"""
+    try:
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.lib.units import inch
+        from reportlab.pdfgen import canvas
+        from reportlab.lib import colors
+        from reportlab.platypus import Table, TableStyle
+        from io import BytesIO
+        from datetime import datetime
+        
+        # Obtener filtros
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        
+        # Query de ventas del usuario actual
+        ventas = Venta.objects.filter(
+            anulada=False,
+            vendedor=request.user
+        ).order_by('-fecha_venta')
+        
+        if fecha_desde:
+            ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
+        if fecha_hasta:
+            ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
+        
+        # Calcular totales
+        total_ventas = ventas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        cantidad_ventas = ventas.count()
+        
+        # Ventas por tipo
+        ventas_contado = ventas.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        ventas_credito = ventas.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        # Ventas por método de pago
+        ventas_efectivo = ventas.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        ventas_tarjeta = ventas.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        ventas_transferencia = ventas.filter(tipo_venta='contado', metodo_pago='transferencia').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        
+        # Crear PDF en orientación vertical
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+        
+        # ============================================
+        # ENCABEZADO
+        # ============================================
+        # Título
+        p.setFont("Helvetica-Bold", 18)
+        p.drawString(1 * inch, height - 1 * inch, "REPORTE DE VENTAS")
+        
+        # Usuario
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(1 * inch, height - 1.5 * inch, f"Usuario: {request.user.get_full_name() or request.user.username}")
+        
+        # Fecha del reporte
+        p.setFont("Helvetica", 10)
+        fecha_reporte = timezone.now().strftime('%d/%m/%Y %H:%M')
+        p.drawString(1 * inch, height - 1.8 * inch, f"Fecha de generación: {fecha_reporte}")
+        
+        # Período
+        periodo = "Todos los tiempos"
+        if fecha_desde and fecha_hasta:
+            periodo = f"{fecha_desde} al {fecha_hasta}"
+        elif fecha_desde:
+            periodo = f"Desde {fecha_desde}"
+        elif fecha_hasta:
+            periodo = f"Hasta {fecha_hasta}"
+        
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(1 * inch, height - 2.1 * inch, f"Período: {periodo}")
+        
+        # Línea separadora
+        p.line(1 * inch, height - 2.3 * inch, 7.5 * inch, height - 2.3 * inch)
+        
+        # ============================================
+        # RESUMEN
+        # ============================================
+        y_position = height - 2.8 * inch
+        
+        # Tarjeta de resumen
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(1 * inch, y_position, "RESUMEN DE VENTAS:")
+        y_position -= 0.3 * inch
+        
+        # Cuadro de resumen
+        p.setFont("Helvetica", 10)
+        p.drawString(1.2 * inch, y_position, f"Cantidad de ventas:")
+        p.drawRightString(3.5 * inch, y_position, f"{cantidad_ventas}")
+        y_position -= 0.2 * inch
+        
+        p.drawString(1.2 * inch, y_position, f"Total ventas:")
+        p.drawRightString(3.5 * inch, y_position, f"RD${float(total_ventas):,.2f}")
+        y_position -= 0.2 * inch
+        
+        if cantidad_ventas > 0:
+            promedio = float(total_ventas) / cantidad_ventas
+            p.drawString(1.2 * inch, y_position, f"Promedio por venta:")
+            p.drawRightString(3.5 * inch, y_position, f"RD${promedio:,.2f}")
+            y_position -= 0.2 * inch
+        
+        # Línea separadora
+        p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
+        y_position -= 0.3 * inch
+        
+        # Desglose por tipo
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(1 * inch, y_position, "DESGLOSE POR TIPO DE VENTA:")
+        y_position -= 0.25 * inch
+        
+        p.setFont("Helvetica", 10)
+        p.drawString(1.2 * inch, y_position, f"Ventas al contado:")
+        p.drawRightString(3.5 * inch, y_position, f"RD${float(ventas_contado):,.2f}")
+        y_position -= 0.2 * inch
+        
+        p.drawString(1.2 * inch, y_position, f"Ventas a crédito:")
+        p.drawRightString(3.5 * inch, y_position, f"RD${float(ventas_credito):,.2f}")
+        y_position -= 0.2 * inch
+        
+        # Línea separadora
+        p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
+        y_position -= 0.3 * inch
+        
+        # Desglose por método de pago
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(1 * inch, y_position, "DESGLOSE POR MÉTODO DE PAGO (CONTADO):")
+        y_position -= 0.25 * inch
+        
+        p.setFont("Helvetica", 10)
+        p.drawString(1.2 * inch, y_position, f"Efectivo:")
+        p.drawRightString(3.5 * inch, y_position, f"RD${float(ventas_efectivo):,.2f}")
+        y_position -= 0.2 * inch
+        
+        p.drawString(1.2 * inch, y_position, f"Tarjeta:")
+        p.drawRightString(3.5 * inch, y_position, f"RD${float(ventas_tarjeta):,.2f}")
+        y_position -= 0.2 * inch
+        
+        p.drawString(1.2 * inch, y_position, f"Transferencia:")
+        p.drawRightString(3.5 * inch, y_position, f"RD${float(ventas_transferencia):,.2f}")
+        y_position -= 0.2 * inch
+        
+        # Línea separadora
+        p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
+        y_position -= 0.3 * inch
+        
+        # ============================================
+        # LISTADO DE VENTAS (últimas 20)
+        # ============================================
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(1 * inch, y_position, "ÚLTIMAS VENTAS:")
+        y_position -= 0.3 * inch
+        
+        # Encabezados de tabla
+        p.setFont("Helvetica-Bold", 9)
+        p.drawString(1 * inch, y_position, "Fecha")
+        p.drawString(2.2 * inch, y_position, "Factura")
+        p.drawString(3.8 * inch, y_position, "Cliente")
+        p.drawString(5.5 * inch, y_position, "Tipo")
+        p.drawString(6.3 * inch, y_position, "Total")
+        
+        p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
+        y_position -= 0.2 * inch
+        
+        p.setFont("Helvetica", 8)
+        ventas_recientes = ventas[:20]  # Mostrar solo las últimas 20 ventas
+        
+        for venta in ventas_recientes:
+            if y_position < 1 * inch:
+                p.showPage()
+                y_position = height - 1 * inch
+                p.setFont("Helvetica-Bold", 9)
+                p.drawString(1 * inch, y_position, "Fecha")
+                p.drawString(2.2 * inch, y_position, "Factura")
+                p.drawString(3.8 * inch, y_position, "Cliente")
+                p.drawString(5.5 * inch, y_position, "Tipo")
+                p.drawString(6.3 * inch, y_position, "Total")
+                p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
+                y_position -= 0.2 * inch
+                p.setFont("Helvetica", 8)
+            
+            fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
+            p.drawString(1 * inch, y_position, fecha_str)
+            p.drawString(2.2 * inch, y_position, venta.numero_factura[:12])
+            
+            cliente = venta.cliente_nombre[:18] + "..." if len(venta.cliente_nombre) > 18 else venta.cliente_nombre
+            p.drawString(3.8 * inch, y_position, cliente)
+            
+            tipo = "Contado" if venta.tipo_venta == 'contado' else "Crédito"
+            p.drawString(5.5 * inch, y_position, tipo)
+            p.drawRightString(7.5 * inch, y_position, f"RD${float(venta.total):,.2f}")
+            
+            y_position -= 0.15 * inch
+        
+        # ============================================
+        # FIRMAS
+        # ============================================
+        y_position = 2 * inch
+        p.line(1 * inch, y_position, 3.5 * inch, y_position)
+        p.setFont("Helvetica", 9)
+        p.drawString(1.2 * inch, y_position - 0.2 * inch, "Firma del Vendedor")
+        
+        p.line(5 * inch, y_position, 7.5 * inch, y_position)
+        p.drawString(5.7 * inch, y_position - 0.2 * inch, "Firma del Administrador")
+        
+        # ============================================
+        # FINALIZAR PDF
+        # ============================================
+        p.showPage()
+        p.save()
+        
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        filename = f"reporte_ventas_{request.user.username}_{timezone.now().strftime('%Y%m%d_%H%M')}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error en reporte_ventas_usuario_actual_pdf: {e}")
+        import traceback
+        traceback.print_exc()
+        return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
+
 
 
 # ------------------------------
@@ -2065,82 +2902,84 @@ def inventario_eliminar(request, id):
 #             messages.error(request, f'Error al iniciar la caja: {str(e)}')
     
 #     return render(request, "facturacion/iniciocaja.html", {'user': request.user})
-@login_required
-def iniciocaja(request):
-    import logging
-    logger = logging.getLogger(__name__)
+
+
+# @login_required
+# def iniciocaja(request):
+#     import logging
+#     logger = logging.getLogger(__name__)
     
-    now = timezone.localtime(timezone.now())
-    today = now.date()
+#     now = timezone.localtime(timezone.now())
+#     today = now.date()
     
-    logger.info(f"=== INICIOCAJA - Usuario: {request.user.username} ===")
-    logger.info(f"Método: {request.method}")
-    logger.info(f"Fecha: {today}, Hora: {now.strftime('%H:%M:%S')}")
+#     logger.info(f"=== INICIOCAJA - Usuario: {request.user.username} ===")
+#     logger.info(f"Método: {request.method}")
+#     logger.info(f"Fecha: {today}, Hora: {now.strftime('%H:%M:%S')}")
     
-    # SOLAMENTE verificar si hay caja abierta HOY
-    caja_abierta_hoy = Caja.objects.filter(
-        usuario=request.user, 
-        estado='abierta',
-        fecha_apertura__date=today
-    ).first()
     
-    if caja_abierta_hoy:
-        logger.info(f"Ya hay caja abierta: ID {caja_abierta_hoy.id}")
-        messages.info(request, f'Ya tienes una caja abierta desde {caja_abierta_hoy.fecha_apertura.strftime("%H:%M")}.')
-        return redirect('ventas')
+#     caja_abierta_hoy = Caja.objects.filter(
+#         usuario=request.user, 
+#         estado='abierta',
+#         fecha_apertura__date=today
+#     ).first()
     
-    if request.method == 'POST':
-        logger.info("Procesando POST para abrir caja")
-        monto_inicial = request.POST.get('monto_inicial')
+#     if caja_abierta_hoy:
+#         logger.info(f"Ya hay caja abierta: ID {caja_abierta_hoy.id}")
+#         messages.info(request, f'Ya tienes una caja abierta desde {caja_abierta_hoy.fecha_apertura.strftime("%H:%M")}.')
+#         return redirect('ventas')
+    
+#     if request.method == 'POST':
+#         logger.info("Procesando POST para abrir caja")
+#         monto_inicial = request.POST.get('monto_inicial')
         
-        if not monto_inicial:
-            logger.warning("No se recibió monto inicial")
-            messages.error(request, 'Debe ingresar un monto inicial.')
-            return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+#         if not monto_inicial:
+#             logger.warning("No se recibió monto inicial")
+#             messages.error(request, 'Debe ingresar un monto inicial.')
+#             return render(request, "facturacion/iniciocaja.html", {'user': request.user})
         
-        try:
-            monto_inicial = Decimal(monto_inicial)
-            if monto_inicial < 0:
-                logger.warning(f"Monto inicial negativo: {monto_inicial}")
-                messages.error(request, 'El monto inicial debe ser mayor o igual a cero.')
-                return render(request, "facturacion/iniciocaja.html", {'user': request.user})
-        except (ValueError, InvalidOperation, TypeError) as e:
-            logger.error(f"Error en monto inicial: {str(e)}")
-            messages.error(request, 'Por favor ingrese un monto válido.')
-            return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+#         try:
+#             monto_inicial = Decimal(monto_inicial)
+#             if monto_inicial < 0:
+#                 logger.warning(f"Monto inicial negativo: {monto_inicial}")
+#                 messages.error(request, 'El monto inicial debe ser mayor o igual a cero.')
+#                 return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+#         except (ValueError, InvalidOperation, TypeError) as e:
+#             logger.error(f"Error en monto inicial: {str(e)}")
+#             messages.error(request, 'Por favor ingrese un monto válido.')
+#             return render(request, "facturacion/iniciocaja.html", {'user': request.user})
         
-        try:
-            nueva_caja = Caja(
-                usuario=request.user,
-                monto_inicial=monto_inicial,
-                estado='abierta',
-                fecha_apertura=now,
-                observaciones='Apertura manual'
-            )
-            nueva_caja.save()
+#         try:
+#             nueva_caja = Caja(
+#                 usuario=request.user,
+#                 monto_inicial=monto_inicial,
+#                 estado='abierta',
+#                 fecha_apertura=now,
+#                 observaciones='Apertura manual'
+#             )
+#             nueva_caja.save()
             
-            logger.info(f"✅ Caja creada exitosamente - ID: {nueva_caja.id}")
-            logger.info(f"Redirigiendo a ventas...")
+#             logger.info(f"✅ Caja creada exitosamente - ID: {nueva_caja.id}")
+#             logger.info(f"Redirigiendo a ventas...")
             
-            messages.success(request, 'Caja iniciada correctamente. Redirigiendo a ventas...')
+#             messages.success(request, 'Caja iniciada correctamente. Redirigiendo a ventas...')
             
-            # IMPORTANTE: Usar HttpResponseRedirect en lugar de redirect()
-            from django.http import HttpResponseRedirect
-            from django.urls import reverse
+           
+#             from django.http import HttpResponseRedirect
+#             from django.urls import reverse
             
-            # Redirigir directamente a ventas
-            ventas_url = reverse('ventas')
-            logger.info(f"URL de ventas: {ventas_url}")
+           
+#             ventas_url = reverse('ventas')
+#             logger.info(f"URL de ventas: {ventas_url}")
             
-            return HttpResponseRedirect(ventas_url)
+#             return HttpResponseRedirect(ventas_url)
             
-        except Exception as e:
-            logger.error(f"❌ Error al crear caja: {str(e)}", exc_info=True)
-            messages.error(request, f'Error al iniciar la caja: {str(e)}')
-            return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+#         except Exception as e:
+#             logger.error(f"❌ Error al crear caja: {str(e)}", exc_info=True)
+#             messages.error(request, f'Error al iniciar la caja: {str(e)}')
+#             return render(request, "facturacion/iniciocaja.html", {'user': request.user})
     
-    logger.info("Mostrando formulario de inicio de caja")
-    return render(request, "facturacion/iniciocaja.html", {'user': request.user})
+#     logger.info("Mostrando formulario de inicio de caja")
+#     return render(request, "facturacion/iniciocaja.html", {'user': request.user})
 # @login_required
 # def ventas(request):
 #     # Verificar que el usuario tenga una caja abierta
@@ -2209,7 +3048,7 @@ def iniciocaja(request):
 #                     status=True
 #                 )
         
-#         # Crear la venta
+#         # Crear la ventas
 #         venta = Venta.objects.create(
 #             caja=caja_abierta,
 #             cliente=cliente,
@@ -2313,38 +3152,18 @@ def iniciocaja(request):
 @login_required
 @check_module_access('ventas')
 def ventas(request):
-    now = timezone.localtime(timezone.now())
-    today = now.date()
-    
-    # Verificar que el usuario tenga una caja abierta HOY
-    caja_abierta = Caja.objects.filter(
-        usuario=request.user, 
-        estado='abierta',
-        fecha_apertura__date=today
-    ).first()
-    
-    if not caja_abierta:
-        messages.error(request, 'No hay una caja abierta. Debe abrir una caja primero.')
-        return redirect('iniciocaja')
-    
-    # ELIMINAR la lógica de cierre automático aquí
-    # El cierre automático solo debe ocurrir via Celery a las 5:30 PM
-    
-    # Resto de la lógica normal de ventas...
+
     if request.method == 'POST':
         return procesar_venta(request)
-    
+
     clientes = Cliente.objects.filter(status=True)
     productos = EntradaProducto.objects.filter(activo=True, cantidad__gt=0)
-    
+
     return render(request, "facturacion/ventas.html", {
         'user': request.user,
-        'caja_abierta': caja_abierta,
         'clientes': clientes,
         'productos': productos
     })
-
-
 
 
 # @csrf_exempt
@@ -3176,7 +3995,7 @@ Productos:
                 if recipient_list:
                     # Importar la función de generar PDF
                     try:
-                        from .utils import generar_pdf_venta
+                        from .utils import generar_pdf_venta # type: ignore
                         pdf_buffer = generar_pdf_venta(venta)
                         
                         subject = f'Factura de Venta - {venta.numero_factura}'

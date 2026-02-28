@@ -611,7 +611,7 @@
             gap: 1.5rem;
         }
 
-        /* Estilos para los filtros de cuadre */
+        /* Estilos para los filtros */
         .filtros-cuadre .form-control {
             background: white;
             border: 1px solid #e1e8ed;
@@ -988,9 +988,9 @@
             <button class="nav-tab" onclick="showView('alerts')" data-view="alerts">
                 <i class='bx bx-dollar'></i> Valor Inventario
             </button>
-            <!-- NUEVA PESTAÑA DE REIMPRESIÓN DE CUADRE -->
-            <button class="nav-tab" onclick="showView('cuadre')" data-view="cuadre">
-                <i class='bx bx-receipt'></i> Reimpresión Cuadre
+            <!-- PESTAÑA CAMBIADA: Reimpresión Impresión de Ventas (antes Reimpresión Cuadre) -->
+            <button class="nav-tab" onclick="showView('ventas-usuario')" data-view="ventas-usuario">
+                <i class='bx bx-printer'></i> Reimpresión Impresión de Ventas
             </button>
             <!-- NUEVA PESTAÑA DE MOVIMIENTOS DE INVENTARIO -->
             <button class="nav-tab" onclick="showView('movimientos')" data-view="movimientos">
@@ -1315,42 +1315,42 @@
                 </div>
             </div>
 
-            <!-- Cuadre Section -->
-            <div id="cuadre" class="view-section fade-in">
+            <!-- SECCIÓN CAMBIADA: Ventas por Usuario (antes Cuadre) -->
+            <div id="ventas-usuario" class="view-section fade-in">
                 <div class="card">
                     <div class="card-header">
                         <div class="card-icon" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                            <i class='bx bx-receipt'></i>
+                            <i class='bx bx-printer'></i>
                         </div>
-                        <h3 class="card-title">Reimpresión de Cuadres de Caja</h3>
+                        <h3 class="card-title">Reimpresión - Total de Ventas por Usuario</h3>
                     </div>
                     <div class="card-body">
-                        <!-- Filtros de Búsqueda Mejorados -->
+                        <!-- Filtros de Búsqueda -->
                         <div class="filtros-cuadre" style="margin-bottom: 2rem;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end;">
                                 <div>
                                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Fecha Desde</label>
-                                    <input type="date" id="fechaDesdeCuadre" class="form-control">
+                                    <input type="date" id="fechaDesdeVentas" class="form-control">
                                 </div>
                                 <div>
                                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Fecha Hasta</label>
-                                    <input type="date" id="fechaHastaCuadre" class="form-control">
+                                    <input type="date" id="fechaHastaVentas" class="form-control">
                                 </div>
                                 <div>
                                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333;">Usuario</label>
-                                    <select id="usuarioCuadre" class="form-control">
+                                    <select id="usuarioVentas" class="form-control">
                                         <option value="">Todos los usuarios</option>
                                     </select>
                                 </div>
                                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                    <button class="btn-buscar" onclick="buscarCuadres()">
+                                    <button class="btn-buscar" onclick="buscarVentasPorUsuario()">
                                         <i class='bx bx-search'></i> Buscar
                                     </button>
-                                    <button class="btn-limpiar" onclick="limpiarFiltrosCuadre()">
+                                    <button class="btn-limpiar" onclick="limpiarFiltrosVentas()">
                                         <i class='bx bx-reset'></i> Limpiar
                                     </button>
-                                    <button class="btn-imprimir" onclick="imprimirTodosCuadres()" id="btnImprimirTodos" style="display: none;">
-                                        <i class='bx bx-printer'></i> Imprimir Todos
+                                    <button class="btn-imprimir" onclick="imprimirReporteVentasUsuario()">
+                                        <i class='bx bx-printer'></i> Imprimir
                                     </button>
                                 </div>
                             </div>
@@ -1358,18 +1358,17 @@
 
                         <!-- Resultados -->
                         <div class="table-container">
-                            <table class="data-table" id="tablaCuadres">
+                            <table class="data-table" id="tablaVentasUsuario">
                                 <thead>
                                     <tr>
-                                        <th>Fecha Cierre</th>
                                         <th>Usuario</th>
-                                        <th>Monto Inicial</th>
-                                        <th>Monto Final</th>
-                                        <th>Efectivo Real</th>
-                                        <th>Tarjeta Real</th>
-                                        <th>Total Esperado</th>
-                                        <th>Diferencia</th>
-                                        <th>Estado</th>
+                                        <th>Cantidad Ventas</th>
+                                        <th>Total Ventas</th>
+                                        <th>Contado</th>
+                                        <th>Crédito</th>
+                                        <th>Efectivo</th>
+                                        <th>Tarjeta</th>
+                                        <th>Promedio por Venta</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
@@ -1380,9 +1379,9 @@
                         </div>
 
                         <!-- Mensaje cuando no hay resultados -->
-                        <div id="mensajeVacio" style="text-align: center; padding: 2rem; display: none;">
+                        <div id="mensajeVacioVentas" style="text-align: center; padding: 2rem; display: none;">
                             <i class='bx bx-inbox' style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;"></i>
-                            <p style="color: #6c757d; font-size: 1.1rem;">No se encontraron cuadres con los filtros seleccionados</p>
+                            <p style="color: #6c757d; font-size: 1.1rem;">No se encontraron ventas con los filtros seleccionados</p>
                         </div>
                     </div>
                 </div>
@@ -1527,7 +1526,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  // Datos reales del sistema (se llenarán desde Django)
+// Datos reales del sistema (se llenarán desde Django)
 let dashboardData = {
     sales: {
         daily: 0,
@@ -1564,7 +1563,8 @@ function formatCurrency(amount) {
     return new Intl.NumberFormat('es-DO', {
         style: 'currency',
         currency: 'DOP',
-        minimumFractionDigits: 0
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
     }).format(amount);
 }
 
@@ -1623,7 +1623,7 @@ function updatePageTitle(viewId) {
         'inventory': 'Gestión de Inventario',
         'products': 'Catálogo de Productos',
         'alerts': 'Valor del Inventario',
-        'cuadre': 'Reimpresión de Cuadres',
+        'ventas-usuario': 'Ventas por Usuario',
         'movimientos': 'Movimientos de Inventario',
         'settings': 'Configuración',
         'reports': 'Reportes'
@@ -1635,7 +1635,7 @@ function updatePageTitle(viewId) {
         'inventory': 'Estado actual del inventario',
         'products': 'Listado completo de productos',
         'alerts': 'Valor total e inversión en inventario',
-        'cuadre': 'Buscar y reimprimir cuadres de caja',
+        'ventas-usuario': 'Consulta y reimpresión de ventas por usuario',
         'movimientos': 'Control de entradas y salidas de productos',
         'settings': 'Configuración del sistema',
         'reports': 'Generación de reportes'
@@ -1663,8 +1663,8 @@ function updateViewContent(viewId) {
         case 'alerts':
             updateInventoryValueView();
             break;
-        case 'cuadre':
-            updateCuadreView();
+        case 'ventas-usuario':
+            updateVentasUsuarioView();
             break;
         case 'movimientos':
             updateMovimientosView();
@@ -2026,104 +2026,114 @@ function updateInventoryValueView() {
 }
 
 // =============================================
-// FUNCIONES PARA CUADRES DE CAJA
+// FUNCIONES PARA VENTAS POR USUARIO - CORREGIDAS
 // =============================================
 
-// Función para actualizar vista de cuadres
-function updateCuadreView() {
-    // Establecer fechas por defecto (últimos 30 días)
+// Función para actualizar vista de ventas por usuario
+function updateVentasUsuarioView() {
+    // Establecer fechas por defecto (primer día del mes hasta hoy)
     const fechaHasta = new Date();
-    const fechaDesde = new Date();
-    fechaDesde.setDate(fechaHasta.getDate() - 30);
+    const fechaDesde = new Date(fechaHasta.getFullYear(), fechaHasta.getMonth(), 1);
     
-    document.getElementById('fechaDesdeCuadre').value = fechaDesde.toISOString().split('T')[0];
-    document.getElementById('fechaHastaCuadre').value = fechaHasta.toISOString().split('T')[0];
+    // Formatear fechas a YYYY-MM-DD
+    document.getElementById('fechaDesdeVentas').value = fechaDesde.toISOString().split('T')[0];
+    document.getElementById('fechaHastaVentas').value = fechaHasta.toISOString().split('T')[0];
     
-    cargarUsuariosCuadre();
-    buscarCuadres();
+    cargarUsuariosVentas();
+    buscarVentasPorUsuario();
 }
 
 // Función para cargar usuarios en el select
-function cargarUsuariosCuadre() {
-    fetch('/dashboard/usuarios/')
-        .then(response => response.json())
+function cargarUsuariosVentas() {
+    fetch("{% url 'get_usuarios' %}")
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error al cargar usuarios');
+            }
+            return response.json();
+        })
         .then(data => {
-            const select = document.getElementById('usuarioCuadre');
+            const select = document.getElementById('usuarioVentas');
             select.innerHTML = '<option value="">Todos los usuarios</option>';
             
-            data.usuarios.forEach(usuario => {
-                const option = document.createElement('option');
-                option.value = usuario.id;
-                option.textContent = usuario.username;
-                select.appendChild(option);
-            });
+            if (data.usuarios && data.usuarios.length > 0) {
+                data.usuarios.forEach(usuario => {
+                    const option = document.createElement('option');
+                    option.value = usuario.id;
+                    option.textContent = usuario.username;
+                    select.appendChild(option);
+                });
+            }
         })
         .catch(error => {
             console.error('Error al cargar usuarios:', error);
+            Swal.fire('Error', 'No se pudieron cargar los usuarios', 'error');
         });
 }
 
-// Función para buscar cuadres con rango de fechas
-function buscarCuadres() {
-    const fechaDesde = document.getElementById('fechaDesdeCuadre').value;
-    const fechaHasta = document.getElementById('fechaHastaCuadre').value;
-    const usuario = document.getElementById('usuarioCuadre').value;
+// Función para buscar ventas por usuario
+function buscarVentasPorUsuario() {
+    const fechaDesde = document.getElementById('fechaDesdeVentas').value;
+    const fechaHasta = document.getElementById('fechaHastaVentas').value;
+    const usuarioId = document.getElementById('usuarioVentas').value;
     
-    let url = '/dashboard/cuadres/';
+    let url = "{% url 'ventas_por_usuario' %}";
     const params = new URLSearchParams();
     
     if (fechaDesde) params.append('fecha_desde', fechaDesde);
     if (fechaHasta) params.append('fecha_hasta', fechaHasta);
-    if (usuario) params.append('usuario', usuario);
+    if (usuarioId) params.append('usuario', usuarioId);
     
     if (params.toString()) {
         url += '?' + params.toString();
     }
     
-    // Mostrar loading
-    const tbody = document.querySelector('#tablaCuadres tbody');
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem;"><i class="bx bx-loader bx-spin"></i> Cargando...</td></tr>';
+    console.log("Buscando ventas con URL:", url); // Para depuración
     
-    fetch(url)
-        .then(response => response.json())
+    // Mostrar loading
+    const tbody = document.querySelector('#tablaVentasUsuario tbody');
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem;"><i class="bx bx-loader bx-spin"></i> Cargando...</td></tr>';
+    
+    fetch(url, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error en la respuesta del servidor');
+            }
+            return response.json();
+        })
         .then(data => {
-            const tbody = document.querySelector('#tablaCuadres tbody');
-            const mensajeVacio = document.getElementById('mensajeVacio');
-            const btnImprimirTodos = document.getElementById('btnImprimirTodos');
+            console.log("Datos recibidos:", data); // Para depuración
+            
+            const tbody = document.querySelector('#tablaVentasUsuario tbody');
+            const mensajeVacio = document.getElementById('mensajeVacioVentas');
             
             tbody.innerHTML = '';
             
-            if (data.cuadres.length === 0) {
+            if (!data.ventas || data.ventas.length === 0) {
                 mensajeVacio.style.display = 'block';
-                btnImprimirTodos.style.display = 'none';
                 return;
             }
             
             mensajeVacio.style.display = 'none';
-            btnImprimirTodos.style.display = 'inline-flex';
             
-            data.cuadres.forEach(cuadre => {
+            data.ventas.forEach(venta => {
                 const row = document.createElement('tr');
-                const estadoBadge = cuadre.estado === 'cerrada' ? 
-                    '<span class="badge badge-success">Cerrada</span>' : 
-                    '<span class="badge badge-warning">Abierta</span>';
                 
                 row.innerHTML = `
-                    <td>${cuadre.fecha_cierre}</td>
-                    <td>${cuadre.usuario}</td>
-                    <td>${formatCurrency(cuadre.monto_inicial)}</td>
-                    <td>${formatCurrency(cuadre.monto_final)}</td>
-                    <td>${formatCurrency(cuadre.monto_efectivo_real)}</td>
-                    <td>${formatCurrency(cuadre.monto_tarjeta_real)}</td>
-                    <td>${formatCurrency(cuadre.total_esperado)}</td>
+                    <td><strong>${venta.usuario}</strong></td>
+                    <td>${venta.cantidad_ventas}</td>
+                    <td>${formatCurrency(venta.total_ventas)}</td>
+                    <td>${formatCurrency(venta.total_contado)}</td>
+                    <td>${formatCurrency(venta.total_credito)}</td>
+                    <td>${formatCurrency(venta.total_efectivo)}</td>
+                    <td>${formatCurrency(venta.total_tarjeta)}</td>
+                    <td>${formatCurrency(venta.promedio_venta)}</td>
                     <td>
-                        <span style="color: ${cuadre.diferencia >= 0 ? '#28a745' : '#dc3545'}; font-weight: bold;">
-                            ${formatCurrency(Math.abs(cuadre.diferencia))}
-                        </span>
-                    </td>
-                    <td>${estadoBadge}</td>
-                    <td>
-                        <button class="btn-imprimir" onclick="reimprimirCuadre(${cuadre.id})" style="margin-bottom: 0.25rem;">
+                        <button class="btn-imprimir" onclick="imprimirVentasUsuario(${venta.usuario_id}, '${venta.usuario}')" style="margin-bottom: 0.25rem;">
                             <i class='bx bx-printer'></i> Imprimir
                         </button>
                     </td>
@@ -2132,52 +2142,80 @@ function buscarCuadres() {
             });
         })
         .catch(error => {
-            console.error('Error al buscar cuadres:', error);
-            Swal.fire('Error', 'No se pudieron cargar los cuadres', 'error');
+            console.error('Error al buscar ventas por usuario:', error);
+            Swal.fire('Error', 'No se pudieron cargar las ventas', 'error');
         });
 }
 
-// Función para limpiar filtros de cuadre
-function limpiarFiltrosCuadre() {
-    document.getElementById('fechaDesdeCuadre').value = '';
-    document.getElementById('fechaHastaCuadre').value = '';
-    document.getElementById('usuarioCuadre').value = '';
-    document.getElementById('btnImprimirTodos').style.display = 'none';
-    buscarCuadres();
+// Función para limpiar filtros de ventas
+function limpiarFiltrosVentas() {
+    document.getElementById('fechaDesdeVentas').value = '';
+    document.getElementById('fechaHastaVentas').value = '';
+    document.getElementById('usuarioVentas').value = '';
+    buscarVentasPorUsuario();
 }
 
-// Función para reimprimir cuadre individual
-function reimprimirCuadre(cuadreId) {
-    // Abrir en nueva pestaña el reporte del cuadre
-    window.open(`/dashboard/cuadre/${cuadreId}/pdf/`, '_blank');
-}
-
-// Función para imprimir todos los cuadres del rango
-function imprimirTodosCuadres() {
-    const fechaDesde = document.getElementById('fechaDesdeCuadre').value;
-    const fechaHasta = document.getElementById('fechaHastaCuadre').value;
-    const usuario = document.getElementById('usuarioCuadre').value;
+// Función para imprimir reporte de ventas por usuario (todos los usuarios)
+function imprimirReporteVentasUsuario() {
+    const fechaDesde = document.getElementById('fechaDesdeVentas').value;
+    const fechaHasta = document.getElementById('fechaHastaVentas').value;
+    const usuarioId = document.getElementById('usuarioVentas').value;
     
-    if (!fechaDesde || !fechaHasta) {
-        Swal.fire('Advertencia', 'Debe seleccionar un rango de fechas para imprimir todos los cuadres', 'warning');
-        return;
-    }
-    
-    let url = '/dashboard/cuadres/pdf-todos/';
+    let url = "{% url 'ventas_por_usuario_pdf' %}";
     const params = new URLSearchParams();
     
     if (fechaDesde) params.append('fecha_desde', fechaDesde);
     if (fechaHasta) params.append('fecha_hasta', fechaHasta);
-    if (usuario) params.append('usuario', usuario);
+    if (usuarioId) params.append('usuario', usuarioId);
     
     if (params.toString()) {
         url += '?' + params.toString();
     }
     
+    console.log("Generando PDF general con URL:", url); // Para depuración
+    
     // Mostrar loading
     Swal.fire({
         title: 'Generando Reporte',
-        text: 'Preparando PDF con todos los cuadres...',
+        text: 'Preparando PDF con las ventas por usuario...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Abrir en nueva pestaña el reporte PDF
+    const newWindow = window.open(url, '_blank');
+    
+    // Verificar si la ventana se abrió correctamente
+    if (newWindow) {
+        Swal.close();
+    } else {
+        Swal.fire('Error', 'No se pudo abrir el PDF. Verifica los bloqueadores de ventanas emergentes.', 'error');
+    }
+}
+
+// Función para imprimir ventas de un usuario específico - CORREGIDA
+function imprimirVentasUsuario(usuarioId, usuarioNombre) {
+    const fechaDesde = document.getElementById('fechaDesdeVentas').value;
+    const fechaHasta = document.getElementById('fechaHastaVentas').value;
+    
+    let url = `/ventas-usuario/${usuarioId}/pdf/`;
+    const params = new URLSearchParams();
+    
+    if (fechaDesde) params.append('fecha_desde', fechaDesde);
+    if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+    
+    if (params.toString()) {
+        url += '?' + params.toString();
+    }
+    
+    console.log("Generando PDF individual con URL:", url); // Para depuración
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Generando Reporte',
+        text: `Preparando PDF de ventas para ${usuarioNombre}...`,
         allowOutsideClick: false,
         didOpen: () => {
             Swal.showLoading();
@@ -2196,7 +2234,7 @@ function imprimirTodosCuadres() {
 }
 
 // =============================================
-// FUNCIONES PARA MOVIMIENTOS DE INVENTARIO - CORREGIDAS COMPLETAMENTE
+// FUNCIONES PARA MOVIMIENTOS DE INVENTARIO
 // =============================================
 
 // Función para actualizar la vista de movimientos
@@ -2212,13 +2250,13 @@ function updateMovimientosView() {
     buscarMovimientos();
 }
 
-// Función para buscar movimientos - VERSIÓN COMPLETAMENTE CORREGIDA
+// Función para buscar movimientos
 function buscarMovimientos() {
     const fechaDesde = document.getElementById('fechaDesde').value;
     const fechaHasta = document.getElementById('fechaHasta').value;
     const tipoMovimiento = document.getElementById('tipoMovimiento').value;
     
-    let url = '/dashboard/movimientos/';
+    let url = "{% url 'movimientos_stock' %}";
     const params = new URLSearchParams();
     
     if (fechaDesde) params.append('fecha_desde', fechaDesde);
@@ -2235,7 +2273,11 @@ function buscarMovimientos() {
     
     console.log("Buscando movimientos con URL:", url);
     
-    fetch(url)
+    fetch(url, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
         .then(response => response.json())
         .then(data => {
             console.log("Datos de movimientos recibidos:", data);
@@ -2256,7 +2298,7 @@ function buscarMovimientos() {
             
             mensajeVacio.style.display = 'none';
             
-            // Calcular estadísticas - LÓGICA COMPLETAMENTE REVISADA
+            // Calcular estadísticas
             let totalEntradas = 0;
             let totalSalidas = 0;
             
@@ -2264,18 +2306,14 @@ function buscarMovimientos() {
                 const row = document.createElement('tr');
                 const tipoBadge = getTipoMovimientoBadge(mov.tipo_movimiento);
                 
-                // REVISIÓN DE LÓGICA: Usar tipo_operacion del backend en lugar de recalcularlo
-                // El backend ya ha calculado correctamente si es entrada o salida
                 const esEntrada = mov.tipo_operacion === 'entrada';
                 
-                // Acumular estadísticas usando tipo_operacion del backend
                 if (esEntrada) {
                     totalEntradas += Math.abs(mov.cantidad);
                 } else {
                     totalSalidas += Math.abs(mov.cantidad);
                 }
                 
-                // Mostrar cantidad con signo y color apropiado
                 const cantidadDisplay = esEntrada ? `+${mov.cantidad}` : `${mov.cantidad}`;
                 
                 row.innerHTML = `
@@ -2298,17 +2336,6 @@ function buscarMovimientos() {
             document.getElementById('totalEntradas').textContent = totalEntradas;
             document.getElementById('totalSalidas').textContent = totalSalidas;
             document.getElementById('totalMovimientos').textContent = data.movimientos.length;
-            
-            // Mostrar información de depuración en consola
-            console.log(`Estadísticas calculadas: Entradas=${totalEntradas}, Salidas=${totalSalidas}, Total=${data.movimientos.length}`);
-            console.log(`Detalle de tipos de operación:`, 
-                data.movimientos.map(m => ({ 
-                    producto: m.producto, 
-                    tipo_mov: m.tipo_movimiento, 
-                    tipo_op: m.tipo_operacion, 
-                    cantidad: m.cantidad 
-                }))
-            );
         })
         .catch(error => {
             console.error('Error al buscar movimientos:', error);
@@ -2316,7 +2343,7 @@ function buscarMovimientos() {
         });
 }
 
-// Función para obtener el badge del tipo de movimiento - ACTUALIZADA
+// Función para obtener el badge del tipo de movimiento
 function getTipoMovimientoBadge(tipo) {
     const badges = {
         'entrada': '<span class="badge badge-success">Entrada</span>',
@@ -2346,7 +2373,7 @@ function imprimirReporteMovimientos() {
     const fechaHasta = document.getElementById('fechaHasta').value;
     const tipoMovimiento = document.getElementById('tipoMovimiento').value;
     
-    let url = '/dashboard/movimientos/pdf/';
+    let url = "{% url 'movimientos_stock_pdf' %}";
     const params = new URLSearchParams();
     
     if (fechaDesde) params.append('fecha_desde', fechaDesde);
@@ -2381,7 +2408,7 @@ function imprimirReporteMovimientos() {
 // Refrescar datos
 function refreshData() {
     // Hacer una solicitud al servidor para obtener datos actualizados
-    fetch('/dashboard/data/')
+    fetch("{% url 'dashboard_data' %}")
         .then(response => {
             if (!response.ok) {
                 throw new Error('Error al actualizar los datos');
@@ -2426,7 +2453,7 @@ function refreshData() {
 // Inicializar el dashboard
 document.addEventListener('DOMContentLoaded', function() {
     // Cargar datos iniciales desde Django
-    fetch('/dashboard/data/')
+    fetch("{% url 'dashboard_data' %}")
         .then(response => {
             if (!response.ok) {
                 throw new Error('Error al cargar los datos iniciales');
