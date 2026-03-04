@@ -10,10 +10,11 @@
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-      <!-- SweetAlert2 CSS -->
+    <!-- SweetAlert2 CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.12/dist/sweetalert2.min.css">
     
     <style>
+        /* (Estilos completos, sin cambios) */
         * {
             margin: 0;
             padding: 0;
@@ -1368,6 +1369,8 @@
                                         <th>Crédito</th>
                                         <th>Efectivo</th>
                                         <th>Tarjeta</th>
+                                        <!-- NUEVA COLUMNA Cobros Registrados -->
+                                        <th>Cobros Registrados</th>
                                         <th>Promedio por Venta</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -1378,7 +1381,7 @@
                             </table>
                         </div>
 
-                        <!-- Mensaje cuando no hay resultados -->
+                        <!-- Mensaje cuando no hay resultados (colspan actualizado a 10) -->
                         <div id="mensajeVacioVentas" style="text-align: center; padding: 2rem; display: none;">
                             <i class='bx bx-inbox' style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;"></i>
                             <p style="color: #6c757d; font-size: 1.1rem;">No se encontraron ventas con los filtros seleccionados</p>
@@ -2090,9 +2093,9 @@ function buscarVentasPorUsuario() {
     
     console.log("Buscando ventas con URL:", url); // Para depuración
     
-    // Mostrar loading
+    // Mostrar loading (colspan actualizado a 10)
     const tbody = document.querySelector('#tablaVentasUsuario tbody');
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 2rem;"><i class="bx bx-loader bx-spin"></i> Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem;"><i class="bx bx-loader bx-spin"></i> Cargando...</td></tr>';
     
     fetch(url, {
         headers: {
@@ -2123,6 +2126,9 @@ function buscarVentasPorUsuario() {
             data.ventas.forEach(venta => {
                 const row = document.createElement('tr');
                 
+                // Asegurarse de que total_cobros existe (por si la vista aún no lo devuelve, mostrar 0)
+                const totalCobros = venta.total_cobros !== undefined ? venta.total_cobros : 0;
+                
                 row.innerHTML = `
                     <td><strong>${venta.usuario}</strong></td>
                     <td>${venta.cantidad_ventas}</td>
@@ -2131,6 +2137,8 @@ function buscarVentasPorUsuario() {
                     <td>${formatCurrency(venta.total_credito)}</td>
                     <td>${formatCurrency(venta.total_efectivo)}</td>
                     <td>${formatCurrency(venta.total_tarjeta)}</td>
+                    <!-- NUEVA CELDA Cobros Registrados -->
+                    <td>${formatCurrency(totalCobros)}</td>
                     <td>${formatCurrency(venta.promedio_venta)}</td>
                     <td>
                         <button class="btn-imprimir" onclick="imprimirVentasUsuario(${venta.usuario_id}, '${venta.usuario}')" style="margin-bottom: 0.25rem;">

@@ -1922,181 +1922,196 @@ def ventas_por_usuario(request):
     
 
 
-
-
-
 @login_required
 def ventas_por_usuario(request):
-    """Vista para obtener ventas agrupadas por usuario (AJAX)"""
+    """
+    Vista para obtener ventas agrupadas por usuario (AJAX)
+    Incluye:
+    - Total ventas (contado + crédito)
+    - Total contado
+    - Total crédito (monto total de facturas a crédito)
+    - Total cobros registrados (pagos a cuentas por cobrar)
+    """
     try:
-        # Obtener filtros
+        # Obtener filtros desde la petición
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         usuario_id = request.GET.get('usuario')
-        
+
         # Query base de ventas no anuladas
         ventas = Venta.objects.filter(anulada=False)
-        
-        # Aplicar filtros de fecha
+
+        # Aplicar filtros de fecha a las ventas
         if fecha_desde:
             ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
         if fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
-        
-        # Obtener todos los usuarios
+
+        # Obtener todos los usuarios (o filtrar por uno específico después)
         usuarios = User.objects.all()
-        
-        # Preparar datos para JSON
+
         ventas_por_usuario = []
-        
+
         for usuario in usuarios:
             # Si hay filtro de usuario, solo mostrar ese
             if usuario_id and str(usuario.id) != usuario_id:
                 continue
-                
+
             # Ventas de este usuario
             ventas_usuario = ventas.filter(vendedor=usuario)
-            
+
+            # Si no hay ventas y no hay filtro específico, no mostrar (opcional)
             if not ventas_usuario.exists() and not usuario_id:
-                # Si no hay ventas y no hay filtro específico, no mostrar
                 continue
-            
-            # Calcular totales
+
+            # ========== CÁLCULOS DE VENTAS ==========
             cantidad_ventas = ventas_usuario.count()
-            
-            # Ventas por tipo - AHORA USAMOS EL TOTAL DE LA FACTURA PARA CRÉDITO TAMBIÉN
-            ventas_contado = ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            ventas_credito = ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            
+
+            # Ventas al contado (total de facturas contado)
+            ventas_contado = ventas_usuario.filter(tipo_venta='contado').aggregate(
+                total=Sum('total')
+            )['total'] or Decimal('0.00')
+
+            # Ventas a crédito (total de facturas crédito)
+            ventas_credito = ventas_usuario.filter(tipo_venta='credito').aggregate(
+                total=Sum('total')
+            )['total'] or Decimal('0.00')
+
             # Total general (contado + crédito)
             total_general = ventas_contado + ventas_credito
-            
-            # Ventas por método de pago (solo para ventas de contado)
+
+            # Ventas por método de pago (solo contado)
             ventas_efectivo = ventas_usuario.filter(
-                tipo_venta='contado', 
-                metodo_pago='efectivo'
+                tipo_venta='contado', metodo_pago='efectivo'
             ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            
+
             ventas_tarjeta = ventas_usuario.filter(
-                tipo_venta='contado', 
-                metodo_pago='tarjeta'
+                tipo_venta='contado', metodo_pago='tarjeta'
             ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            
+
             ventas_transferencia = ventas_usuario.filter(
-                tipo_venta='contado', 
-                metodo_pago='transferencia'
+                tipo_venta='contado', metodo_pago='transferencia'
             ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            
+
             # Promedio por venta
             promedio_venta = total_general / cantidad_ventas if cantidad_ventas > 0 else 0
-            
+
+            # ========== CÁLCULO DE COBROS REGISTRADOS ==========
+            # Pagos (cobros) registrados por este usuario en el mismo período
+            pagos = PagoCuentaPorCobrar.objects.filter(
+                usuario=usuario,
+                anulado=False
+            )
+            if fecha_desde:
+                pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
+            if fecha_hasta:
+                pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
+
+            total_cobros = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+
+            # ========== AGREGAR AL LISTADO ==========
             ventas_por_usuario.append({
                 'usuario_id': usuario.id,
                 'usuario': usuario.username,
                 'cantidad_ventas': cantidad_ventas,
-                'total_ventas': float(total_general),  # Total general (contado + crédito)
+                'total_ventas': float(total_general),
                 'total_contado': float(ventas_contado),
-                'total_credito': float(ventas_credito),  # AHORA ES EL TOTAL DE LA FACTURA
+                'total_credito': float(ventas_credito),
                 'total_efectivo': float(ventas_efectivo),
                 'total_tarjeta': float(ventas_tarjeta),
                 'total_transferencia': float(ventas_transferencia),
+                'total_cobros': float(total_cobros),   # <-- NUEVO CAMPO
                 'promedio_venta': float(promedio_venta)
             })
-        
-        # Ordenar por total de ventas (mayor a menor)
+
+        # Ordenar por total de ventas (de mayor a menor)
         ventas_por_usuario.sort(key=lambda x: x['total_ventas'], reverse=True)
-        
+
         return JsonResponse({'ventas': ventas_por_usuario})
-        
+
     except Exception as e:
         print(f"Error en ventas_por_usuario: {e}")
-        import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
 
 
-
-
 @login_required
 def ventas_por_usuario_pdf(request):
-    """Generar PDF con resumen de ventas por usuario"""
+    """Generar PDF con resumen de ventas por usuario (incluye cobros)"""
     try:
         from reportlab.lib.pagesizes import letter, landscape
         from reportlab.lib.units import inch
         from reportlab.pdfgen import canvas
         from io import BytesIO
-        
-        # Obtener filtros
+        from django.db.models import Sum
+
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         usuario_id = request.GET.get('usuario')
-        
-        # Query base de ventas
+
         ventas = Venta.objects.filter(anulada=False)
-        
         if fecha_desde:
             ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
         if fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
-        
-        # Obtener todos los usuarios
+
         usuarios = User.objects.all()
-        
-        # Crear PDF en orientación horizontal
+
         buffer = BytesIO()
         p = canvas.Canvas(buffer, pagesize=landscape(letter))
         width, height = landscape(letter)
-        
-        # Título
+
+        # Título y encabezado
         p.setFont("Helvetica-Bold", 16)
         p.drawString(1 * inch, height - 1 * inch, "Reporte de Ventas por Usuario")
-        
-        # Fecha del reporte
         p.setFont("Helvetica", 10)
         fecha_reporte = timezone.now().strftime('%d/%m/%Y %H:%M')
         p.drawString(1 * inch, height - 1.3 * inch, f"Fecha de generación: {fecha_reporte}")
-        
-        # Período
+
         periodo = "Todos los tiempos"
         if fecha_desde and fecha_hasta:
             periodo = f"{fecha_desde} al {fecha_hasta}"
-        elif fecha_desde:
-            periodo = f"Desde {fecha_desde}"
-        elif fecha_hasta:
-            periodo = f"Hasta {fecha_hasta}"
-        
         p.drawString(1 * inch, height - 1.5 * inch, f"Período: {periodo}")
-        
-        # Tabla de resumen
+
+        # ===== TABLA DE RESUMEN POR USUARIO (con columna Cobros) =====
         y_position = height - 2.5 * inch
         p.setFont("Helvetica-Bold", 9)
-        
-        # Encabezados - AÑADIMOS TRANSFERENCIA
-        headers = ['Usuario', 'Cantidad', 'Total', 'Contado', 'Crédito', 'Efectivo', 'Tarjeta', 'Transf.', 'Promedio']
-        col_positions = [1 * inch, 1.8 * inch, 2.8 * inch, 3.8 * inch, 4.8 * inch, 5.8 * inch, 6.8 * inch, 7.8 * inch, 8.8 * inch]
-        
+
+        headers = ['Usuario', 'Cantidad', 'Total', 'Contado', 'Crédito', 'Cobros', 'Efectivo', 'Tarjeta', 'Promedio']
+        col_positions = [
+            1.0 * inch,      # Usuario
+            1.8 * inch,      # Cantidad
+            2.8 * inch,      # Total
+            3.8 * inch,      # Contado
+            4.8 * inch,      # Crédito
+            5.8 * inch,      # Cobros
+            6.8 * inch,      # Efectivo
+            7.8 * inch,      # Tarjeta
+            8.8 * inch       # Promedio
+        ]
+
         for i, header in enumerate(headers):
             p.drawString(col_positions[i], y_position, header)
-        
+
         p.line(1 * inch, y_position - 0.1 * inch, 9.8 * inch, y_position - 0.1 * inch)
-        
         y_position -= 0.3 * inch
         p.setFont("Helvetica", 8)
-        
+
+        # Acumuladores para totales generales
         total_general = 0
         total_cantidad = 0
-        
+        total_contado_acum = 0
+        total_credito_acum = 0
+        total_cobros_acum = 0
+
         for usuario in usuarios:
-            # Si hay filtro de usuario, solo mostrar ese
             if usuario_id and str(usuario.id) != usuario_id:
                 continue
-                
-            # Ventas de este usuario
+
             ventas_usuario = ventas.filter(vendedor=usuario)
-            
             if not ventas_usuario.exists() and not usuario_id:
                 continue
-            
+
             if y_position < 1 * inch:
                 p.showPage()
                 y_position = height - 1 * inch
@@ -2106,221 +2121,309 @@ def ventas_por_usuario_pdf(request):
                 p.line(1 * inch, y_position - 0.1 * inch, 9.8 * inch, y_position - 0.1 * inch)
                 y_position -= 0.3 * inch
                 p.setFont("Helvetica", 8)
-            
-            # Calcular totales
+
             cantidad = ventas_usuario.count()
-            
-            # Ventas por tipo - USAMOS EL TOTAL DE LA FACTURA
             contado = float(ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or 0)
             credito = float(ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or 0)
-            
-            # Total general
             total = contado + credito
-            
-            # Ventas por método de pago
+
             efectivo = float(ventas_usuario.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or 0)
             tarjeta = float(ventas_usuario.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or 0)
-            transferencia = float(ventas_usuario.filter(tipo_venta='contado', metodo_pago='transferencia').aggregate(total=Sum('total'))['total'] or 0)
-            
+
+            # Cobros registrados por este usuario
+            pagos = PagoCuentaPorCobrar.objects.filter(
+                usuario=usuario,
+                anulado=False
+            )
+            if fecha_desde:
+                pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
+            if fecha_hasta:
+                pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
+            total_cobros = float(pagos.aggregate(total=Sum('monto'))['total'] or 0)
+
             promedio = total / cantidad if cantidad > 0 else 0
-            
+
             p.drawString(col_positions[0], y_position, usuario.username[:12])
             p.drawString(col_positions[1], y_position, str(cantidad))
             p.drawString(col_positions[2], y_position, f"${total:,.2f}")
             p.drawString(col_positions[3], y_position, f"${contado:,.2f}")
             p.drawString(col_positions[4], y_position, f"${credito:,.2f}")
-            p.drawString(col_positions[5], y_position, f"${efectivo:,.2f}")
-            p.drawString(col_positions[6], y_position, f"${tarjeta:,.2f}")
-            p.drawString(col_positions[7], y_position, f"${transferencia:,.2f}")
+            p.drawString(col_positions[5], y_position, f"${total_cobros:,.2f}")
+            p.drawString(col_positions[6], y_position, f"${efectivo:,.2f}")
+            p.drawString(col_positions[7], y_position, f"${tarjeta:,.2f}")
             p.drawString(col_positions[8], y_position, f"${promedio:,.2f}")
-            
+
             total_general += total
             total_cantidad += cantidad
+            total_contado_acum += contado
+            total_credito_acum += credito
+            total_cobros_acum += total_cobros
+
             y_position -= 0.2 * inch
-        
-        # Totales
+
+        # Totales generales
         y_position -= 0.2 * inch
         p.setFont("Helvetica-Bold", 9)
         p.line(1 * inch, y_position, 9.8 * inch, y_position)
         y_position -= 0.2 * inch
-        
+
         p.drawString(col_positions[0], y_position, "TOTALES:")
         p.drawString(col_positions[1], y_position, str(total_cantidad))
         p.drawString(col_positions[2], y_position, f"${total_general:,.2f}")
-        
-        # Nota aclaratoria
-        y_position -= 0.4 * inch
-        p.setFont("Helvetica-Oblique", 7)
-        p.drawString(1 * inch, y_position, "Nota: Las ventas a crédito muestran el total de la factura, no solo los pagos recibidos.")
-        
+        p.drawString(col_positions[3], y_position, f"${total_contado_acum:,.2f}")
+        p.drawString(col_positions[4], y_position, f"${total_credito_acum:,.2f}")
+        p.drawString(col_positions[5], y_position, f"${total_cobros_acum:,.2f}")
+
+        # Línea adicional: Entrada del día (contado + cobros)
+        y_position -= 0.3 * inch
+        p.setFont("Helvetica-Bold", 10)
+        total_entrada_dia = total_contado_acum + total_cobros_acum
+        p.drawString(1 * inch, y_position, f"Total entrada del día (contado + cobros): ${total_entrada_dia:,.2f}")
+
         p.showPage()
         p.save()
-        
+
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/pdf')
         filename = f"ventas_por_usuario_{timezone.now().strftime('%Y%m%d')}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
+
         return response
-        
+
     except Exception as e:
         print(f"Error en ventas_por_usuario_pdf: {e}")
         import traceback
         traceback.print_exc()
         return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
 
-
-
 @login_required
 def ventas_usuario_pdf(request, usuario_id):
-    """Generar PDF de ventas para un usuario específico"""
     try:
-        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.pagesizes import letter, landscape
         from reportlab.lib.units import inch
         from reportlab.pdfgen import canvas
         from io import BytesIO
-        
-        # Obtener filtros
+        from django.shortcuts import get_object_or_404
+        from django.db.models import Sum
+        from decimal import Decimal
+
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
-        
-        # Obtener usuario
-        try:
-            usuario = User.objects.get(id=usuario_id)
-        except User.DoesNotExist:
-            return HttpResponse("Usuario no encontrado", status=404)
-        
-        # Query de ventas
+        usuario = get_object_or_404(User, id=usuario_id)
+
+        # Ventas realizadas por el usuario
         ventas = Venta.objects.filter(
             anulada=False,
             vendedor=usuario
-        ).order_by('-fecha_venta')
-        
-        # Aplicar filtros de fecha
+        ).select_related('vendedor').prefetch_related('cuenta_por_cobrar__pagos').order_by('-fecha_venta')
+
         if fecha_desde:
             ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
         if fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
-        
-        # Calcular totales
+
+        # Pagos (cobros) realizados por el usuario
+        pagos = PagoCuentaPorCobrar.objects.filter(
+            usuario=usuario,
+            anulado=False
+        ).select_related('cuenta__venta', 'cuenta__cliente').order_by('-fecha_pago')
+
+        if fecha_desde:
+            pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
+        if fecha_hasta:
+            pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
+
+        # ===== Cálculo de totales para el resumen =====
+        total_ventas = ventas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        total_contado = ventas.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        total_credito = ventas.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        total_cobros = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
         cantidad_ventas = ventas.count()
-        
-        # Ventas por tipo - USAMOS EL TOTAL DE LA FACTURA PARA CRÉDITO
-        ventas_contado = ventas.filter(tipo_venta='contado')
-        total_contado = ventas_contado.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        
-        ventas_credito = ventas.filter(tipo_venta='credito')
-        total_credito = ventas_credito.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        
-        # Ventas por método de pago
-        efectivo = ventas.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        tarjeta = ventas.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        transferencia = ventas.filter(tipo_venta='contado', metodo_pago='transferencia').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        
-        # Total general
-        total_general = total_contado + total_credito
-        
-        # Crear PDF
+
+        # Crear PDF en orientación horizontal
         buffer = BytesIO()
-        p = canvas.Canvas(buffer, pagesize=letter)
-        width, height = letter
-        
-        # Título
-        p.setFont("Helvetica-Bold", 16)
-        p.drawString(1 * inch, height - 1 * inch, f"Reporte de Ventas - {usuario.username}")
-        
-        # Fecha del reporte
+        p = canvas.Canvas(buffer, pagesize=landscape(letter))
+        width, height = landscape(letter)
+
+        # ===== ENCABEZADO =====
+        p.setFont("Helvetica-Bold", 18)
+        p.drawString(1 * inch, height - 0.75 * inch, "Reporte de Actividad del Usuario")
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(1 * inch, height - 1.25 * inch, f"{usuario.get_full_name() or usuario.username}")
+
         p.setFont("Helvetica", 10)
         fecha_reporte = timezone.now().strftime('%d/%m/%Y %H:%M')
-        p.drawString(1 * inch, height - 1.3 * inch, f"Fecha de generación: {fecha_reporte}")
-        
-        # Período
+        p.drawString(1 * inch, height - 1.6 * inch, f"Fecha de generación: {fecha_reporte}")
+
         periodo = "Todos los tiempos"
         if fecha_desde and fecha_hasta:
-            periodo = f"{fecha_desde} al {fecha_hasta}"
-        elif fecha_desde:
-            periodo = f"Desde {fecha_desde}"
-        elif fecha_hasta:
-            periodo = f"Hasta {fecha_hasta}"
-        
-        p.drawString(1 * inch, height - 1.5 * inch, f"Período: {periodo}")
-        
-        # Resumen
+            periodo = f"Desde {fecha_desde} hasta {fecha_hasta}"
+        p.drawString(1 * inch, height - 1.8 * inch, f"Período: {periodo}")
+
+        y_position = height - 2.3 * inch
+
+        # ===== RESUMEN GENERAL =====
         p.setFont("Helvetica-Bold", 12)
-        p.drawString(1 * inch, height - 2 * inch, "Resumen:")
-        
+        p.drawString(1 * inch, y_position, "RESUMEN GENERAL")
+        y_position -= 0.2 * inch
+
         p.setFont("Helvetica", 10)
-        p.drawString(1 * inch, height - 2.3 * inch, f"Total de ventas: {cantidad_ventas}")
-        p.drawString(1 * inch, height - 2.5 * inch, f"Ventas contado: ${float(total_contado):,.2f}")
-        p.drawString(1 * inch, height - 2.7 * inch, f"Ventas crédito: ${float(total_credito):,.2f}")
-        p.drawString(1 * inch, height - 2.9 * inch, f"Monto total general: ${float(total_general):,.2f}")
-        
-        # Desglose por método de pago
-        p.drawString(1 * inch, height - 3.2 * inch, "Desglose contado:")
-        p.drawString(1.2 * inch, height - 3.4 * inch, f"Efectivo: ${float(efectivo):,.2f}")
-        p.drawString(1.2 * inch, height - 3.6 * inch, f"Tarjeta: ${float(tarjeta):,.2f}")
-        p.drawString(1.2 * inch, height - 3.8 * inch, f"Transferencia: ${float(transferencia):,.2f}")
-        
-        if cantidad_ventas > 0:
-            promedio = float(total_general) / cantidad_ventas
-            p.drawString(1 * inch, height - 4.1 * inch, f"Promedio por venta: ${promedio:,.2f}")
-        
-        # Listado de ventas
-        y_position = height - 4.8 * inch
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(1 * inch, y_position, "Fecha")
-        p.drawString(2.2 * inch, y_position, "Factura")
-        p.drawString(3.8 * inch, y_position, "Cliente")
-        p.drawString(6 * inch, y_position, "Tipo")
-        p.drawString(7 * inch, y_position, "Total")
-        
-        p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
-        
+        p.drawString(1.2 * inch, y_position, f"Cantidad de ventas: {cantidad_ventas}")
+        y_position -= 0.15 * inch
+        p.drawString(1.2 * inch, y_position, f"Total ventas: RD${float(total_ventas):,.2f}")
+        y_position -= 0.15 * inch
+        p.drawString(1.2 * inch, y_position, f"Total contado: RD${float(total_contado):,.2f}")
+        y_position -= 0.15 * inch
+        p.drawString(1.2 * inch, y_position, f"Total crédito: RD${float(total_credito):,.2f}")
+        y_position -= 0.15 * inch
+        p.drawString(1.2 * inch, y_position, f"Total cobros registrados: RD${float(total_cobros):,.2f}")
+        y_position -= 0.15 * inch
+
+        # Nueva línea: Entrada del día (contado + cobros)
+        entrada_dia = float(total_contado) + float(total_cobros)
+        p.drawString(1.2 * inch, y_position, f"Entrada del día (contado + cobros): RD${entrada_dia:,.2f}")
+        y_position -= 0.2 * inch
+
+        p.line(1 * inch, y_position, 9.5 * inch, y_position)
         y_position -= 0.3 * inch
+
+        # ===== SECCIÓN 1: VENTAS REALIZADAS (DETALLE) =====
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(1 * inch, y_position, "VENTAS REALIZADAS")
+        y_position -= 0.3 * inch
+
+        # Encabezados de tabla
+        p.setFont("Helvetica-Bold", 9)
+        p.drawString(1.0 * inch, y_position, "Fecha")
+        p.drawString(2.0 * inch, y_position, "Factura")
+        p.drawString(3.5 * inch, y_position, "Cliente")
+        p.drawString(5.5 * inch, y_position, "Tipo")
+        p.drawString(6.5 * inch, y_position, "Total")
+        p.drawString(7.8 * inch, y_position, "Estado Crédito")
+        p.line(1.0 * inch, y_position - 0.1 * inch, 9.5 * inch, y_position - 0.1 * inch)
+        y_position -= 0.25 * inch
         p.setFont("Helvetica", 8)
-        
-        for venta in ventas[:50]:  # Limitar a 50 ventas para no saturar el PDF
-            if y_position < 1 * inch:
+
+        for venta in ventas[:30]:  # límite para no saturar
+            if y_position < 1.5 * inch:
                 p.showPage()
                 y_position = height - 1 * inch
-                p.setFont("Helvetica-Bold", 10)
-                p.drawString(1 * inch, y_position, "Fecha")
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(1 * inch, y_position, "VENTAS REALIZADAS (continuación)")
+                y_position -= 0.3 * inch
+                p.setFont("Helvetica-Bold", 9)
+                p.drawString(1.0 * inch, y_position, "Fecha")
+                p.drawString(2.0 * inch, y_position, "Factura")
+                p.drawString(3.5 * inch, y_position, "Cliente")
+                p.drawString(5.5 * inch, y_position, "Tipo")
+                p.drawString(6.5 * inch, y_position, "Total")
+                p.drawString(7.8 * inch, y_position, "Estado Crédito")
+                p.line(1.0 * inch, y_position - 0.1 * inch, 9.5 * inch, y_position - 0.1 * inch)
+                y_position -= 0.25 * inch
+                p.setFont("Helvetica", 8)
+
+            # Determinar estado de crédito
+            if venta.tipo_venta == 'contado':
+                estado_credito = "N/A"
+            else:
+                try:
+                    cuenta = venta.cuenta_por_cobrar
+                    if cuenta.estado == 'pagada' or cuenta.monto_pagado >= cuenta.monto_total:
+                        estado_credito = "Pagado"
+                    elif cuenta.estado == 'parcial':
+                        estado_credito = "Parcial"
+                    elif cuenta.estado == 'vencida':
+                        estado_credito = "Vencida"
+                    else:
+                        estado_credito = "Pendiente"
+                except Venta.cuenta_por_cobrar.RelatedObjectDoesNotExist:
+                    estado_credito = "Sin cuenta"
+
+            fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
+            p.drawString(1.0 * inch, y_position, fecha_str)
+            p.drawString(2.0 * inch, y_position, venta.numero_factura[:12])
+            cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
+            p.drawString(3.5 * inch, y_position, cliente)
+            p.drawString(5.5 * inch, y_position, venta.tipo_venta.capitalize())
+            p.drawRightString(7.0 * inch, y_position, f"RD${float(venta.total):,.2f}")
+            p.drawString(7.8 * inch, y_position, estado_credito[:15])
+
+            y_position -= 0.15 * inch
+
+        # Separador
+        y_position -= 0.2 * inch
+        p.line(1.0 * inch, y_position, 9.5 * inch, y_position)
+        y_position -= 0.3 * inch
+
+        # ===== SECCIÓN 2: COBROS REGISTRADOS (DETALLE) =====
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(1 * inch, y_position, "COBROS REGISTRADOS (Pagos a Cuentas por Cobrar)")
+        y_position -= 0.3 * inch
+
+        # Encabezados de tabla
+        p.setFont("Helvetica-Bold", 9)
+        p.drawString(1.0 * inch, y_position, "Fecha Pago")
+        p.drawString(2.2 * inch, y_position, "Factura")
+        p.drawString(3.8 * inch, y_position, "Cliente")
+        p.drawString(5.5 * inch, y_position, "Monto")
+        p.drawString(6.8 * inch, y_position, "Método")
+        p.drawString(8.0 * inch, y_position, "Saldo Pendiente")
+        p.line(1.0 * inch, y_position - 0.1 * inch, 9.5 * inch, y_position - 0.1 * inch)
+        y_position -= 0.25 * inch
+        p.setFont("Helvetica", 8)
+
+        for pago in pagos[:30]:
+            if y_position < 1.5 * inch:
+                p.showPage()
+                y_position = height - 1 * inch
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(1 * inch, y_position, "COBROS REGISTRADOS (continuación)")
+                y_position -= 0.3 * inch
+                p.setFont("Helvetica-Bold", 9)
+                p.drawString(1.0 * inch, y_position, "Fecha Pago")
                 p.drawString(2.2 * inch, y_position, "Factura")
                 p.drawString(3.8 * inch, y_position, "Cliente")
-                p.drawString(6 * inch, y_position, "Tipo")
-                p.drawString(7 * inch, y_position, "Total")
-                p.line(1 * inch, y_position - 0.1 * inch, 7.5 * inch, y_position - 0.1 * inch)
-                y_position -= 0.3 * inch
+                p.drawString(5.5 * inch, y_position, "Monto")
+                p.drawString(6.8 * inch, y_position, "Método")
+                p.drawString(8.0 * inch, y_position, "Saldo Pendiente")
+                p.line(1.0 * inch, y_position - 0.1 * inch, 9.5 * inch, y_position - 0.1 * inch)
+                y_position -= 0.25 * inch
                 p.setFont("Helvetica", 8)
-            
-            fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
-            p.drawString(1 * inch, y_position, fecha_str)
-            p.drawString(2.2 * inch, y_position, venta.numero_factura[:13])
-            
-            cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
+
+            fecha_pago = pago.fecha_pago.strftime('%d/%m/%Y')
+            factura = pago.cuenta.venta.numero_factura if pago.cuenta.venta else "N/A"
+            cliente = pago.cuenta.cliente.full_name[:20] + "..." if len(pago.cuenta.cliente.full_name) > 20 else pago.cuenta.cliente.full_name
+            monto = f"RD${float(pago.monto):,.2f}"
+            metodo = pago.get_metodo_pago_display()
+            saldo = pago.cuenta.saldo_pendiente
+            saldo_str = f"RD${float(saldo):,.2f}"
+
+            p.drawString(1.0 * inch, y_position, fecha_pago)
+            p.drawString(2.2 * inch, y_position, factura[:12])
             p.drawString(3.8 * inch, y_position, cliente)
-            
-            p.drawString(6 * inch, y_position, venta.tipo_venta.capitalize())
-            p.drawRightString(7.5 * inch, y_position, f"${float(venta.total):,.2f}")
-            
+            p.drawRightString(6.0 * inch, y_position, monto)
+            p.drawString(6.8 * inch, y_position, metodo[:10])
+            p.drawRightString(9.5 * inch, y_position, saldo_str)
+
             y_position -= 0.15 * inch
-        
-        # Nota aclaratoria (opcional)
-        if ventas_credito.exists():
-            y_position -= 0.3 * inch
-            p.setFont("Helvetica-Oblique", 7)
-            p.drawString(1 * inch, y_position, "Las ventas a crédito muestran el total de la factura, no solo los pagos recibidos.")
-        
+
+        # ===== FIRMAS =====
+        y_position = 1.5 * inch
+        p.line(1 * inch, y_position, 3.5 * inch, y_position)
+        p.setFont("Helvetica", 9)
+        p.drawString(1.2 * inch, y_position - 0.2 * inch, "Firma del Usuario")
+        p.line(6 * inch, y_position, 9.5 * inch, y_position)
+        p.drawString(6.7 * inch, y_position - 0.2 * inch, "Firma del Administrador")
+
         p.showPage()
         p.save()
-        
         buffer.seek(0)
+
         response = HttpResponse(buffer, content_type='application/pdf')
-        filename = f"ventas_{usuario.username}_{timezone.now().strftime('%Y%m%d')}.pdf"
+        filename = f"actividad_{usuario.username}_{timezone.now().strftime('%Y%m%d')}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
         return response
-        
+
     except Exception as e:
         print(f"Error en ventas_usuario_pdf: {e}")
         import traceback
@@ -6145,7 +6248,17 @@ def sincronizar_cuentas_ventas():
     return f"Sincronizadas {cuentas.count()} cuentas"
 
 
-@csrf_exempt
+
+
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from decimal import Decimal
+import json
+
+@login_required
+@csrf_exempt  # Opcional: se puede quitar si se envía el token CSRF correctamente
 def registrar_pago(request):
     if request.method == 'POST':
         try:
@@ -6165,53 +6278,54 @@ def registrar_pago(request):
                     'message': 'No se puede registrar pago en una cuenta anulada'
                 })
 
-            # Usar `total_a_pagar` de Venta y asegurar 2 decimales
+            # Usar total_a_pagar de la venta y asegurar 2 decimales
             monto_total_original = Decimal(str(cuenta.venta.total_a_pagar)).quantize(Decimal('0.01'))
-            
-            # Calcular saldo pendiente (usando `total_a_pagar`) con 2 decimales
+
+            # Calcular saldo pendiente (con 2 decimales)
             saldo_pendiente = (monto_total_original - Decimal(str(cuenta.monto_pagado))).quantize(Decimal('0.01'))
-            
+
             # Redondear el monto del pago a 2 decimales
             monto = monto.quantize(Decimal('0.01'))
-            
+
             # Validar que el monto sea positivo
             if monto <= 0:
                 return JsonResponse({
                     'success': False,
                     'message': 'El monto del pago debe ser mayor a cero'
                 })
-            
+
             # Validar que el monto no exceda el saldo pendiente (con tolerancia de 1 centavo)
             if monto > saldo_pendiente + Decimal('0.01'):
                 return JsonResponse({
                     'success': False,
                     'message': f'El monto (RD${monto}) excede el saldo pendiente de RD${saldo_pendiente}'
                 })
-            
+
             # Si el monto es muy cercano al saldo pendiente (diferencia <= 1 centavo), ajustarlo
             if abs(monto - saldo_pendiente) <= Decimal('0.01'):
                 monto = saldo_pendiente
 
-            # Crear el pago
+            # Crear el pago con el usuario actual
             pago = PagoCuentaPorCobrar(
                 cuenta=cuenta,
                 monto=monto,
                 metodo_pago=metodo_pago,
                 referencia=referencia,
-                observaciones=observaciones
+                observaciones=observaciones,
+                usuario=request.user  # ← ASIGNACIÓN CLAVE PARA EVITAR EL ERROR
             )
             pago.save()
 
-            # Actualizar monto pagado (sumar el nuevo pago)
+            # Actualizar monto pagado de la cuenta
             cuenta.monto_pagado = (Decimal(str(cuenta.monto_pagado)) + monto).quantize(Decimal('0.01'))
 
-            # Calcular nuevo saldo (usando `total_a_pagar`)
+            # Calcular nuevo saldo
             nuevo_saldo = (monto_total_original - cuenta.monto_pagado).quantize(Decimal('0.01'))
 
-            # Actualizar el estado basado en el nuevo saldo
-            if nuevo_saldo <= Decimal('0.01'):  # Considerar pagada si el saldo es <= 1 centavo
+            # Actualizar el estado según el nuevo saldo
+            if nuevo_saldo <= Decimal('0.01'):  # Pagada si saldo <= 1 centavo
                 cuenta.estado = 'pagada'
-                cuenta.monto_pagado = monto_total_original  # Asegurar que sea exactamente el total
+                cuenta.monto_pagado = monto_total_original  # Ajuste exacto
                 nuevo_saldo = Decimal('0.00')
             elif cuenta.monto_pagado > 0:
                 cuenta.estado = 'parcial'
@@ -6247,6 +6361,7 @@ def registrar_pago(request):
             })
 
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
+
 
 
 def generar_comprobante_pdf(request, comprobante_id):
