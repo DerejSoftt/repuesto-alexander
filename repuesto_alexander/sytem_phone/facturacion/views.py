@@ -2390,6 +2390,14 @@ def ventas_usuario_pdf(request, usuario_id):
                 y_position -= 0.25 * inch
                 p.setFont("Helvetica", 8)
 
+            
+            fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
+            p.drawString(1 * inch, y_position, fecha_str)
+            p.drawString(2.2 * inch, y_position, venta.numero_factura[:13 ])
+            
+            cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
+
+
             fecha_pago = pago.fecha_pago.strftime('%d/%m/%Y')
             factura = pago.cuenta.venta.numero_factura if pago.cuenta.venta else "N/A"
             cliente = pago.cuenta.cliente.full_name[:20] + "..." if len(pago.cuenta.cliente.full_name) > 20 else pago.cuenta.cliente.full_name
@@ -2400,6 +2408,7 @@ def ventas_usuario_pdf(request, usuario_id):
 
             p.drawString(1.0 * inch, y_position, fecha_pago)
             p.drawString(2.2 * inch, y_position, factura[:12])
+
             p.drawString(3.8 * inch, y_position, cliente)
             p.drawRightString(6.0 * inch, y_position, monto)
             p.drawString(6.8 * inch, y_position, metodo[:10])
