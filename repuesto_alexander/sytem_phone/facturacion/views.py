@@ -2295,7 +2295,7 @@ def ventas_usuario_pdf(request, usuario_id):
             
             fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
             p.drawString(1 * inch, y_position, fecha_str)
-            p.drawString(2.2 * inch, y_position, venta.numero_factura[:13])
+            p.drawString(2.2 * inch, y_position, venta.numero_factura[:13 ])
             
             cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
             p.drawString(3.8 * inch, y_position, cliente)
