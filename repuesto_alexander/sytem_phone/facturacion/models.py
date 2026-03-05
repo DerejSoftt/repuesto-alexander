@@ -714,7 +714,7 @@ class PagoCuentaPorCobrar(models.Model):
     observaciones = models.TextField(blank=True, verbose_name="Observaciones")
     fecha_registro = models.DateTimeField(auto_now_add=True)
     anulado = models.BooleanField(default=False)
-    
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT, verbose_name="Usuario que cobró")
     class Meta:
         db_table = 'pagos_cuentas_por_cobrar'
         verbose_name = 'Pago de Cuenta por Cobrar'
