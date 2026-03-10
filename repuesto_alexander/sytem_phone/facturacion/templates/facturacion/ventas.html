@@ -1556,8 +1556,6 @@
             cashPaymentFields: document.getElementById('cash-payment-fields'),
             cashReceivedInput: document.getElementById('cash-received'),
             changeAmountDisplay: document.getElementById('change-amount'),
-            // El botón de cerrar caja fue reemplazado, pero lo dejamos comentado por si acaso
-            // closeRegisterButton: document.getElementById('close-register-button'),
             closeRegisterModal: document.getElementById('close-register-modal'),
             cancelCloseRegister: document.getElementById('cancel-close-register'),
             confirmCloseRegister: document.getElementById('confirm-close-register'),
@@ -2304,12 +2302,13 @@
             `;
         }
 
-        // Generar PDF de reporte de ventas para el usuario actual
+        // Generar PDF de reporte de ventas para TODOS los usuarios (con cobros)
         function generateSalesReportPDF() {
             const fechaDesde = document.getElementById('report-fecha-desde').value;
             const fechaHasta = document.getElementById('report-fecha-hasta').value;
             
-            let url = '/reporte-ventas-usuario-actual-pdf/';  // URL que debe coincidir con el backend
+            // Usar la vista que genera el PDF agrupado por usuario (incluye cobros)
+            let url = "{% url 'ventas_por_usuario_pdf' %}";
             const params = new URLSearchParams();
             
             if (fechaDesde) params.append('fecha_desde', fechaDesde);
