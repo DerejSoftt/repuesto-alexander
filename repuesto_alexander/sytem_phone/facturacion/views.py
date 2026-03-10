@@ -2035,37 +2035,54 @@ def ventas_por_usuario(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+
+
 @login_required
 def ventas_por_usuario_pdf(request):
-    """Generar PDF con resumen de ventas por usuario (incluye cobros)"""
+    """
+    Genera un PDF con resumen de ventas por usuario en el período seleccionado.
+    Incluye:
+    - Cantidad de ventas
+    - Total ventas (contado + crédito)
+    - Desglose contado y crédito
+    - Total cobros registrados (pagos)
+    - Desglose por método de pago (efectivo, tarjeta, transferencia)
+    - Promedio por venta
+    - Totales generales y entrada del día (contado + cobros)
+    """
     try:
-        from reportlab.lib.pagesizes import letter, landscape
-        from reportlab.lib.units import inch
-        from reportlab.pdfgen import canvas
-        from io import BytesIO
-        from django.db.models import Sum
-
+        # Obtener filtros desde la petición
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
-        usuario_id = request.GET.get('usuario')
+        usuario_id = request.GET.get('usuario')  # Opcional, si se quiere filtrar por un usuario
 
+        # Fecha actual para el encabezado
+        ahora = timezone.now()
+        fecha_reporte = ahora.strftime('%d/%m/%Y %H:%M')
+
+        # Query base de ventas no anuladas
         ventas = Venta.objects.filter(anulada=False)
-        if fecha_desde:
+
+        # Aplicar filtros de fecha (inclusivos)
+        if fecha_desde and fecha_hasta:
+            ventas = ventas.filter(fecha_venta__date__range=[fecha_desde, fecha_hasta])
+        elif fecha_desde:
             ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
-        if fecha_hasta:
+        elif fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
 
-        usuarios = User.objects.all()
+        # Obtener todos los usuarios (ordenados por username)
+        usuarios = User.objects.all().order_by('username')
 
-        buffer = BytesIO()
+        # Crear el buffer para el PDF
+        buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=landscape(letter))
         width, height = landscape(letter)
 
-        # Título y encabezado
+        # ===== ENCABEZADO =====
         p.setFont("Helvetica-Bold", 16)
         p.drawString(1 * inch, height - 1 * inch, "Reporte de Ventas por Usuario")
         p.setFont("Helvetica", 10)
-        fecha_reporte = timezone.now().strftime('%d/%m/%Y %H:%M')
         p.drawString(1 * inch, height - 1.3 * inch, f"Fecha de generación: {fecha_reporte}")
 
         periodo = "Todos los tiempos"
@@ -2073,46 +2090,86 @@ def ventas_por_usuario_pdf(request):
             periodo = f"{fecha_desde} al {fecha_hasta}"
         p.drawString(1 * inch, height - 1.5 * inch, f"Período: {periodo}")
 
-        # ===== TABLA DE RESUMEN POR USUARIO (con columna Cobros) =====
+        # ===== TABLA DE RESUMEN =====
         y_position = height - 2.5 * inch
         p.setFont("Helvetica-Bold", 9)
 
-        headers = ['Usuario', 'Cantidad', 'Total', 'Contado', 'Crédito', 'Cobros', 'Efectivo', 'Tarjeta', 'Promedio']
+        # Definir encabezados y posiciones de columnas
+        headers = ['Usuario', 'Cant.', 'Total', 'Contado', 'Crédito', 'Cobros', 'Efectivo', 'Tarjeta', 'Transf.']
         col_positions = [
-            1.0 * inch,      # Usuario
-            1.8 * inch,      # Cantidad
-            2.8 * inch,      # Total
-            3.8 * inch,      # Contado
-            4.8 * inch,      # Crédito
-            5.8 * inch,      # Cobros
-            6.8 * inch,      # Efectivo
-            7.8 * inch,      # Tarjeta
-            8.8 * inch       # Promedio
+            1.0 * inch,   # Usuario
+            1.9 * inch,   # Cantidad
+            2.7 * inch,   # Total
+            3.5 * inch,   # Contado
+            4.3 * inch,   # Crédito
+            5.1 * inch,   # Cobros
+            5.9 * inch,   # Efectivo
+            6.7 * inch,   # Tarjeta
+            7.5 * inch,   # Transferencia
+            # 8.3 * inch,   # Promedio
         ]
 
+        # Dibujar encabezados
         for i, header in enumerate(headers):
             p.drawString(col_positions[i], y_position, header)
 
+        # Línea debajo de los encabezados
         p.line(1 * inch, y_position - 0.1 * inch, 9.8 * inch, y_position - 0.1 * inch)
         y_position -= 0.3 * inch
         p.setFont("Helvetica", 8)
 
         # Acumuladores para totales generales
-        total_general = 0
+        total_general = Decimal('0.00')
         total_cantidad = 0
-        total_contado_acum = 0
-        total_credito_acum = 0
-        total_cobros_acum = 0
+        total_contado_acum = Decimal('0.00')
+        total_credito_acum = Decimal('0.00')
+        total_cobros_acum = Decimal('0.00')
+        total_efectivo_acum = Decimal('0.00')
+        total_tarjeta_acum = Decimal('0.00')
+        total_transferencia_acum = Decimal('0.00')
 
+        # Iterar sobre cada usuario
         for usuario in usuarios:
+            # Si se especificó un usuario_id, filtrar solo ese
             if usuario_id and str(usuario.id) != usuario_id:
                 continue
 
             ventas_usuario = ventas.filter(vendedor=usuario)
-            if not ventas_usuario.exists() and not usuario_id:
-                continue
 
-            if y_position < 1 * inch:
+            # Calcular métricas de ventas
+            cantidad = ventas_usuario.count()
+            contado = ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            credito = ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            total = contado + credito
+
+            efectivo = ventas_usuario.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            tarjeta = ventas_usuario.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            transferencia = ventas_usuario.filter(tipo_venta='contado', metodo_pago='transferencia').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+
+            # Cobros registrados por este usuario en el mismo período
+            pagos = PagoCuentaPorCobrar.objects.filter(usuario=usuario, anulado=False)
+            if fecha_desde and fecha_hasta:
+                pagos = pagos.filter(fecha_pago__date__range=[fecha_desde, fecha_hasta])
+            elif fecha_desde:
+                pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
+            elif fecha_hasta:
+                pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
+            total_cobros = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+
+            # promedio = total / cantidad if cantidad > 0 else Decimal('0.00')
+
+            # Actualizar acumuladores
+            total_general += total
+            total_cantidad += cantidad
+            total_contado_acum += contado
+            total_credito_acum += credito
+            total_cobros_acum += total_cobros
+            total_efectivo_acum += efectivo
+            total_tarjeta_acum += tarjeta
+            total_transferencia_acum += transferencia
+
+            # Si estamos cerca del final de la página, crear una nueva
+            if y_position < 1.5 * inch:
                 p.showPage()
                 y_position = height - 1 * inch
                 p.setFont("Helvetica-Bold", 9)
@@ -2122,79 +2179,60 @@ def ventas_por_usuario_pdf(request):
                 y_position -= 0.3 * inch
                 p.setFont("Helvetica", 8)
 
-            cantidad = ventas_usuario.count()
-            contado = float(ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or 0)
-            credito = float(ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or 0)
-            total = contado + credito
-
-            efectivo = float(ventas_usuario.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or 0)
-            tarjeta = float(ventas_usuario.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or 0)
-
-            # Cobros registrados por este usuario
-            pagos = PagoCuentaPorCobrar.objects.filter(
-                usuario=usuario,
-                anulado=False
-            )
-            if fecha_desde:
-                pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
-            if fecha_hasta:
-                pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
-            total_cobros = float(pagos.aggregate(total=Sum('monto'))['total'] or 0)
-
-            promedio = total / cantidad if cantidad > 0 else 0
-
-            p.drawString(col_positions[0], y_position, usuario.username[:12])
+            # Dibujar fila del usuario
+            p.drawString(col_positions[0], y_position, usuario.username[:15])
             p.drawString(col_positions[1], y_position, str(cantidad))
-            p.drawString(col_positions[2], y_position, f"${total:,.2f}")
-            p.drawString(col_positions[3], y_position, f"${contado:,.2f}")
-            p.drawString(col_positions[4], y_position, f"${credito:,.2f}")
-            p.drawString(col_positions[5], y_position, f"${total_cobros:,.2f}")
-            p.drawString(col_positions[6], y_position, f"${efectivo:,.2f}")
-            p.drawString(col_positions[7], y_position, f"${tarjeta:,.2f}")
-            p.drawString(col_positions[8], y_position, f"${promedio:,.2f}")
-
-            total_general += total
-            total_cantidad += cantidad
-            total_contado_acum += contado
-            total_credito_acum += credito
-            total_cobros_acum += total_cobros
+            p.drawString(col_positions[2], y_position, f"${float(total):,.2f}")
+            p.drawString(col_positions[3], y_position, f"${float(contado):,.2f}")
+            p.drawString(col_positions[4], y_position, f"${float(credito):,.2f}")
+            p.drawString(col_positions[5], y_position, f"${float(total_cobros):,.2f}")
+            p.drawString(col_positions[6], y_position, f"${float(efectivo):,.2f}")
+            p.drawString(col_positions[7], y_position, f"${float(tarjeta):,.2f}")
+            p.drawString(col_positions[8], y_position, f"${float(transferencia):,.2f}")
+            # p.drawString(col_positions[9], y_position, f"${float(promedio):,.2f}")
 
             y_position -= 0.2 * inch
 
-        # Totales generales
-        y_position -= 0.2 * inch
+        # ===== TOTALES GENERALES =====
+        y_position -= 0.1 * inch
         p.setFont("Helvetica-Bold", 9)
         p.line(1 * inch, y_position, 9.8 * inch, y_position)
         y_position -= 0.2 * inch
 
         p.drawString(col_positions[0], y_position, "TOTALES:")
         p.drawString(col_positions[1], y_position, str(total_cantidad))
-        p.drawString(col_positions[2], y_position, f"${total_general:,.2f}")
-        p.drawString(col_positions[3], y_position, f"${total_contado_acum:,.2f}")
-        p.drawString(col_positions[4], y_position, f"${total_credito_acum:,.2f}")
-        p.drawString(col_positions[5], y_position, f"${total_cobros_acum:,.2f}")
+        p.drawString(col_positions[2], y_position, f"${float(total_general):,.2f}")
+        p.drawString(col_positions[3], y_position, f"${float(total_contado_acum):,.2f}")
+        p.drawString(col_positions[4], y_position, f"${float(total_credito_acum):,.2f}")
+        p.drawString(col_positions[5], y_position, f"${float(total_cobros_acum):,.2f}")
+        p.drawString(col_positions[6], y_position, f"${float(total_efectivo_acum):,.2f}")
+        p.drawString(col_positions[7], y_position, f"${float(total_tarjeta_acum):,.2f}")
+        p.drawString(col_positions[8], y_position, f"${float(total_transferencia_acum):,.2f}")
+        # El promedio general no se calcula aquí (sería promedio de promedios, poco significativo)
 
-        # Línea adicional: Entrada del día (contado + cobros)
+        # ===== LÍNEA ADICIONAL: ENTRADA DEL DÍA =====
         y_position -= 0.3 * inch
-        p.setFont("Helvetica-Bold", 10)
-        total_entrada_dia = total_contado_acum + total_cobros_acum
-        p.drawString(1 * inch, y_position, f"Total entrada del día (contado + cobros): ${total_entrada_dia:,.2f}")
+        p.setFont("Helvetica-Bold", 11)
+        entrada_dia = float(total_contado_acum) + float(total_cobros_acum)
+        p.drawString(1 * inch, y_position, f"Total entrada del día (contado + cobros): RD${entrada_dia:,.2f}")
 
+        # Finalizar PDF
         p.showPage()
         p.save()
 
+        # Preparar respuesta
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/pdf')
-        filename = f"ventas_por_usuario_{timezone.now().strftime('%Y%m%d')}.pdf"
+        filename = f"ventas_por_usuario_{ahora.strftime('%Y%m%d_%H%M%S')}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
         return response
 
     except Exception as e:
-        print(f"Error en ventas_por_usuario_pdf: {e}")
         import traceback
         traceback.print_exc()
-        return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
+        return HttpResponse(f"Error al generar el reporte: {str(e)}", status=500)
+
+
 
 @login_required
 def ventas_usuario_pdf(request, usuario_id):
