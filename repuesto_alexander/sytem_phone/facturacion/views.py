@@ -2124,9 +2124,9 @@ def ventas_por_usuario_pdf(request):
                     cliente_nombre = pago.cuenta.venta.cliente_nombre
 
             if pago.metodo_pago == 'efectivo':
-                metodo = 'cobro/efectivo'
+                metodo = 'Cobro/efectivo'
             elif pago.metodo_pago == 'transferencia':
-                metodo = 'cobro/transferencia'
+                metodo = 'Cobro/transferencia'
             else:
                 metodo = pago.metodo_pago
 
