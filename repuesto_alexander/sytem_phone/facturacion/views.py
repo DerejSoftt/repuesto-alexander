@@ -2037,33 +2037,35 @@ def ventas_por_usuario(request):
 
 
 
+
 @login_required
 def ventas_por_usuario_pdf(request):
     """
-    Genera un PDF con resumen de ventas por usuario en el período seleccionado.
-    Incluye:
-    - Cantidad de ventas
-    - Total ventas (contado + crédito)
-    - Desglose contado y crédito
-    - Total cobros registrados (pagos)
-    - Desglose por método de pago (efectivo, tarjeta, transferencia)
-    - Promedio por venta
-    - Totales generales y entrada del día (contado + cobros)
+    Genera PDF con detalle de ventas y cobros por usuario (solo usuarios con ventas en el período).
+    Muestra una tabla con: fecha, factura, usuario, cliente, tipo, método, valor.
     """
     try:
-        # Obtener filtros desde la petición
+        import io
+        import pytz
+        from django.http import HttpResponse
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.lib.units import inch
+        from django.utils import timezone
+        from django.contrib.auth.models import User
+        from .models import Venta, PagoCuentaPorCobrar, Cliente
+        
+        # ========== FILTROS ==========
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
-        usuario_id = request.GET.get('usuario')  # Opcional, si se quiere filtrar por un usuario
+        usuario_id = request.GET.get('usuario')
 
-        # Fecha actual para el encabezado
-        ahora = timezone.now()
-        fecha_reporte = ahora.strftime('%d/%m/%Y %H:%M')
+        tz_rd = pytz.timezone('America/Santo_Domingo')
+        ahora_local = timezone.now().astimezone(tz_rd)
+        fecha_reporte = ahora_local.strftime('%d/%m/%Y %I:%M %p')
 
-        # Query base de ventas no anuladas
         ventas = Venta.objects.filter(anulada=False)
 
-        # Aplicar filtros de fecha (inclusivos)
         if fecha_desde and fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__range=[fecha_desde, fecha_hasta])
         elif fecha_desde:
@@ -2071,159 +2073,306 @@ def ventas_por_usuario_pdf(request):
         elif fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
 
-        # Obtener todos los usuarios (ordenados por username)
-        usuarios = User.objects.all().order_by('username')
+        usuarios_excluidos = ['derej', 'soft']
+        usuarios_activos = User.objects.filter(is_active=True).exclude(username__in=usuarios_excluidos)
+        usuarios_con_ventas_ids = ventas.filter(vendedor__in=usuarios_activos).values_list('vendedor_id', flat=True).distinct()
 
-        # Crear el buffer para el PDF
+        if usuario_id:
+            usuario_obj = User.objects.filter(id=usuario_id, is_active=True).exclude(username__in=usuarios_excluidos).first()
+            if usuario_obj and usuario_obj.id in usuarios_con_ventas_ids:
+                usuarios_con_ventas_ids = [usuario_obj.id]
+            else:
+                usuarios_con_ventas_ids = []
+
+        ventas = ventas.filter(vendedor_id__in=usuarios_con_ventas_ids)
+
+        pagos = PagoCuentaPorCobrar.objects.filter(usuario_id__in=usuarios_con_ventas_ids, anulado=False)
+        if fecha_desde and fecha_hasta:
+            pagos = pagos.filter(fecha_pago__date__range=[fecha_desde, fecha_hasta])
+        elif fecha_desde:
+            pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
+        elif fecha_hasta:
+            pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
+
+        # ========== CONSTRUIR FILAS ==========
+        rows = []
+
+        for venta in ventas.select_related('vendedor', 'cliente').iterator():
+            if venta.tipo_venta == 'contado':
+                tipo = 'contado'
+                metodo = venta.metodo_pago if venta.metodo_pago else 'efectivo'
+            else:
+                tipo = 'credito'
+                metodo = 'credito'
+
+            rows.append({
+                'fecha': venta.fecha_venta.date(),
+                'factura': venta.numero_factura,
+                'usuario': venta.vendedor.username,
+                'cliente': venta.cliente_nombre if venta.cliente_nombre else 'N/A',
+                'tipo': tipo,
+                'metodo': metodo,
+                'valor': venta.total,
+            })
+
+        for pago in pagos.select_related('usuario', 'cuenta', 'cuenta__venta').iterator():
+            cliente_nombre = 'N/A'
+            if pago.cuenta and pago.cuenta.venta:
+                if pago.cuenta.venta.cliente:
+                    cliente_nombre = pago.cuenta.venta.cliente.full_name
+                elif pago.cuenta.venta.cliente_nombre:
+                    cliente_nombre = pago.cuenta.venta.cliente_nombre
+
+            if pago.metodo_pago == 'efectivo':
+                metodo = 'cobro/efectivo'
+            elif pago.metodo_pago == 'transferencia':
+                metodo = 'cobro/transferencia'
+            else:
+                metodo = pago.metodo_pago
+
+            rows.append({
+                'fecha': pago.fecha_pago.date(),
+                'factura': pago.cuenta.venta.numero_factura if pago.cuenta and pago.cuenta.venta else 'N/A',
+                'usuario': pago.usuario.username if pago.usuario else 'Sistema',
+                'cliente': cliente_nombre,
+                'tipo': 'Cobros',
+                'metodo': metodo,
+                'valor': pago.monto,
+            })
+
+        rows.sort(key=lambda x: (x['fecha'], x['factura']), reverse=True)
+
+        # ========== TOTALES ==========
+        total_registros = len(rows)
+        total_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('efectivo'))
+        total_transferencias = sum(r['valor'] for r in rows if r['metodo'] in ('transferencia' ))
+        total_credito = sum(r['valor'] for r in rows if r['metodo'] == 'credito')
+        total_cobros = sum(r['valor'] for r in rows if r.get('tipo') == 'Cobros')
+        total_ventas_general = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
+        total_contado = total_efectivo + total_cobros
+
+        # ========== COLORES ==========
+        # Gris oscuro para headers (como en la imagen)
+        HEADER_BG = (0.25, 0.25, 0.25)      # Gris oscuro cabecera tabla
+        HEADER_TEXT = (1, 1, 1)              # Blanco
+        ROW_ALT = (0.93, 0.93, 0.93)        # Gris muy claro filas alternas
+        ROW_WHITE = (1, 1, 1)               # Blanco filas normales
+        CARD_BG = (0.20, 0.20, 0.20)        # Gris oscuro cards
+        CARD_TEXT = (1, 1, 1)               # Blanco texto cards
+        CARD_VALUE = (1, 1, 1)              # Blanco valor cards
+        BORDER = (0.60, 0.60, 0.60)         # Gris borde
+
+        # ========== GENERAR PDF ==========
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=landscape(letter))
         width, height = landscape(letter)
 
-        # ===== ENCABEZADO =====
-        p.setFont("Helvetica-Bold", 16)
-        p.drawString(1 * inch, height - 1 * inch, "Reporte de Ventas por Usuario")
-        p.setFont("Helvetica", 10)
-        p.drawString(1 * inch, height - 1.3 * inch, f"Fecha de generación: {fecha_reporte}")
+        def draw_page_header(p, height, fecha_reporte, periodo):
+            """Dibuja el encabezado del reporte."""
+            # Título principal
+            p.setFillColorRGB(0.15, 0.15, 0.15)
+            p.setFont("Helvetica-Bold", 15)
+            p.drawString(1 * inch, height - 0.75 * inch, "Reporte Detallado de Ventas y Cobros por Usuario")
+
+            # Subtítulo fecha y período
+            p.setFont("Helvetica", 9)
+            p.setFillColorRGB(0.35, 0.35, 0.35)
+            p.drawString(1 * inch, height - 1.05 * inch, f"Generado: {fecha_reporte}    |    Período: {periodo}")
+
+            # Línea separadora bajo el título
+            p.setStrokeColorRGB(*BORDER)
+            p.setLineWidth(0.8)
+            p.line(1 * inch, height - 1.20 * inch, width - 1 * inch, height - 1.20 * inch)
 
         periodo = "Todos los tiempos"
         if fecha_desde and fecha_hasta:
             periodo = f"{fecha_desde} al {fecha_hasta}"
-        p.drawString(1 * inch, height - 1.5 * inch, f"Período: {periodo}")
+        elif fecha_desde:
+            periodo = f"Desde {fecha_desde}"
+        elif fecha_hasta:
+            periodo = f"Hasta {fecha_hasta}"
 
-        # ===== TABLA DE RESUMEN =====
-        y_position = height - 2.5 * inch
-        p.setFont("Helvetica-Bold", 9)
+        draw_page_header(p, height, fecha_reporte, periodo)
 
-        # Definir encabezados y posiciones de columnas
-        headers = ['Usuario', 'Cant.', 'Total', 'Contado', 'Crédito', 'Cobros', 'Efectivo', 'Tarjeta', 'Transf.']
-        col_positions = [
-            1.0 * inch,   # Usuario
-            1.9 * inch,   # Cantidad
-            2.7 * inch,   # Total
-            3.5 * inch,   # Contado
-            4.3 * inch,   # Crédito
-            5.1 * inch,   # Cobros
-            5.9 * inch,   # Efectivo
-            6.7 * inch,   # Tarjeta
-            7.5 * inch,   # Transferencia
-            # 8.3 * inch,   # Promedio
+        # ========== CARDS DE RESUMEN ==========
+        cards_data = [
+            ("Total Vendido",    f"RD${total_ventas_general:,.2f}", None),
+            ("Transacciones",    str(total_registros),              None),
+            ("Efectivo",         f"RD${total_efectivo:,.2f}",       f"({sum(1 for r in rows if r['metodo'] in ('efectivo', 'cobro/efectivo'))} ventas)"),
+            ("Transferencias",   f"RD${total_transferencias:,.2f}", f"({sum(1 for r in rows if r['metodo'] in ('transferencia', 'cobro/transferencia'))} trans.)"),
+            ("Cobros",           f"RD${total_cobros:,.2f}",         f"({sum(1 for r in rows if r['metodo'] in ('cobro/efectivo', 'cobro/transferencia'))} cobros)"),
+            ("Contado",          f"RD${total_contado:,.2f}",        f"({sum(1 for r in rows if r['tipo'] == 'contado')} ventas)"),
+            ("Crédito",          f"RD${total_credito:,.2f}",        f"({sum(1 for r in rows if r['metodo'] == 'credito')} ventas)"),
         ]
 
-        # Dibujar encabezados
-        for i, header in enumerate(headers):
-            p.drawString(col_positions[i], y_position, header)
+        n_cards = len(cards_data)
+        total_card_area = width - 2 * inch
+        card_spacing = 0.12 * inch
+        card_width = (total_card_area - (n_cards - 1) * card_spacing) / n_cards
+        card_height = 0.70 * inch
+        card_y_top = height - 1.45 * inch  # Top of card area
+        card_y_bottom = card_y_top - card_height
 
-        # Línea debajo de los encabezados
-        p.line(1 * inch, y_position - 0.1 * inch, 9.8 * inch, y_position - 0.1 * inch)
-        y_position -= 0.3 * inch
-        p.setFont("Helvetica", 8)
+        x = 1 * inch
+        for label, value, sub in cards_data:
+            # Fondo oscuro tipo imagen
+            p.setFillColorRGB(*CARD_BG)
+            p.setStrokeColorRGB(*BORDER)
+            p.setLineWidth(0.5)
+            p.roundRect(x, card_y_bottom, card_width, card_height, 4, fill=1, stroke=1)
 
-        # Acumuladores para totales generales
-        total_general = Decimal('0.00')
-        total_cantidad = 0
-        total_contado_acum = Decimal('0.00')
-        total_credito_acum = Decimal('0.00')
-        total_cobros_acum = Decimal('0.00')
-        total_efectivo_acum = Decimal('0.00')
-        total_tarjeta_acum = Decimal('0.00')
-        total_transferencia_acum = Decimal('0.00')
+            # Label (etiqueta arriba, pequeña, gris claro)
+            p.setFillColorRGB(0.75, 0.75, 0.75)
+            p.setFont("Helvetica", 7)
+            p.drawCentredString(x + card_width / 2, card_y_bottom + card_height - 0.20 * inch, label.upper())
 
-        # Iterar sobre cada usuario
-        for usuario in usuarios:
-            # Si se especificó un usuario_id, filtrar solo ese
-            if usuario_id and str(usuario.id) != usuario_id:
-                continue
+            # Value (grande, blanco, negrita)
+            p.setFillColorRGB(*CARD_VALUE)
+            # Ajustar tamaño de fuente si el valor es muy largo
+            font_size = 10 if len(value) > 14 else 11
+            p.setFont("Helvetica-Bold", font_size)
+            p.drawCentredString(x + card_width / 2, card_y_bottom + card_height * 0.38, value)
 
-            ventas_usuario = ventas.filter(vendedor=usuario)
+            # Sub (subtítulo opcional)
+            if sub:
+                p.setFillColorRGB(0.65, 0.65, 0.65)
+                p.setFont("Helvetica", 6.5)
+                p.drawCentredString(x + card_width / 2, card_y_bottom + 0.10 * inch, sub)
 
-            # Calcular métricas de ventas
-            cantidad = ventas_usuario.count()
-            contado = ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            credito = ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            total = contado + credito
+            x += card_width + card_spacing
 
-            efectivo = ventas_usuario.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            tarjeta = ventas_usuario.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            transferencia = ventas_usuario.filter(tipo_venta='contado', metodo_pago='transferencia').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        # ========== TABLA ==========
+        # Posición inicio tabla
+        y_position = card_y_bottom - 0.30 * inch
 
-            # Cobros registrados por este usuario en el mismo período
-            pagos = PagoCuentaPorCobrar.objects.filter(usuario=usuario, anulado=False)
-            if fecha_desde and fecha_hasta:
-                pagos = pagos.filter(fecha_pago__date__range=[fecha_desde, fecha_hasta])
-            elif fecha_desde:
-                pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
-            elif fecha_hasta:
-                pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
-            total_cobros = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+        # Definición de columnas
+        headers = ['Fecha', 'Factura', 'Usuario', 'Cliente', 'Tipo', 'Método', 'Valor (RD$)']
 
-            # promedio = total / cantidad if cantidad > 0 else Decimal('0.00')
+        col_x = [
+            1.00 * inch,   # Fecha
+            2.05 * inch,   # Factura
+            3.30 * inch,   # Usuario
+            4.45 * inch,   # Cliente
+            6.15 * inch,   # Tipo
+            7.00 * inch,   # Método
+            8.10 * inch,   # Valor
+        ]
+        col_widths = [
+            1.00 * inch,   # Fecha
+            1.20 * inch,   # Factura
+            1.10 * inch,   # Usuario
+            1.65 * inch,   # Cliente
+            0.80 * inch,   # Tipo
+            1.05 * inch,   # Método
+            1.20 * inch,   # Valor
+        ]
+        table_right = col_x[-1] + col_widths[-1]
+        table_left = col_x[0]
+        row_height = 0.22 * inch
 
-            # Actualizar acumuladores
-            total_general += total
-            total_cantidad += cantidad
-            total_contado_acum += contado
-            total_credito_acum += credito
-            total_cobros_acum += total_cobros
-            total_efectivo_acum += efectivo
-            total_tarjeta_acum += tarjeta
-            total_transferencia_acum += transferencia
+        def draw_table_header(p, y, col_x, col_widths, headers, table_left, table_right, row_height):
+            """Dibuja la fila de cabecera de la tabla."""
+            # Fondo gris oscuro para la cabecera
+            p.setFillColorRGB(*HEADER_BG)
+            p.setStrokeColorRGB(*BORDER)
+            p.setLineWidth(0.4)
+            p.rect(table_left, y - row_height, table_right - table_left, row_height, fill=1, stroke=0)
 
-            # Si estamos cerca del final de la página, crear una nueva
-            if y_position < 1.5 * inch:
+            # Texto blanco negrita
+            p.setFillColorRGB(*HEADER_TEXT)
+            p.setFont("Helvetica-Bold", 10)
+            for i, header in enumerate(headers):
+                if i == len(headers) - 1:
+                    # Alinear derecha el valor
+                    p.drawRightString(col_x[i] + col_widths[i] - 0.05 * inch, y - row_height + 0.07 * inch, header)
+                else:
+                    p.drawString(col_x[i] + 0.05 * inch, y - row_height + 0.07 * inch, header)
+
+            # Línea inferior del header
+            p.setStrokeColorRGB(*BORDER)
+            p.line(table_left, y - row_height, table_right, y - row_height)
+            return y - row_height
+
+        y_position = draw_table_header(p, y_position, col_x, col_widths, headers, table_left, table_right, row_height)
+
+        p.setFont("Helvetica", 9)
+
+        def draw_table_border(p, top_y, bottom_y, table_left, table_right, col_x, col_widths, BORDER):
+            """Dibuja bordes verticales y horizontales externos."""
+            p.setStrokeColorRGB(*BORDER)
+            p.setLineWidth(0.4)
+            # Borde externo
+            p.rect(table_left, bottom_y, table_right - table_left, top_y - bottom_y, fill=0, stroke=1)
+            # Líneas verticales internas
+            for i in range(1, len(col_x)):
+                p.line(col_x[i], bottom_y, col_x[i], top_y)
+
+        table_top_y = y_position  # Guardar para borde final
+
+        for idx, row in enumerate(rows):
+            # Salto de página
+            if y_position < 1.2 * inch:
+                # Dibujar bordes de tabla antes de nueva página
+                draw_table_border(p, table_top_y, y_position, table_left, table_right, col_x, col_widths, BORDER)
                 p.showPage()
-                y_position = height - 1 * inch
-                p.setFont("Helvetica-Bold", 9)
-                for i, header in enumerate(headers):
-                    p.drawString(col_positions[i], y_position, header)
-                p.line(1 * inch, y_position - 0.1 * inch, 9.8 * inch, y_position - 0.1 * inch)
-                y_position -= 0.3 * inch
-                p.setFont("Helvetica", 8)
+                draw_page_header(p, height, fecha_reporte, periodo)
+                y_position = height - 1.50 * inch
+                y_position = draw_table_header(p, y_position, col_x, col_widths, headers, table_left, table_right, row_height)
+                table_top_y = y_position
+                p.setFont("Helvetica", 7.5)
 
-            # Dibujar fila del usuario
-            p.drawString(col_positions[0], y_position, usuario.username[:15])
-            p.drawString(col_positions[1], y_position, str(cantidad))
-            p.drawString(col_positions[2], y_position, f"${float(total):,.2f}")
-            p.drawString(col_positions[3], y_position, f"${float(contado):,.2f}")
-            p.drawString(col_positions[4], y_position, f"${float(credito):,.2f}")
-            p.drawString(col_positions[5], y_position, f"${float(total_cobros):,.2f}")
-            p.drawString(col_positions[6], y_position, f"${float(efectivo):,.2f}")
-            p.drawString(col_positions[7], y_position, f"${float(tarjeta):,.2f}")
-            p.drawString(col_positions[8], y_position, f"${float(transferencia):,.2f}")
-            # p.drawString(col_positions[9], y_position, f"${float(promedio):,.2f}")
+            # Fondo de fila alterno
+            if idx % 2 == 0:
+                p.setFillColorRGB(*ROW_WHITE)
+            else:
+                p.setFillColorRGB(*ROW_ALT)
+            p.rect(table_left, y_position - row_height, table_right - table_left, row_height, fill=1, stroke=0)
 
-            y_position -= 0.2 * inch
+            # Línea horizontal entre filas
+            p.setStrokeColorRGB(*BORDER)
+            p.setLineWidth(0.2)
+            p.line(table_left, y_position - row_height, table_right, y_position - row_height)
 
-        # ===== TOTALES GENERALES =====
-        y_position -= 0.1 * inch
-        p.setFont("Helvetica-Bold", 9)
-        p.line(1 * inch, y_position, 9.8 * inch, y_position)
-        y_position -= 0.2 * inch
+            # Texto de cada celda
+            p.setFillColorRGB(0.10, 0.10, 0.10)
+            text_y = y_position - row_height + 0.065 * inch
 
-        p.drawString(col_positions[0], y_position, "TOTALES:")
-        p.drawString(col_positions[1], y_position, str(total_cantidad))
-        p.drawString(col_positions[2], y_position, f"${float(total_general):,.2f}")
-        p.drawString(col_positions[3], y_position, f"${float(total_contado_acum):,.2f}")
-        p.drawString(col_positions[4], y_position, f"${float(total_credito_acum):,.2f}")
-        p.drawString(col_positions[5], y_position, f"${float(total_cobros_acum):,.2f}")
-        p.drawString(col_positions[6], y_position, f"${float(total_efectivo_acum):,.2f}")
-        p.drawString(col_positions[7], y_position, f"${float(total_tarjeta_acum):,.2f}")
-        p.drawString(col_positions[8], y_position, f"${float(total_transferencia_acum):,.2f}")
-        # El promedio general no se calcula aquí (sería promedio de promedios, poco significativo)
+            fecha_str = row['fecha'].strftime('%d/%m/%Y')
+            usuario = str(row['usuario'])[:14]
+            cliente = str(row['cliente'])[:22]
+            tipo = str(row['tipo'])[:9]
+            metodo = str(row['metodo'])[:13]
+            valor_str = f"RD${float(row['valor']):,.2f}"
+            factura = str(row['factura'])[:16]
 
-        # ===== LÍNEA ADICIONAL: ENTRADA DEL DÍA =====
-        y_position -= 0.3 * inch
-        p.setFont("Helvetica-Bold", 11)
-        entrada_dia = float(total_contado_acum) + float(total_cobros_acum)
-        p.drawString(1 * inch, y_position, f"Total entrada del día (contado + cobros): RD${entrada_dia:,.2f}")
+            # Color especial para tipo "Cobros"
+            cells = [
+                (col_x[0], fecha_str, False),
+                (col_x[1], factura, False),
+                (col_x[2], usuario, False),
+                (col_x[3], cliente, False),
+                (col_x[4], tipo, False),
+                (col_x[5], metodo, False),
+                (col_x[6], valor_str, True),  # True = alinear derecha
+            ]
 
-        # Finalizar PDF
+            for cx, text, right_align in cells:
+                if right_align:
+                    p.drawRightString(cx + col_widths[6] - 0.05 * inch, text_y, text)
+                else:
+                    p.drawString(cx + 0.05 * inch, text_y, text)
+
+            y_position -= row_height
+
+        # Dibujar bordes finales de la tabla
+        draw_table_border(p, table_top_y, y_position, table_left, table_right, col_x, col_widths, BORDER)
+
         p.showPage()
         p.save()
 
-        # Preparar respuesta
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/pdf')
-        filename = f"ventas_por_usuario_{ahora.strftime('%Y%m%d_%H%M%S')}.pdf"
+        filename = f"reporte-ventas-cuadre-{ahora_local.strftime('%d%m%Y-%H%M%S')}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
