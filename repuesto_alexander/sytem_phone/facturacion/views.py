@@ -2095,11 +2095,11 @@ def ventas_por_usuario_pdf(request):
 
         for venta in ventas.select_related('vendedor', 'cliente').iterator():
             if venta.tipo_venta == 'contado':
-                tipo = 'contado'
+                tipo = 'Contado'
                 metodo = venta.metodo_pago if venta.metodo_pago else 'efectivo'
             else:
-                tipo = 'credito'
-                metodo = 'credito'
+                tipo = 'Credito'
+                metodo = 'Credito'
 
             rows.append({
                 'fecha': venta.fecha_venta.date(),
@@ -2120,9 +2120,9 @@ def ventas_por_usuario_pdf(request):
                     cliente_nombre = pago.cuenta.venta.cliente_nombre
 
             if pago.metodo_pago == 'efectivo':
-                metodo = 'cobro/efectivo'
+                metodo = 'Cobro/efectivo'
             elif pago.metodo_pago == 'transferencia':
-                metodo = 'cobro/transferencia'
+                metodo = 'Cobro/transferencia'
             else:
                 metodo = pago.metodo_pago
 
@@ -2143,9 +2143,10 @@ def ventas_por_usuario_pdf(request):
         total_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('efectivo'))
         total_transferencias = sum(r['valor'] for r in rows if r['metodo'] in ('transferencia' ))
         total_credito = sum(r['valor'] for r in rows if r['metodo'] == 'credito')
+        total_cobros_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('cobro/efectivo'))
         total_cobros = sum(r['valor'] for r in rows if r.get('tipo') == 'Cobros')
         total_ventas_general = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
-        total_contado = total_efectivo + total_cobros
+        total_contado = total_efectivo + total_cobros_efectivo
 
         # ========== COLORES ==========
         # Gris oscuro para headers (como en la imagen)
@@ -2336,8 +2337,8 @@ def ventas_por_usuario_pdf(request):
             fecha_str = row['fecha'].strftime('%d/%m/%Y')
             usuario = str(row['usuario'])[:14]
             cliente = str(row['cliente'])[:22]
-            tipo = str(row['tipo'])[:9]
-            metodo = str(row['metodo'])[:13]
+            tipo = str(row['tipo'])[:15]
+            metodo = str(row['metodo'])[:19]
             valor_str = f"RD${float(row['valor']):,.2f}"
             factura = str(row['factura'])[:16]
 
