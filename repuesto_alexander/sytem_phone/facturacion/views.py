@@ -2033,10 +2033,11 @@ def ventas_por_usuario(request):
         print(f"Error en ventas_por_usuario: {e}")
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
-
-
-
-
+    
+    
+#================================================================================================
+#======================== APARTADO DE REPORTE DE VENTAS CUADRE ===================================
+#================================================================================================
 @login_required
 def ventas_por_usuario_pdf(request):
     """
@@ -2142,6 +2143,7 @@ def ventas_por_usuario_pdf(request):
         rows.sort(key=lambda x: (x['fecha'], x['factura']), reverse=True)
 
         # ========== TOTALES ==========
+
         total_registros = len(rows)
         total_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('efectivo'))
         total_transferencias = sum(r['valor'] for r in rows if r['metodo'] in ('transferencia' ))
@@ -2149,6 +2151,17 @@ def ventas_por_usuario_pdf(request):
         total_cobros = sum(r['valor'] for r in rows if r.get('tipo') == 'Cobros')
         total_ventas_general = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
         total_contado = total_efectivo + total_cobros
+
+        total_registros          = len(rows)
+        total_efectivo           = sum(r['valor'] for r in rows if r['metodo'] == 'efectivo')
+        total_transferencias     = sum(r['valor'] for r in rows if r['metodo'] == 'transferencia')
+        total_credito            = sum(r['valor'] for r in rows if r['metodo'] == 'credito')
+        total_cobros_efectivo    = sum(r['valor'] for r in rows if r['metodo'] == 'cobro/efectivo')
+        total_cobros_transf      = sum(r['valor'] for r in rows if r['metodo'] == 'cobro/transferencia')
+        total_cobros             = total_cobros_efectivo + total_cobros_transf
+        total_ventas_general     = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
+        total_contado            = total_efectivo + total_cobros_efectivo
+
 
         # ========== COLORES ==========
         # Gris oscuro para headers (como en la imagen)
@@ -2339,8 +2352,13 @@ def ventas_por_usuario_pdf(request):
             fecha_str = row['fecha'].strftime('%d/%m/%Y')
             usuario = str(row['usuario'])[:14]
             cliente = str(row['cliente'])[:22]
+
             tipo = str(row['tipo'])[:9]
             metodo = str(row['metodo'])[:13]
+
+            tipo = str(row['tipo'])[:15]
+            metodo = str(row['metodo'])[:25]
+
             valor_str = f"RD${float(row['valor']):,.2f}"
             factura = str(row['factura'])[:16]
 
@@ -2381,6 +2399,10 @@ def ventas_por_usuario_pdf(request):
         return HttpResponse(f"Error al generar el reporte: {str(e)}", status=500)
 
 
+
+
+
+#
 @login_required
 def ventas_usuario_pdf(request, usuario_id):
     try:
@@ -2465,7 +2487,7 @@ def ventas_usuario_pdf(request, usuario_id):
         y_position -= 0.15 * inch
 
         # Nueva línea: Entrada del día (contado + cobros)
-        entrada_dia = float(total_contado) + float(total_cobros)
+        entrada_dia = float(total_contado) + float(total_cobros) 
         p.drawString(1.2 * inch, y_position, f"Entrada del día (contado + cobros): RD${entrada_dia:,.2f}")
         y_position -= 0.2 * inch
 
@@ -2526,7 +2548,7 @@ def ventas_usuario_pdf(request, usuario_id):
 
             fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
             p.drawString(1.0 * inch, y_position, fecha_str)
-            p.drawString(2.0 * inch, y_position, venta.numero_factura[:12])
+            p.drawString(2.0 * inch, y_position, venta.numero_factura[:14])
             cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
             p.drawString(3.5 * inch, y_position, cliente)
             p.drawString(5.5 * inch, y_position, venta.tipo_venta.capitalize())
@@ -2625,7 +2647,9 @@ def ventas_usuario_pdf(request, usuario_id):
         return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
 
 
-    
+ #================================================================================================
+ #========================== Obtener lista de usuarios para filtros =============================
+ #================================================================================================  
 @login_required
 def get_usuarios(request):
     """Obtener lista de usuarios para filtros"""
@@ -2636,10 +2660,9 @@ def get_usuarios(request):
         print(f"Error en get_usuarios: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
-
-
-
-
+#================================================================================================
+ #================================= VENTAS POR USUARIO ACTUAL ===================================
+ #================================================================================================
 @login_required
 def reporte_ventas_usuario_actual(request):
     """Vista para mostrar reporte de ventas del usuario actual"""
@@ -2954,17 +2977,10 @@ def reporte_ventas_usuario_actual_pdf(request):
         return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
 
 
-
-# ------------------------------
-# inventario
-# ------------------------------
-# Función para verificar si el usuario es superusuario
-
-
-
-# Decorador personalizado para requerir superusuario
+#================================================================================================
+# =======================Decorador personalizado para requerir superusuario =====================
+#================================================================================================
 def superuser_required(view_func):
-    
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
         print(f"Usuario autenticado: {request.user.is_authenticated}")  # Debug
@@ -3024,13 +3040,9 @@ def inventario_datos(request):
         return JsonResponse({'error': f'Error interno del servidor: {str(e)}'}, status=500)
 
 
+#================================================================================================
 # Vista para editar un producto (solo superusuarios)
-
-# Vista para editar un producto (solo superusuarios)
-# Vista para editar un producto (solo superusuarios)
-
-
-# Vista para editar un producto (solo superusuarios)
+#================================================================================================
 @csrf_exempt
 @superuser_required
 def inventario_editar(request, id):
@@ -3131,7 +3143,9 @@ def inventario_editar(request, id):
         print(f"Error en inventario_editar: {str(e)}")
         return JsonResponse({'error': f'Error al actualizar el producto: {str(e)}'}, status=500)
 
+#================================================================================================
 # Vista para eliminar un producto (solo superusuarios)
+#================================================================================================
 @csrf_exempt
 @superuser_required
 def inventario_eliminar(request, id):
