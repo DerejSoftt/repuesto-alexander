@@ -2033,7 +2033,11 @@ def ventas_por_usuario(request):
         print(f"Error en ventas_por_usuario: {e}")
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
-
+    
+    
+#================================================================================================
+#======================== APARTADO DE REPORTE DE VENTAS CUADRE ===================================
+#================================================================================================
 @login_required
 def ventas_por_usuario_pdf(request):
     """
@@ -2381,7 +2385,7 @@ def ventas_por_usuario_pdf(request):
 
 
 
-
+#
 @login_required
 def ventas_usuario_pdf(request, usuario_id):
     try:
@@ -2617,7 +2621,9 @@ def ventas_usuario_pdf(request, usuario_id):
         return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
 
 
-    
+ #================================================================================================
+ #========================== Obtener lista de usuarios para filtros =============================
+ #================================================================================================  
 @login_required
 def get_usuarios(request):
     """Obtener lista de usuarios para filtros"""
@@ -2628,10 +2634,9 @@ def get_usuarios(request):
         print(f"Error en get_usuarios: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
-
-
-
-
+#================================================================================================
+ #================================= VENTAS POR USUARIO ACTUAL ===================================
+ #================================================================================================
 @login_required
 def reporte_ventas_usuario_actual(request):
     """Vista para mostrar reporte de ventas del usuario actual"""
@@ -2946,17 +2951,10 @@ def reporte_ventas_usuario_actual_pdf(request):
         return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
 
 
-
-# ------------------------------
-# inventario
-# ------------------------------
-# Función para verificar si el usuario es superusuario
-
-
-
-# Decorador personalizado para requerir superusuario
+#================================================================================================
+# =======================Decorador personalizado para requerir superusuario =====================
+#================================================================================================
 def superuser_required(view_func):
-    
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
         print(f"Usuario autenticado: {request.user.is_authenticated}")  # Debug
@@ -3016,13 +3014,9 @@ def inventario_datos(request):
         return JsonResponse({'error': f'Error interno del servidor: {str(e)}'}, status=500)
 
 
+#================================================================================================
 # Vista para editar un producto (solo superusuarios)
-
-# Vista para editar un producto (solo superusuarios)
-# Vista para editar un producto (solo superusuarios)
-
-
-# Vista para editar un producto (solo superusuarios)
+#================================================================================================
 @csrf_exempt
 @superuser_required
 def inventario_editar(request, id):
@@ -3123,7 +3117,9 @@ def inventario_editar(request, id):
         print(f"Error en inventario_editar: {str(e)}")
         return JsonResponse({'error': f'Error al actualizar el producto: {str(e)}'}, status=500)
 
+#================================================================================================
 # Vista para eliminar un producto (solo superusuarios)
+#================================================================================================
 @csrf_exempt
 @superuser_required
 def inventario_eliminar(request, id):
