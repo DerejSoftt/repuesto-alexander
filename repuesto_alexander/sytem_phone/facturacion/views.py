@@ -2034,10 +2034,6 @@ def ventas_por_usuario(request):
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
 
-
-
-
-
 @login_required
 def ventas_por_usuario_pdf(request):
     """
@@ -2099,11 +2095,11 @@ def ventas_por_usuario_pdf(request):
 
         for venta in ventas.select_related('vendedor', 'cliente').iterator():
             if venta.tipo_venta == 'contado':
-                tipo = 'Contado'
+                tipo = 'contado'
                 metodo = venta.metodo_pago if venta.metodo_pago else 'efectivo'
             else:
-                tipo = 'Credito'
-                metodo = 'Credito'
+                tipo = 'credito'
+                metodo = 'credito'
 
             rows.append({
                 'fecha': venta.fecha_venta.date(),
@@ -2124,9 +2120,9 @@ def ventas_por_usuario_pdf(request):
                     cliente_nombre = pago.cuenta.venta.cliente_nombre
 
             if pago.metodo_pago == 'efectivo':
-                metodo = 'Cobro/efectivo'
+                metodo = 'cobro/efectivo'
             elif pago.metodo_pago == 'transferencia':
-                metodo = 'Cobro/transferencia'
+                metodo = 'cobro/transferencia'
             else:
                 metodo = pago.metodo_pago
 
@@ -2147,7 +2143,6 @@ def ventas_por_usuario_pdf(request):
         total_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('efectivo'))
         total_transferencias = sum(r['valor'] for r in rows if r['metodo'] in ('transferencia' ))
         total_credito = sum(r['valor'] for r in rows if r['metodo'] == 'credito')
-        total_cobros_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('cobro/efectivo'))
         total_cobros = sum(r['valor'] for r in rows if r.get('tipo') == 'Cobros')
         total_ventas_general = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
         total_contado = total_efectivo + total_cobros
@@ -2384,6 +2379,7 @@ def ventas_por_usuario_pdf(request):
 
 
 
+
 @login_required
 def ventas_usuario_pdf(request, usuario_id):
     try:
@@ -2468,7 +2464,7 @@ def ventas_usuario_pdf(request, usuario_id):
         y_position -= 0.15 * inch
 
         # Nueva línea: Entrada del día (contado + cobros)
-        entrada_dia = float(total_contado) + float(total_cobros)
+        entrada_dia = float(total_contado) + float(total_cobros) 
         p.drawString(1.2 * inch, y_position, f"Entrada del día (contado + cobros): RD${entrada_dia:,.2f}")
         y_position -= 0.2 * inch
 
@@ -2529,7 +2525,7 @@ def ventas_usuario_pdf(request, usuario_id):
 
             fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
             p.drawString(1.0 * inch, y_position, fecha_str)
-            p.drawString(2.0 * inch, y_position, venta.numero_factura[:12])
+            p.drawString(2.0 * inch, y_position, venta.numero_factura[:14])
             cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
             p.drawString(3.5 * inch, y_position, cliente)
             p.drawString(5.5 * inch, y_position, venta.tipo_venta.capitalize())
