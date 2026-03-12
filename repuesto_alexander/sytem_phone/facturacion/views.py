@@ -2095,11 +2095,11 @@ def ventas_por_usuario_pdf(request):
 
         for venta in ventas.select_related('vendedor', 'cliente').iterator():
             if venta.tipo_venta == 'contado':
-                tipo = 'Contado'
+                tipo = 'contado'
                 metodo = venta.metodo_pago if venta.metodo_pago else 'efectivo'
             else:
-                tipo = 'Credito'
-                metodo = 'Credito'
+                tipo = 'credito'
+                metodo = 'credito'
 
             rows.append({
                 'fecha': venta.fecha_venta.date(),
@@ -2120,9 +2120,9 @@ def ventas_por_usuario_pdf(request):
                     cliente_nombre = pago.cuenta.venta.cliente_nombre
 
             if pago.metodo_pago == 'efectivo':
-                metodo = 'Cobro/efectivo'
+                metodo = 'cobro/efectivo'
             elif pago.metodo_pago == 'transferencia':
-                metodo = 'Cobro/transferencia'
+                metodo = 'cobro/transferencia'
             else:
                 metodo = pago.metodo_pago
 
@@ -2139,14 +2139,15 @@ def ventas_por_usuario_pdf(request):
         rows.sort(key=lambda x: (x['fecha'], x['factura']), reverse=True)
 
         # ========== TOTALES ==========
-        total_registros = len(rows)
-        total_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('efectivo'))
-        total_transferencias = sum(r['valor'] for r in rows if r['metodo'] in ('transferencia' ))
-        total_credito = sum(r['valor'] for r in rows if r['metodo'] == 'credito')
-        total_cobros_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('cobro/efectivo'))
-        total_cobros = sum(r['valor'] for r in rows if r.get('tipo') == 'Cobros')
-        total_ventas_general = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
-        total_contado = total_efectivo + total_cobros_efectivo
+        total_registros          = len(rows)
+        total_efectivo           = sum(r['valor'] for r in rows if r['metodo'] == 'efectivo')
+        total_transferencias     = sum(r['valor'] for r in rows if r['metodo'] == 'transferencia')
+        total_credito            = sum(r['valor'] for r in rows if r['metodo'] == 'credito')
+        total_cobros_efectivo    = sum(r['valor'] for r in rows if r['metodo'] == 'cobro/efectivo')
+        total_cobros_transf      = sum(r['valor'] for r in rows if r['metodo'] == 'cobro/transferencia')
+        total_cobros             = total_cobros_efectivo + total_cobros_transf
+        total_ventas_general     = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
+        total_contado            = total_efectivo + total_cobros_efectivo
 
         # ========== COLORES ==========
         # Gris oscuro para headers (como en la imagen)
@@ -2338,7 +2339,7 @@ def ventas_por_usuario_pdf(request):
             usuario = str(row['usuario'])[:14]
             cliente = str(row['cliente'])[:22]
             tipo = str(row['tipo'])[:15]
-            metodo = str(row['metodo'])[:19]
+            metodo = str(row['metodo'])[:25]
             valor_str = f"RD${float(row['valor']):,.2f}"
             factura = str(row['factura'])[:16]
 
