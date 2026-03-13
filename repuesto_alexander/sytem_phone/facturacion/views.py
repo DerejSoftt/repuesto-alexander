@@ -2446,7 +2446,7 @@ def ventas_por_usuario_pdf(request):
 
             fecha_str = row['fecha'].strftime('%d/%m/%Y')
             usuario = str(row['usuario'])[:14]
-            cliente = str(row['cliente'])[:22]
+            cliente = str(row['cliente'])[:20]
 
             tipo = str(row['tipo'])[:9]
             metodo = str(row['metodo'])[:13]
