@@ -113,14 +113,37 @@ def index(request):
         password = request.POST.get('password')
         
         user = authenticate(request, username=username, password=password)
-        
+
         if user is not None:
             login(request, user)
-            return redirect('ventas')  # Asegúrate de tener esta URL configurada
-        else:
-            messages.error(request, 'Usuario o contraseña incorrectos')
-    
-    return render(request, "facturacion/index.html")
+
+            # 1) Super user -> dashboard
+            if user.is_superuser:
+                return redirect('dashboard')
+
+            # 2) Normalizar nombres de grupos para evitar problemas con mayúsculas/acentos
+            grupos = set()
+            for g in user.groups.values_list('name', flat=True):
+                nombre = (g or '').strip().lower()
+                nombre = nombre.replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+                grupos.add(nombre)
+
+            # 3) Almacén -> entrada de mercancía
+            if 'almacen' in grupos:
+                return redirect('entrada')
+
+            # 4) Usuario normal -> caja
+            # Si tu "caja" real es ventas, cambia 'cierredecaja' por 'ventas'
+            if 'usuario normal' in grupos:
+                return redirect('ventas')
+
+            # 5) Cualquier otro rol -> dashboard
+            return redirect('dashboard')
+
+        messages.error(request, 'Usuario o contraseña incorrectos')
+
+    return render(request, 'facturacion/index.html')
+
 
 @user_passes_test(is_superuser, login_url='/admin/login/')
 @login_required
