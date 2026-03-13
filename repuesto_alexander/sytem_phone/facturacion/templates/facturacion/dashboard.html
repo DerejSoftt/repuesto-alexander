@@ -1764,6 +1764,26 @@ function updateOverview() {
 
 // Actualizar vista de ventas
 function updateSalesView() {
+    const defaultMonthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const labels = Array.isArray(dashboardData?.sales?.monthLabels) && dashboardData.sales.monthLabels.length
+        ? dashboardData.sales.monthLabels
+        : defaultMonthLabels;
+
+    let trend = Array.isArray(dashboardData?.sales?.monthlyTrend)
+        ? dashboardData.sales.monthlyTrend.map(value => Number(value) || 0)
+        : [];
+
+    if (!trend.length) {
+        const monthlyValue = Number(dashboardData?.sales?.monthly) || 0;
+        trend = new Array(labels.length).fill(monthlyValue);
+    }
+
+    if (trend.length < labels.length) {
+        trend = [...trend, ...new Array(labels.length - trend.length).fill(0)];
+    } else if (trend.length > labels.length) {
+        trend = trend.slice(0, labels.length);
+    }
+
     // Crear/actualizar gráfico de ventas mensuales
     if (salesChart) {
         salesChart.destroy();
@@ -1775,10 +1795,10 @@ function updateSalesView() {
         salesChart = new Chart(salesCtx, {
             type: 'line',
             data: {
-                labels: dashboardData.sales.monthLabels,
+                labels: labels,
                 datasets: [{
                     label: 'Ventas mensuales',
-                    data: dashboardData.sales.monthlyTrend,
+                    data: trend,
                     backgroundColor: 'rgba(102, 126, 234, 0.1)',
                     borderColor: 'rgba(102, 126, 234, 1)',
                     borderWidth: 2,

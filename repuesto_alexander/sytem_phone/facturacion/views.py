@@ -38,7 +38,7 @@ from django.urls import reverse
 
 from django.db.models import Max
 from django.db.models import Sum, Q, F, Avg, Count
-from django.db.models.functions import TruncDate
+from django.db.models.functions import TruncDate, ExtractMonth
 from datetime import datetime, timedelta, time
 import pandas as pd
 from decimal import Decimal, InvalidOperation
@@ -192,6 +192,40 @@ def dashboard(request):
             total_dia = float(ventas_contado_dia + ventas_credito_dia)
             ventas_semana.append(total_dia)
 
+        # Tendencia mensual real (enero-diciembre del anio actual)
+        monthly_trend = [0.0] * 12
+
+        ventas_contado_por_mes = Venta.objects.filter(
+            fecha_venta__year=hoy.year,
+            anulada=False,
+            tipo_venta='contado'
+        ).annotate(
+            mes=ExtractMonth('fecha_venta')
+        ).values('mes').annotate(
+            total=Sum('total')
+        )
+
+        ventas_credito_por_mes = CuentaPorCobrar.objects.filter(
+            venta__fecha_venta__year=hoy.year,
+            venta__anulada=False,
+            venta__tipo_venta='credito',
+            anulada=False
+        ).annotate(
+            mes=ExtractMonth('venta__fecha_venta')
+        ).values('mes').annotate(
+            total=Sum('monto_pagado')
+        )
+
+        for item in ventas_contado_por_mes:
+            mes = item.get('mes')
+            if mes:
+                monthly_trend[mes - 1] += float(item.get('total') or 0)
+
+        for item in ventas_credito_por_mes:
+            mes = item.get('mes')
+            if mes:
+                monthly_trend[mes - 1] += float(item.get('total') or 0)
+
         # Inventario
         total_stock = EntradaProducto.objects.filter(activo=True).aggregate(total=Sum('cantidad'))['total'] or 0
         productos_bajo_stock = EntradaProducto.objects.filter(
@@ -331,6 +365,40 @@ def dashboard_data(request):
             total_dia = float(ventas_contado_dia + ventas_credito_dia)
             ventas_semana.append(total_dia)
 
+        # Tendencia mensual real (enero-diciembre del anio actual)
+        monthly_trend = [0.0] * 12
+
+        ventas_contado_por_mes = Venta.objects.filter(
+            fecha_venta__year=hoy.year,
+            anulada=False,
+            tipo_venta='contado'
+        ).annotate(
+            mes=ExtractMonth('fecha_venta')
+        ).values('mes').annotate(
+            total=Sum('total')
+        )
+
+        ventas_credito_por_mes = CuentaPorCobrar.objects.filter(
+            venta__fecha_venta__year=hoy.year,
+            venta__anulada=False,
+            venta__tipo_venta='credito',
+            anulada=False
+        ).annotate(
+            mes=ExtractMonth('venta__fecha_venta')
+        ).values('mes').annotate(
+            total=Sum('monto_pagado')
+        )
+
+        for item in ventas_contado_por_mes:
+            mes = item.get('mes')
+            if mes:
+                monthly_trend[mes - 1] += float(item.get('total') or 0)
+
+        for item in ventas_credito_por_mes:
+            mes = item.get('mes')
+            if mes:
+                monthly_trend[mes - 1] += float(item.get('total') or 0)
+
         # Inventario
         total_stock = EntradaProducto.objects.filter(activo=True).aggregate(total=Sum('cantidad'))['total'] or 0
         productos_bajo_stock = EntradaProducto.objects.filter(
@@ -445,7 +513,8 @@ def dashboard_data(request):
                 'monthly': float(ventas_mes),
                 'weekly': ventas_semana,
                 'weekLabels': dias_semana,
-                'monthlyTrend': [float(ventas_mes)] * 12
+                'monthlyTrend': monthly_trend,
+                'monthLabels': ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
             },
             'inventory': {
                 'totalStock': total_stock,
@@ -560,6 +629,40 @@ def dashboard_tradicional(request):
         # Total del día
         total_dia = float(ventas_contado_dia + ventas_credito_dia)
         ventas_semana.append(total_dia)
+
+    # Tendencia mensual real (enero-diciembre del anio actual)
+    monthly_trend = [0.0] * 12
+
+    ventas_contado_por_mes = Venta.objects.filter(
+        fecha_venta__year=hoy.year,
+        anulada=False,
+        tipo_venta='contado'
+    ).annotate(
+        mes=ExtractMonth('fecha_venta')
+    ).values('mes').annotate(
+        total=Sum('total')
+    )
+
+    ventas_credito_por_mes = CuentaPorCobrar.objects.filter(
+        venta__fecha_venta__year=hoy.year,
+        venta__anulada=False,
+        venta__tipo_venta='credito',
+        anulada=False
+    ).annotate(
+        mes=ExtractMonth('venta__fecha_venta')
+    ).values('mes').annotate(
+        total=Sum('monto_pagado')
+    )
+
+    for item in ventas_contado_por_mes:
+        mes = item.get('mes')
+        if mes:
+            monthly_trend[mes - 1] += float(item.get('total') or 0)
+
+    for item in ventas_credito_por_mes:
+        mes = item.get('mes')
+        if mes:
+            monthly_trend[mes - 1] += float(item.get('total') or 0)
 
     # Inventario
     total_stock = EntradaProducto.objects.filter(activo=True).aggregate(
@@ -757,7 +860,8 @@ def dashboard_data_tradicional(request):
             'monthly': float(ventas_mes),
             'weekly': ventas_semana,
             'weekLabels': dias_semana,
-            'monthlyTrend': [float(ventas_mes)] * 12
+            'monthlyTrend': monthly_trend,
+            'monthLabels': ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
         },
         'inventory': {
             'totalStock': total_stock,
