@@ -2143,15 +2143,6 @@ def ventas_por_usuario_pdf(request):
         rows.sort(key=lambda x: (x['fecha'], x['factura']), reverse=True)
 
         # ========== TOTALES ==========
-
-        total_registros = len(rows)
-        total_efectivo = sum(r['valor'] for r in rows if r['metodo'] in ('efectivo'))
-        total_transferencias = sum(r['valor'] for r in rows if r['metodo'] in ('transferencia' ))
-        total_credito = sum(r['valor'] for r in rows if r['metodo'] == 'credito')
-        total_cobros = sum(r['valor'] for r in rows if r.get('tipo') == 'Cobros')
-        total_ventas_general = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
-        total_contado = total_efectivo + total_cobros
-
         total_registros          = len(rows)
         total_efectivo           = sum(r['valor'] for r in rows if r['metodo'] == 'efectivo')
         total_transferencias     = sum(r['valor'] for r in rows if r['metodo'] == 'transferencia')
