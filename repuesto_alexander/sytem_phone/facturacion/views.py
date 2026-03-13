@@ -2153,6 +2153,7 @@ def ventas_por_usuario_pdf(request):
         total_ventas_general     = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
         total_contado            = total_efectivo + total_cobros_efectivo
 
+
         # ========== COLORES ==========
         # Gris oscuro para headers (como en la imagen)
         HEADER_BG = (0.25, 0.25, 0.25)      # Gris oscuro cabecera tabla
@@ -2342,8 +2343,13 @@ def ventas_por_usuario_pdf(request):
             fecha_str = row['fecha'].strftime('%d/%m/%Y')
             usuario = str(row['usuario'])[:14]
             cliente = str(row['cliente'])[:22]
+
+            tipo = str(row['tipo'])[:9]
+            metodo = str(row['metodo'])[:13]
+
             tipo = str(row['tipo'])[:15]
             metodo = str(row['metodo'])[:25]
+
             valor_str = f"RD${float(row['valor']):,.2f}"
             factura = str(row['factura'])[:16]
 
@@ -2382,6 +2388,8 @@ def ventas_por_usuario_pdf(request):
         import traceback
         traceback.print_exc()
         return HttpResponse(f"Error al generar el reporte: {str(e)}", status=500)
+
+
 
 
 
