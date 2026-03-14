@@ -6241,64 +6241,58 @@ def lista_comprobantes(request):
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
 
+
 @login_required
 def cuentaporcobrar(request):
-    # Obtener parámetros de filtrado
     search = request.GET.get('search', '')
     status_filter = request.GET.get('status', '')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
-    
-    # Filtrar cuentas por cobrar (excluir anuladas y eliminadas)
+ 
     cuentas = CuentaPorCobrar.objects.select_related('venta', 'cliente').filter(
         anulada=False,
         eliminada=False
     )
-    
+ 
     if search:
         cuentas = cuentas.filter(
             Q(cliente__full_name__icontains=search) |
             Q(venta__numero_factura__icontains=search) |
             Q(cliente__identification_number__icontains=search)
         )
-    
+ 
     if status_filter:
         cuentas = cuentas.filter(estado=status_filter)
-    
+ 
     if date_from:
         cuentas = cuentas.filter(venta__fecha_venta__gte=date_from)
-    
+ 
     if date_to:
         cuentas = cuentas.filter(venta__fecha_venta__lte=date_to)
-    
+ 
     # Calcular estadísticas
     total_pendiente = Decimal('0.00')
     total_vencido = Decimal('0.00')
     total_por_cobrar = Decimal('0.00')
-    
+ 
     for cuenta in cuentas:
-        # Usar monto_total de la cuenta (que debería ser igual a total_a_pagar)
         monto_total_original = Decimal(str(cuenta.monto_total))
-        
-        # Calcular saldo pendiente
         saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
-        
-        # Asegurar que no sea negativo
+ 
         if saldo_pendiente < 0:
             saldo_pendiente = Decimal('0.00')
-            # Ajustar monto_pagado si es necesario
             if cuenta.monto_pagado > monto_total_original:
                 cuenta.monto_pagado = monto_total_original
                 cuenta.save()
-        
+ 
         if cuenta.estado in ['pendiente', 'parcial']:
             total_pendiente += saldo_pendiente
         elif cuenta.estado == 'vencida':
             total_vencido += saldo_pendiente
-        
+ 
         if cuenta.estado != 'pagada':
             total_por_cobrar += saldo_pendiente
-    
+ 
     # Pagos del mes actual
     mes_actual = timezone.now().month
     año_actual = timezone.now().year
@@ -6308,74 +6302,76 @@ def cuentaporcobrar(request):
         cuenta__anulada=False,
         cuenta__eliminada=False
     ).aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
-    
+ 
     # Preparar datos para el template
     cuentas_data = []
     for cuenta in cuentas:
-        # Usar monto_total de la cuenta
         monto_total_original = float(cuenta.monto_total)
-        
-        # Obtener productos de la venta
+ 
         productos = []
         if cuenta.venta and hasattr(cuenta.venta, 'detalles'):
             for detalle in cuenta.venta.detalles.all():
                 nombre_producto = 'Servicio'
                 precio_sin_itbis = float(detalle.precio_unitario)
-                
+ 
                 if hasattr(detalle, 'producto') and detalle.producto:
                     nombre_producto = detalle.producto.descripcion
                 elif hasattr(detalle, 'servicio') and detalle.servicio:
                     nombre_producto = detalle.servicio.nombre
                 elif hasattr(detalle, 'descripcion') and detalle.descripcion:
                     nombre_producto = detalle.descripcion
-                
+ 
                 cantidad = 1
                 if hasattr(detalle, 'cantidad'):
                     cantidad = float(detalle.cantidad)
-                
+ 
                 productos.append({
                     'nombre': nombre_producto,
                     'cantidad': cantidad,
                     'precio': precio_sin_itbis,
                 })
-        
-        # Obtener información del cliente
+ 
         client_name = 'Cliente no disponible'
         client_phone = 'N/A'
         if cuenta.cliente:
             client_name = cuenta.cliente.full_name or 'Cliente sin nombre'
             client_phone = cuenta.cliente.primary_phone or 'N/A'
-        
-        # Obtener información de la factura
+ 
         invoice_number = 'N/A'
         sale_date = ''
         if cuenta.venta:
             invoice_number = cuenta.venta.numero_factura or 'N/A'
             if cuenta.venta.fecha_venta:
                 sale_date = cuenta.venta.fecha_venta.strftime('%Y-%m-%d')
-        
-        # Obtener fecha de vencimiento
+ 
         due_date = ''
         if cuenta.fecha_vencimiento:
             due_date = cuenta.fecha_vencimiento.strftime('%Y-%m-%d')
-        
+ 
         monto_pagado = float(cuenta.monto_pagado)
-        
-        # Calcular saldo pendiente
-        saldo_pendiente = max(0, monto_total_original - monto_pagado)
-        
-        # Determinar si la cuenta puede ser eliminada
+ 
+        # ✅ CORRECCIÓN: si monto_pagado >= monto_total y estado no es 'pagada',
+        # corregir en BD y ajustar los valores locales para el frontend.
+        if monto_pagado >= monto_total_original and cuenta.estado != 'pagada':
+            cuenta.monto_pagado = Decimal(str(monto_total_original)).quantize(Decimal('0.01'))
+            cuenta.estado = 'pagada'
+            cuenta.save()
+            monto_pagado = monto_total_original
+ 
+        saldo_pendiente = max(0.0, monto_total_original - monto_pagado)
+ 
         puede_eliminar = cuenta.estado == 'pagada'
-        
+ 
         cuentas_data.append({
             'id': cuenta.id,
+            'clientId': cuenta.cliente.id,
             'invoiceNumber': invoice_number,
             'clientName': client_name,
             'clientPhone': client_phone,
             'products': productos,
             'saleDate': sale_date,
             'dueDate': due_date,
-            'totalAmount': monto_total_original,  # Usar monto_total de la cuenta
+            'totalAmount': monto_total_original,
             'paidAmount': monto_pagado,
             'pendingBalance': saldo_pendiente,
             'status': cuenta.estado,
@@ -6383,10 +6379,9 @@ def cuentaporcobrar(request):
             'puede_eliminar': puede_eliminar,
             'totalConItbis': float(cuenta.venta.total) if cuenta.venta else 0,
         })
-    
-    # Convertir a JSON
+ 
     cuentas_json = json.dumps(cuentas_data)
-    
+ 
     context = {
         'cuentas_json': cuentas_json,
         'total_pendiente': float(total_pendiente),
@@ -6398,41 +6393,40 @@ def cuentaporcobrar(request):
         'date_from': date_from,
         'date_to': date_to,
     }
-    
+ 
     return render(request, "facturacion/cuentaporcobrar.html", context)
+ 
+
 
 
 def sincronizar_cuentas_ventas():
     """
-    Sincroniza todas las cuentas por cobrar con sus ventas correspondientes
-    Para corregir inconsistencias después de devoluciones
+    Sincroniza todas las cuentas por cobrar con sus ventas correspondientes.
+    Corrige inconsistencias después de devoluciones o pagos mal registrados.
     """
     cuentas = CuentaPorCobrar.objects.filter(anulada=False, eliminada=False)
-    
+ 
     for cuenta in cuentas:
         if cuenta.venta:
-            # Actualizar monto_total de la cuenta con total_a_pagar de la venta
             cuenta.monto_total = cuenta.venta.total_a_pagar
-            
-            # Recalcular estado
             saldo_pendiente = cuenta.monto_total - cuenta.monto_pagado
-            
+ 
             if saldo_pendiente <= 0:
                 cuenta.estado = 'pagada'
+                # ✅ CORRECCIÓN: ajustar monto_pagado si excede el total,
+                # evitando que quede registrado un pago mayor al total de la factura.
                 cuenta.monto_pagado = cuenta.monto_total
             elif cuenta.monto_pagado > 0:
                 cuenta.estado = 'parcial'
             else:
                 cuenta.estado = 'pendiente'
-            
-            # Verificar vencimiento
+ 
             if cuenta.esta_vencida:
                 cuenta.estado = 'vencida'
-            
+ 
             cuenta.save()
-    
+ 
     return f"Sincronizadas {cuentas.count()} cuentas"
-
 
 
 
@@ -6443,8 +6437,9 @@ from django.shortcuts import get_object_or_404
 from decimal import Decimal
 import json
 
+
 @login_required
-@csrf_exempt  # Opcional: se puede quitar si se envía el token CSRF correctamente
+@csrf_exempt
 def registrar_pago(request):
     if request.method == 'POST':
         try:
@@ -6454,73 +6449,75 @@ def registrar_pago(request):
             metodo_pago = data.get('metodo_pago')
             referencia = data.get('referencia', '')
             observaciones = data.get('observaciones', '')
-
+ 
             cuenta = get_object_or_404(CuentaPorCobrar, id=cuenta_id)
-
-            # Verificar que la cuenta no esté anulada
+ 
             if cuenta.anulada:
                 return JsonResponse({
                     'success': False,
                     'message': 'No se puede registrar pago en una cuenta anulada'
                 })
-
-            # Usar total_a_pagar de la venta y asegurar 2 decimales
-            monto_total_original = Decimal(str(cuenta.venta.total_a_pagar)).quantize(Decimal('0.01'))
-
-            # Calcular saldo pendiente (con 2 decimales)
-            saldo_pendiente = (monto_total_original - Decimal(str(cuenta.monto_pagado))).quantize(Decimal('0.01'))
-
-            # Redondear el monto del pago a 2 decimales
+ 
+            # ✅ CORRECCIÓN: usar cuenta.monto_total como fuente de verdad,
+            # no venta.total_a_pagar, para evitar inconsistencias.
+            monto_total_original = Decimal(str(cuenta.monto_total)).quantize(Decimal('0.01'))
+            monto_ya_pagado = Decimal(str(cuenta.monto_pagado)).quantize(Decimal('0.01'))
+            saldo_pendiente = (monto_total_original - monto_ya_pagado).quantize(Decimal('0.01'))
+ 
+            # ✅ CORRECCIÓN: si el saldo ya es <= 0, la cuenta está pagada.
+            # Corregir estado en BD si hace falta y rechazar el pago.
+            if saldo_pendiente <= Decimal('0.00'):
+                if cuenta.estado != 'pagada':
+                    cuenta.estado = 'pagada'
+                    cuenta.monto_pagado = monto_total_original
+                    cuenta.save()
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Esta cuenta ya está completamente pagada'
+                })
+ 
             monto = monto.quantize(Decimal('0.01'))
-
-            # Validar que el monto sea positivo
+ 
             if monto <= 0:
                 return JsonResponse({
                     'success': False,
                     'message': 'El monto del pago debe ser mayor a cero'
                 })
-
-            # Validar que el monto no exceda el saldo pendiente (con tolerancia de 1 centavo)
+ 
             if monto > saldo_pendiente + Decimal('0.01'):
                 return JsonResponse({
                     'success': False,
                     'message': f'El monto (RD${monto}) excede el saldo pendiente de RD${saldo_pendiente}'
                 })
-
+ 
             # Si el monto es muy cercano al saldo pendiente (diferencia <= 1 centavo), ajustarlo
             if abs(monto - saldo_pendiente) <= Decimal('0.01'):
                 monto = saldo_pendiente
-
-            # Crear el pago con el usuario actual
+ 
             pago = PagoCuentaPorCobrar(
                 cuenta=cuenta,
                 monto=monto,
                 metodo_pago=metodo_pago,
                 referencia=referencia,
                 observaciones=observaciones,
-                usuario=request.user  # ← ASIGNACIÓN CLAVE PARA EVITAR EL ERROR
+                usuario=request.user
             )
             pago.save()
-
-            # Actualizar monto pagado de la cuenta
-            cuenta.monto_pagado = (Decimal(str(cuenta.monto_pagado)) + monto).quantize(Decimal('0.01'))
-
-            # Calcular nuevo saldo
+ 
+            cuenta.monto_pagado = (monto_ya_pagado + monto).quantize(Decimal('0.01'))
             nuevo_saldo = (monto_total_original - cuenta.monto_pagado).quantize(Decimal('0.01'))
-
-            # Actualizar el estado según el nuevo saldo
-            if nuevo_saldo <= Decimal('0.01'):  # Pagada si saldo <= 1 centavo
+ 
+            if nuevo_saldo <= Decimal('0.01'):
                 cuenta.estado = 'pagada'
-                cuenta.monto_pagado = monto_total_original  # Ajuste exacto
+                cuenta.monto_pagado = monto_total_original
                 nuevo_saldo = Decimal('0.00')
             elif cuenta.monto_pagado > 0:
                 cuenta.estado = 'parcial'
             else:
                 cuenta.estado = 'pendiente'
-
+ 
             cuenta.save()
-
-            # Crear comprobante de pago
+ 
             comprobante = ComprobantePago(
                 pago=pago,
                 cuenta=cuenta,
@@ -6528,7 +6525,7 @@ def registrar_pago(request):
                 tipo_comprobante='recibo'
             )
             comprobante.save()
-
+ 
             return JsonResponse({
                 'success': True,
                 'message': f'Pago registrado exitosamente. Comprobante: {comprobante.numero_comprobante}',
@@ -6539,16 +6536,15 @@ def registrar_pago(request):
                 'monto_pagado_total': float(cuenta.monto_pagado),
                 'estado_actual': cuenta.estado
             })
-
+ 
         except Exception as e:
             return JsonResponse({
                 'success': False,
                 'message': f'Error al registrar pago: {str(e)}'
             })
-
+ 
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
-
-
+ 
 
 def generar_comprobante_pdf(request, comprobante_id):
     try:
@@ -7146,6 +7142,237 @@ def generar_reporte_deudas_pdf(request):
         # En caso de error, devolver una respuesta de error
         error_message = f"Error al generar el reporte: {str(e)}"
         return HttpResponse(error_message, content_type='text/plain')
+
+
+
+
+@login_required
+def generar_historial_cliente_pdf(request, client_id):
+    """
+    Genera un PDF con el historial detallado de un cliente.
+    Incluye clamp en monto_pagado para evitar que supere monto_total.
+    Horas en zona horaria de República Dominicana (UTC-4) en formato 12h.
+    """
+    try:
+        from .models import Cliente, CuentaPorCobrar, PagoCuentaPorCobrar, ComprobantePago
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from decimal import Decimal
+        from datetime import datetime
+        import io
+        import pytz
+
+        tz_rd = pytz.timezone('America/Santo_Domingo')
+
+        def formato_hora_rd(dt):
+            """Convierte un datetime UTC a hora RD (UTC-4) en formato 12h"""
+            if dt is None:
+                return 'N/A'
+            if timezone.is_aware(dt):
+                # ✅ convertir directo desde UTC a RD, sin pasar por timezone.localtime()
+                dt = dt.astimezone(tz_rd)
+            else:
+                # Si llega naive, asumir UTC y convertir
+                dt = pytz.utc.localize(dt).astimezone(tz_rd)
+            return dt.strftime('%d/%m/%Y %I:%M')
+
+        User = get_user_model()
+        cliente = get_object_or_404(Cliente, id=client_id)
+
+        cuentas = CuentaPorCobrar.objects.filter(
+            cliente=cliente,
+            anulada=False,
+            eliminada=False
+        ).select_related(
+            'venta',
+            'venta__vendedor'
+        ).prefetch_related(
+            'pagos',
+            'pagos__usuario',
+            'pagos__comprobante'
+        ).order_by('venta__fecha_venta')
+
+        if not cuentas.exists():
+            return HttpResponse("El cliente no tiene cuentas registradas.", content_type='text/plain')
+
+        response = HttpResponse(content_type='application/pdf')
+        # ✅ fecha del archivo también en hora RD
+        fecha_reporte = datetime.now(tz_rd).strftime('%Y%m%d_%H%M%S')
+        nombre_limpio = "".join(c for c in cliente.full_name if c.isalnum() or c in "._- ").strip()
+        response['Content-Disposition'] = f'attachment; filename="historial_{nombre_limpio}_{fecha_reporte}.pdf"'
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=1.5*cm,
+            leftMargin=1.5*cm,
+            topMargin=1.5*cm,
+            bottomMargin=1.5*cm
+        )
+
+        styles = getSampleStyleSheet()
+        contenido = []
+
+        titulo_style = ParagraphStyle(
+            'Titulo',
+            parent=styles['Title'],
+            fontSize=16,
+            spaceAfter=10,
+            alignment=1
+        )
+        contenido.append(Paragraph("HISTORIAL DE CUENTAS POR CLIENTE", titulo_style))
+        contenido.append(Spacer(1, 0.5*cm))
+
+        info_style = ParagraphStyle('Info', parent=styles['Normal'], fontSize=10)
+        contenido.append(Paragraph(f"<b>Cliente:</b> {cliente.full_name}", info_style))
+        contenido.append(Paragraph(f"<b>Cédula/RNC:</b> {cliente.identification_number or 'N/A'}", info_style))
+        contenido.append(Paragraph(f"<b>Teléfono:</b> {cliente.primary_phone or 'N/A'}", info_style))
+
+        # ✅ fecha del reporte en hora RD formato 12h
+        fecha_reporte_str = datetime.now(tz_rd).strftime('%d/%m/%Y %I:%M %p')
+        contenido.append(Paragraph(f"<b>Fecha del reporte:</b> {fecha_reporte_str}", info_style))
+        contenido.append(Spacer(1, 0.5*cm))
+
+        # ✅ clamp en monto_pagado antes de calcular totales
+        total_deuda = Decimal('0.00')
+        total_pagado = Decimal('0.00')
+        for cuenta in cuentas:
+            monto_total = Decimal(str(cuenta.monto_total))
+            monto_pagado_real = min(Decimal(str(cuenta.monto_pagado)), monto_total)
+            saldo = max(monto_total - monto_pagado_real, Decimal('0.00'))
+            if saldo > 0:
+                total_deuda += saldo
+            total_pagado += monto_pagado_real
+
+        resumen_data = [
+            ["Total deuda pendiente:",   f"RD$ {total_deuda:,.2f}"],
+            ["Total pagado (histórico):", f"RD$ {total_pagado:,.2f}"],
+        ]
+        resumen_table = Table(resumen_data, colWidths=[6*cm, 4*cm])
+        resumen_table.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, -1), colors.lightgrey),
+            ('TEXTCOLOR',     (0, 0), (-1, -1), colors.black),
+            ('ALIGN',         (0, 0), (0, -1),  'LEFT'),
+            ('ALIGN',         (1, 0), (1, -1),  'RIGHT'),
+            ('FONTNAME',      (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING',    (0, 0), (-1, -1), 8),
+            ('BOX',           (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        contenido.append(resumen_table)
+        contenido.append(Spacer(1, 0.7*cm))
+
+        for cuenta in cuentas:
+            factura_text = f"<b>Factura N°:</b> {cuenta.venta.numero_factura if cuenta.venta else 'N/A'}"
+            if cuenta.venta and cuenta.venta.vendedor:
+                vendedor = cuenta.venta.vendedor
+                factura_text += f" | <b>Vendedor:</b> {vendedor.get_full_name() or vendedor.username}"
+            contenido.append(Paragraph(factura_text, styles['Heading4']))
+
+            # ✅ pasar datetime crudo al helper, sin timezone.localtime()
+            fecha_venta_local = formato_hora_rd(cuenta.venta.fecha_venta) if cuenta.venta and cuenta.venta.fecha_venta else 'N/A'
+            fecha_venc = cuenta.fecha_vencimiento.strftime('%d/%m/%Y') if cuenta.fecha_vencimiento else 'N/A'
+            estado = cuenta.get_estado_display()
+
+            # ✅ clamp por factura individual
+            monto_total = Decimal(str(cuenta.monto_total))
+            monto_pagado_real = min(Decimal(str(cuenta.monto_pagado)), monto_total)
+            saldo = max(monto_total - monto_pagado_real, Decimal('0.00'))
+
+            info_factura = [
+                ["Fecha venta:",     fecha_venta_local],
+                ["Vencimiento:",     fecha_venc],
+                ["Monto total:",     f"RD$ {monto_total:,.2f}"],
+                ["Monto pagado:",    f"RD$ {monto_pagado_real:,.2f}"],
+                ["Saldo pendiente:", f"RD$ {saldo:,.2f}"],
+                ["Estado:",          estado],
+            ]
+            tabla_factura = Table(info_factura, colWidths=[4*cm, 8*cm])
+            tabla_factura.setStyle(TableStyle([
+                ('FONTNAME',      (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTSIZE',      (0, 0), (-1, -1), 9),
+                ('ALIGN',         (0, 0), (0, -1),  'LEFT'),
+                ('ALIGN',         (1, 0), (1, -1),  'LEFT'),
+                ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            contenido.append(tabla_factura)
+
+            pagos = cuenta.pagos.all().order_by('-fecha_pago')
+            if pagos:
+                contenido.append(Paragraph("<b>Pagos realizados:</b>", styles['Normal']))
+                pago_data = [["Fecha", "Monto", "Método", "Referencia", "Comprobante", "Cobró"]]
+
+                # ✅ clamp proporcional si suma de pagos supera monto_total
+                suma_pagos = Decimal('0.00')
+                for pago in pagos:
+                    suma_pagos += Decimal(str(pago.monto))
+
+                factor_ajuste = None
+                if suma_pagos > monto_total:
+                    factor_ajuste = monto_total / suma_pagos
+
+                for pago in pagos:
+                    # ✅ pasar datetime crudo al helper, sin timezone.localtime()
+                    fecha_pago_local = formato_hora_rd(pago.fecha_pago)
+                    comprobante = getattr(pago, 'comprobante', None)
+                    comp_num = comprobante.numero_comprobante if comprobante else 'N/A'
+                    usuario = pago.usuario.get_full_name() or pago.usuario.username if pago.usuario else 'N/A'
+
+                    monto_pago = Decimal(str(pago.monto))
+                    if factor_ajuste is not None:
+                        monto_pago = (monto_pago * factor_ajuste).quantize(Decimal('0.01'))
+
+                    pago_data.append([
+                        fecha_pago_local,
+                        f"RD$ {monto_pago:,.2f}",
+                        pago.get_metodo_pago_display(),
+                        pago.referencia or 'N/A',
+                        comp_num,
+                        usuario,
+                    ])
+
+                tabla_pagos = Table(pago_data, colWidths=[2.5*cm, 2.5*cm, 2.5*cm, 3*cm, 3*cm, 3*cm])
+                tabla_pagos.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1,  0), colors.HexColor('#667eea')),
+                    ('TEXTCOLOR',  (0, 0), (-1,  0), colors.white),
+                    ('ALIGN',      (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME',   (0, 0), (-1,  0), 'Helvetica-Bold'),
+                    ('FONTSIZE',   (0, 0), (-1,  0), 8),
+                    ('FONTSIZE',   (0, 1), (-1, -1), 8),
+                    ('GRID',       (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                ]))
+                contenido.append(tabla_pagos)
+            else:
+                contenido.append(Paragraph("<i>No hay pagos registrados para esta factura.</i>", styles['Italic']))
+
+            contenido.append(Spacer(1, 0.5*cm))
+            contenido.append(Paragraph("<hr/>", styles['Normal']))
+            contenido.append(Spacer(1, 0.3*cm))
+
+        nota = Paragraph(
+            "Reporte generado automáticamente por el sistema Super Bestia.",
+            ParagraphStyle('Nota', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
+        )
+        contenido.append(Spacer(1, 1*cm))
+        contenido.append(nota)
+
+        doc.build(contenido)
+        pdf = buffer.getvalue()
+        buffer.close()
+        response.write(pdf)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Error al generar el historial: {str(e)}", content_type='text/plain')
 
 
 @login_required
