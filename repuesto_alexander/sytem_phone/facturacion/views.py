@@ -38,7 +38,7 @@ from django.urls import reverse
 
 from django.db.models import Max
 from django.db.models import Sum, Q, F, Avg, Count
-from django.db.models.functions import TruncDate
+from django.db.models.functions import TruncDate, ExtractMonth
 from datetime import datetime, timedelta, time
 import pandas as pd
 from decimal import Decimal, InvalidOperation
@@ -192,6 +192,40 @@ def dashboard(request):
             total_dia = float(ventas_contado_dia + ventas_credito_dia)
             ventas_semana.append(total_dia)
 
+        # Tendencia mensual real (enero-diciembre del anio actual)
+        monthly_trend = [0.0] * 12
+
+        ventas_contado_por_mes = Venta.objects.filter(
+            fecha_venta__year=hoy.year,
+            anulada=False,
+            tipo_venta='contado'
+        ).annotate(
+            mes=ExtractMonth('fecha_venta')
+        ).values('mes').annotate(
+            total=Sum('total')
+        )
+
+        ventas_credito_por_mes = CuentaPorCobrar.objects.filter(
+            venta__fecha_venta__year=hoy.year,
+            venta__anulada=False,
+            venta__tipo_venta='credito',
+            anulada=False
+        ).annotate(
+            mes=ExtractMonth('venta__fecha_venta')
+        ).values('mes').annotate(
+            total=Sum('monto_pagado')
+        )
+
+        for item in ventas_contado_por_mes:
+            mes = item.get('mes')
+            if mes:
+                monthly_trend[mes - 1] += float(item.get('total') or 0)
+
+        for item in ventas_credito_por_mes:
+            mes = item.get('mes')
+            if mes:
+                monthly_trend[mes - 1] += float(item.get('total') or 0)
+
         # Inventario
         total_stock = EntradaProducto.objects.filter(activo=True).aggregate(total=Sum('cantidad'))['total'] or 0
         productos_bajo_stock = EntradaProducto.objects.filter(
@@ -331,6 +365,40 @@ def dashboard_data(request):
             total_dia = float(ventas_contado_dia + ventas_credito_dia)
             ventas_semana.append(total_dia)
 
+        # Tendencia mensual real (enero-diciembre del anio actual)
+        monthly_trend = [0.0] * 12
+
+        ventas_contado_por_mes = Venta.objects.filter(
+            fecha_venta__year=hoy.year,
+            anulada=False,
+            tipo_venta='contado'
+        ).annotate(
+            mes=ExtractMonth('fecha_venta')
+        ).values('mes').annotate(
+            total=Sum('total')
+        )
+
+        ventas_credito_por_mes = CuentaPorCobrar.objects.filter(
+            venta__fecha_venta__year=hoy.year,
+            venta__anulada=False,
+            venta__tipo_venta='credito',
+            anulada=False
+        ).annotate(
+            mes=ExtractMonth('venta__fecha_venta')
+        ).values('mes').annotate(
+            total=Sum('monto_pagado')
+        )
+
+        for item in ventas_contado_por_mes:
+            mes = item.get('mes')
+            if mes:
+                monthly_trend[mes - 1] += float(item.get('total') or 0)
+
+        for item in ventas_credito_por_mes:
+            mes = item.get('mes')
+            if mes:
+                monthly_trend[mes - 1] += float(item.get('total') or 0)
+
         # Inventario
         total_stock = EntradaProducto.objects.filter(activo=True).aggregate(total=Sum('cantidad'))['total'] or 0
         productos_bajo_stock = EntradaProducto.objects.filter(
@@ -445,7 +513,8 @@ def dashboard_data(request):
                 'monthly': float(ventas_mes),
                 'weekly': ventas_semana,
                 'weekLabels': dias_semana,
-                'monthlyTrend': [float(ventas_mes)] * 12
+                'monthlyTrend': monthly_trend,
+                'monthLabels': ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
             },
             'inventory': {
                 'totalStock': total_stock,
@@ -560,6 +629,40 @@ def dashboard_tradicional(request):
         # Total del día
         total_dia = float(ventas_contado_dia + ventas_credito_dia)
         ventas_semana.append(total_dia)
+
+    # Tendencia mensual real (enero-diciembre del anio actual)
+    monthly_trend = [0.0] * 12
+
+    ventas_contado_por_mes = Venta.objects.filter(
+        fecha_venta__year=hoy.year,
+        anulada=False,
+        tipo_venta='contado'
+    ).annotate(
+        mes=ExtractMonth('fecha_venta')
+    ).values('mes').annotate(
+        total=Sum('total')
+    )
+
+    ventas_credito_por_mes = CuentaPorCobrar.objects.filter(
+        venta__fecha_venta__year=hoy.year,
+        venta__anulada=False,
+        venta__tipo_venta='credito',
+        anulada=False
+    ).annotate(
+        mes=ExtractMonth('venta__fecha_venta')
+    ).values('mes').annotate(
+        total=Sum('monto_pagado')
+    )
+
+    for item in ventas_contado_por_mes:
+        mes = item.get('mes')
+        if mes:
+            monthly_trend[mes - 1] += float(item.get('total') or 0)
+
+    for item in ventas_credito_por_mes:
+        mes = item.get('mes')
+        if mes:
+            monthly_trend[mes - 1] += float(item.get('total') or 0)
 
     # Inventario
     total_stock = EntradaProducto.objects.filter(activo=True).aggregate(
@@ -757,7 +860,8 @@ def dashboard_data_tradicional(request):
             'monthly': float(ventas_mes),
             'weekly': ventas_semana,
             'weekLabels': dias_semana,
-            'monthlyTrend': [float(ventas_mes)] * 12
+            'monthlyTrend': monthly_trend,
+            'monthLabels': ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
         },
         'inventory': {
             'totalStock': total_stock,
@@ -2033,7 +2137,11 @@ def ventas_por_usuario(request):
         print(f"Error en ventas_por_usuario: {e}")
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
-
+    
+    
+#================================================================================================
+#======================== APARTADO DE REPORTE DE VENTAS CUADRE ===================================
+#================================================================================================
 @login_required
 def ventas_por_usuario_pdf(request):
     """
@@ -2148,6 +2256,7 @@ def ventas_por_usuario_pdf(request):
         total_cobros             = total_cobros_efectivo + total_cobros_transf
         total_ventas_general     = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
         total_contado            = total_efectivo + total_cobros_efectivo
+
 
         # ========== COLORES ==========
         # Gris oscuro para headers (como en la imagen)
@@ -2337,9 +2446,14 @@ def ventas_por_usuario_pdf(request):
 
             fecha_str = row['fecha'].strftime('%d/%m/%Y')
             usuario = str(row['usuario'])[:14]
-            cliente = str(row['cliente'])[:22]
+            cliente = str(row['cliente'])[:20]
+
+            tipo = str(row['tipo'])[:9]
+            metodo = str(row['metodo'])[:13]
+
             tipo = str(row['tipo'])[:15]
             metodo = str(row['metodo'])[:25]
+
             valor_str = f"RD${float(row['valor']):,.2f}"
             factura = str(row['factura'])[:16]
 
@@ -2382,6 +2496,8 @@ def ventas_por_usuario_pdf(request):
 
 
 
+
+#
 @login_required
 def ventas_usuario_pdf(request, usuario_id):
     try:
@@ -2576,6 +2692,14 @@ def ventas_usuario_pdf(request, usuario_id):
                 y_position -= 0.25 * inch
                 p.setFont("Helvetica", 8)
 
+            
+            fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
+            p.drawString(1 * inch, y_position, fecha_str)
+            p.drawString(2.2 * inch, y_position, venta.numero_factura[:13 ])
+            
+            cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
+
+
             fecha_pago = pago.fecha_pago.strftime('%d/%m/%Y')
             factura = pago.cuenta.venta.numero_factura if pago.cuenta.venta else "N/A"
             cliente = pago.cuenta.cliente.full_name[:20] + "..." if len(pago.cuenta.cliente.full_name) > 20 else pago.cuenta.cliente.full_name
@@ -2586,6 +2710,7 @@ def ventas_usuario_pdf(request, usuario_id):
 
             p.drawString(1.0 * inch, y_position, fecha_pago)
             p.drawString(2.2 * inch, y_position, factura[:12])
+
             p.drawString(3.8 * inch, y_position, cliente)
             p.drawRightString(6.0 * inch, y_position, monto)
             p.drawString(6.8 * inch, y_position, metodo[:10])
@@ -2617,7 +2742,9 @@ def ventas_usuario_pdf(request, usuario_id):
         return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
 
 
-    
+ #================================================================================================
+ #========================== Obtener lista de usuarios para filtros =============================
+ #================================================================================================  
 @login_required
 def get_usuarios(request):
     """Obtener lista de usuarios para filtros"""
@@ -2628,10 +2755,9 @@ def get_usuarios(request):
         print(f"Error en get_usuarios: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
-
-
-
-
+#================================================================================================
+ #================================= VENTAS POR USUARIO ACTUAL ===================================
+ #================================================================================================
 @login_required
 def reporte_ventas_usuario_actual(request):
     """Vista para mostrar reporte de ventas del usuario actual"""
@@ -2946,17 +3072,10 @@ def reporte_ventas_usuario_actual_pdf(request):
         return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
 
 
-
-# ------------------------------
-# inventario
-# ------------------------------
-# Función para verificar si el usuario es superusuario
-
-
-
-# Decorador personalizado para requerir superusuario
+#================================================================================================
+# =======================Decorador personalizado para requerir superusuario =====================
+#================================================================================================
 def superuser_required(view_func):
-    
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
         print(f"Usuario autenticado: {request.user.is_authenticated}")  # Debug
@@ -3016,13 +3135,9 @@ def inventario_datos(request):
         return JsonResponse({'error': f'Error interno del servidor: {str(e)}'}, status=500)
 
 
+#================================================================================================
 # Vista para editar un producto (solo superusuarios)
-
-# Vista para editar un producto (solo superusuarios)
-# Vista para editar un producto (solo superusuarios)
-
-
-# Vista para editar un producto (solo superusuarios)
+#================================================================================================
 @csrf_exempt
 @superuser_required
 def inventario_editar(request, id):
@@ -3123,7 +3238,9 @@ def inventario_editar(request, id):
         print(f"Error en inventario_editar: {str(e)}")
         return JsonResponse({'error': f'Error al actualizar el producto: {str(e)}'}, status=500)
 
+#================================================================================================
 # Vista para eliminar un producto (solo superusuarios)
+#================================================================================================
 @csrf_exempt
 @superuser_required
 def inventario_eliminar(request, id):
