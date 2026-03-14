@@ -1082,7 +1082,7 @@
                                 </thead>
                                 <tbody id="rolesTableBody">
                                     {% for role in roles_data %}
-                                    <tr data-role-id="{{ role.id }}" data-modulos="{{ role.modulos_asignados|join:',' }}">
+                                    <tr data-role-id="{{ role.id }}" data-role-name="{{ role.name }}" data-modulos="{{ role.modulos_codename|join:',' }}">
                                         <td>
                                             {{ role.name }}
                                             {% if role.es_especial %}
@@ -1644,11 +1644,12 @@
         // Función para abrir el modal de editar rol
         function openEditRoleModal(roleId) {
             const row = document.querySelector(`tr[data-role-id="${roleId}"]`);
-            const modulos = row.getAttribute('data-modulos').split(',');
+            const modulosAttr = row.getAttribute('data-modulos') || '';
+            const modulos = modulosAttr ? modulosAttr.split(',').map(m => m.trim()).filter(Boolean) : [];
             const isEspecial = row.querySelector('small.text-muted') !== null;
             
             document.getElementById('editRoleId').value = roleId;
-            document.getElementById('editRoleName').value = row.querySelector('td').textContent.trim();
+            document.getElementById('editRoleName').value = row.getAttribute('data-role-name') || row.querySelector('td').textContent.trim();
             
             // Marcar los checkboxes correspondientes a los módulos del rol
             document.querySelectorAll('#editRolePermissions input[type="checkbox"]').forEach(checkbox => {

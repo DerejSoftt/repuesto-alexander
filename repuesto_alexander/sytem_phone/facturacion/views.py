@@ -7317,9 +7317,11 @@ def roles(request):
         
         # Obtener módulos asignados al rol
         modulos_asignados = []
+        modulos_codename = []
         for modulo in MODULOS_SISTEMA:
             if f'access_{modulo["codename"]}' in permissions:
                 modulos_asignados.append(modulo["name"])
+                modulos_codename.append(modulo["codename"])
         
         # Determinar si es un grupo especial
         es_especial = group.name in ['Usuario Normal', 'Almacén']
@@ -7331,6 +7333,7 @@ def roles(request):
             'status': 'activo',  # Asumimos que todos están activos
             'userCount': group.user_set.count(),
             'modulos_asignados': modulos_asignados,
+            'modulos_codename': modulos_codename,
             'es_especial': es_especial
         }
         
