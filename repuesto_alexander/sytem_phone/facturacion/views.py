@@ -7360,12 +7360,17 @@ def roles(request):
     for user in users:
         user_group = user.groups.first()
         role_name = user_group.name if user_group else 'Sin rol'
+        role_id = user_group.id if user_group else ''
         
         users_data.append({
             'id': user.id,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
             'name': f"{user.first_name} {user.last_name}".strip() or user.username,
             'email': user.email,
             'role': role_name,
+            'role_id': role_id,
             'status': 'activo' if user.is_active else 'inactivo',
             'lastAccess': format_last_access(user.last_login)
         })
