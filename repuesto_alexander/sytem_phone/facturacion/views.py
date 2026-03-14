@@ -198,6 +198,7 @@ def index(request):
         if user is not None:
             login(request, user)
 
+
             # 1) Super user -> dashboard
             if user.is_superuser:
                 return redirect('dashboard')
@@ -224,6 +225,8 @@ def index(request):
         messages.error(request, 'Usuario o contraseña incorrectos')
 
     return render(request, 'facturacion/index.html')
+
+
 
 #==============================================================================================
 #==============================Dashboard - Vista principal con KPIs y gráficos=================
@@ -3189,6 +3192,7 @@ def superuser_required(view_func):
 #================================================================================================
 #============================ Vista para renderizar la página de inventario ============================
 #================================================================================================
+
 @login_required
 @check_module_access('inventario')
 def inventario(request):
@@ -3371,6 +3375,7 @@ def inventario_eliminar(request, id):
 #================================================================================================
 #============================ Vista para renderizar la página de ventas ============================
 #================================================================================================
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
 @login_required
 @check_module_access('ventas')
 def ventas(request):
@@ -4186,6 +4191,8 @@ def detalle_venta(request, venta_id):
         'detalles': venta.detalles.all()
     })
 
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@login_required
 def listadecliente(request):
     return render(request, "facturacion/listadecliente.html")
 
@@ -4292,7 +4299,7 @@ def editar_cliente(request, cliente_id):
         })
 
 
-
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
 @login_required
 def registrodecliente(request):
     return render(request, "facturacion/registrodecliente.html")
@@ -4808,8 +4815,8 @@ def buscar_productos_similares(request):
 
 
 
-
-
+@require_GET
+@login_required
 def generar_comprobante_pdf(request, comprobante_id):
     try:
         comprobante = get_object_or_404(ComprobantePago, id=comprobante_id)
@@ -4951,7 +4958,8 @@ def generar_comprobante_pdf(request, comprobante_id):
             'message': f'Error al generar comprobante: {str(e)}'
         })
 
-
+@require_POST
+@login_required
 def eliminar_cuenta_pagada(request, cuenta_id):
     if request.method == 'POST':
         try:
@@ -4991,6 +4999,7 @@ def eliminar_cuenta_pagada(request, cuenta_id):
 #=========================================================================================
 #                          ===== VISTA PARA LISTAR COMPROBANTES =====
 #=========================================================================================
+@login_required
 def lista_comprobantes(request):
     comprobantes = ComprobantePago.objects.select_related(
         'pago', 'cuenta', 'cliente'
@@ -5012,7 +5021,7 @@ def lista_comprobantes(request):
     
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+
 @user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
 @login_required
 def cuentaporcobrar(request):
@@ -5199,7 +5208,6 @@ def sincronizar_cuentas_ventas():
     return f"Sincronizadas {cuentas.count()} cuentas"
 
 
-
 @login_required
 def registrar_pago(request):
     if request.method == 'POST':
@@ -5305,8 +5313,10 @@ def registrar_pago(request):
             })
  
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
- 
 
+
+@require_GET
+@login_required
 def generar_comprobante_pdf(request, comprobante_id):
     try:
         comprobante = get_object_or_404(ComprobantePago, id=comprobante_id)
@@ -5451,8 +5461,11 @@ def generar_comprobante_pdf(request, comprobante_id):
             'success': False,
             'message': f'Error al generar comprobante: {str(e)}'
         })
+    
 
 
+@require_POST
+@login_required
 def eliminar_cuenta_pagada(request, cuenta_id):
     if request.method == 'POST':
         try:
@@ -5488,8 +5501,8 @@ def eliminar_cuenta_pagada(request, cuenta_id):
     
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
-
-
+@require_POST
+@login_required
 def anular_cuenta(request, cuenta_id):
     if request.method == 'POST':
         try:
@@ -5535,6 +5548,7 @@ def anular_cuenta(request, cuenta_id):
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
+@login_required
 def detalle_cuenta(request, cuenta_id):
     cuenta = get_object_or_404(
         CuentaPorCobrar.objects.select_related('venta', 'cliente'),
@@ -6923,6 +6937,8 @@ def cuadre(request):
     return render(request, 'facturacion/cuadre.html', context)
 #========================================================================================
 
+
+
 @user_passes_test(is_superuser, login_url='/admin/login/')
 @login_required
 def reavastecer(request):
@@ -7814,7 +7830,6 @@ def anular_factura(request):
 
 
 @user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
-@user_passes_test(is_superuser, login_url='/admin/login/')
 @login_required
 def reimprimir_factura(request):
     # Esta vista renderiza la página de reimpresión
@@ -8106,7 +8121,6 @@ def ultimo_comprobante(request):
 
 
 @user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
-@user_passes_test(is_superuser, login_url='/admin/login/')
 @login_required
 def cotizacion(request):
     return render(request, "facturacion/cotizacion.html")
@@ -8426,7 +8440,7 @@ def guardar_cuenta_por_pagar(request):
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+
 @user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
 @login_required
 def cuentaporpagar(request):
