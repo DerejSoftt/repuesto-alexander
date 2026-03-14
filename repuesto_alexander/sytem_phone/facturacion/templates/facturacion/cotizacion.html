@@ -903,11 +903,11 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="clientPhone">Teléfono</label>
-                            <input type="tel" id="clientPhone" class="form-input">
+                            <input type="tel" id="clientPhone" class="form-input" inputmode="numeric" autocomplete="off" placeholder="000-000-0000">
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="clientEmail">RNC</label>
-                            <input type="text" id="clientEmail" class="form-input">
+                            <input type="text" id="clientEmail" class="form-input" inputmode="numeric" autocomplete="off" placeholder="000-00000000">
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="quoteDate">Fecha</label>
@@ -1047,10 +1047,60 @@
             }
         }
 
+        // Formateadores de campos
+        function formatPhone(value) {
+            const digits = value.replace(/\D/g, '').slice(0, 10);
+            if (digits.length <= 3) return digits;
+            if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+            return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+        }
+
+        function formatRNC(value) {
+            const digits = value.replace(/\D/g, '').slice(0, 11);
+            if (digits.length <= 3) return digits;
+            return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+        }
+
+        function setupFieldFormatting() {
+            const phoneInput = document.getElementById('clientPhone');
+            const rncInput = document.getElementById('clientEmail');
+
+            phoneInput.addEventListener('input', function() {
+                this.value = formatPhone(this.value);
+            });
+
+            rncInput.addEventListener('input', function() {
+                this.value = formatRNC(this.value);
+            });
+        }
+
+        function validateOptionalFormattedFields() {
+            const phoneValue = document.getElementById('clientPhone').value;
+            const rncValue = document.getElementById('clientEmail').value;
+
+            const phoneDigits = phoneValue.replace(/\D/g, '');
+            const rncDigits = rncValue.replace(/\D/g, '');
+
+            if (phoneValue && phoneDigits.length !== 10) {
+                alert('El teléfono debe tener 10 dígitos con formato 000-000-0000');
+                document.getElementById('clientPhone').focus();
+                return false;
+            }
+
+            if (rncValue && rncDigits.length !== 11) {
+                alert('El RNC debe tener 11 dígitos con formato 000-00000000');
+                document.getElementById('clientEmail').focus();
+                return false;
+            }
+
+            return true;
+        }
+
         // Inicialización
         document.addEventListener('DOMContentLoaded', function() {
             cargarProductos();
             document.getElementById('quoteDate').valueAsDate = new Date();
+            setupFieldFormatting();
             const searchInput = document.getElementById('productSearch');
             searchInput.addEventListener('input', handleSearch);
             document.addEventListener('click', function(e) {
@@ -1333,6 +1383,11 @@
                 document.getElementById('clientName').focus();
                 return;
             }
+
+            if (!validateOptionalFormattedFields()) {
+                return;
+            }
+
             // Crear formulario temporal para enviar datos
             const form = document.createElement('form');
             form.method = 'GET';
@@ -1375,6 +1430,11 @@
                 document.getElementById('clientName').focus();
                 return;
             }
+
+            if (!validateOptionalFormattedFields()) {
+                return;
+            }
+
             // Construir URL manualmente
             let url = '/generar-factura/?';
             url += `cliente_nombre=${encodeURIComponent(clientName)}`;
