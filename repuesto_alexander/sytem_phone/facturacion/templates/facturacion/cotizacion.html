@@ -1034,9 +1034,14 @@
         let selectedProducts = [];
         let currentProduct = null;
         let selectedPriceType = null;
+        const ITBIS_RATE = 0.18;
 
         function formatCurrency(amount) {
             return `RD$ ${Number(amount || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        function priceWithItbis(amount) {
+            return Number(amount || 0) * (1 + ITBIS_RATE);
         }
 
         // Función para cargar los productos desde Django
@@ -1169,12 +1174,12 @@
                     <div class="product-prices">
                         <div>
                             <div class="price-label">Unitario</div>
-                            <div class="price-value">${formatCurrency(product.precio)}</div>
+                            <div class="price-value">${formatCurrency(priceWithItbis(product.precio))}</div>
                         </div>
                         ${product.precio_por_mayor ? `
                         <div style="margin-top: 5px;">
                             <div class="price-label">Por Mayor</div>
-                            <div class="price-value">${formatCurrency(product.precio_por_mayor)}</div>
+                            <div class="price-value">${formatCurrency(priceWithItbis(product.precio_por_mayor))}</div>
                         </div>
                         ` : ''}
                     </div>
@@ -1233,7 +1238,7 @@
                         <h3>Precio Unitario</h3>
                         <p>Precio de venta al detalle</p>
                     </div>
-                    <div class="price-option-value">${formatCurrency(currentProduct.precio)}</div>
+                    <div class="price-option-value">${formatCurrency(priceWithItbis(currentProduct.precio))}</div>
                 </div>
             `;
             if (currentProduct.precio_por_mayor) {
@@ -1243,7 +1248,7 @@
                             <h3>Precio Por Mayor</h3>
                             <p>Precio de venta al por mayor</p>
                         </div>
-                        <div class="price-option-value">${formatCurrency(currentProduct.precio_por_mayor)}</div>
+                        <div class="price-option-value">${formatCurrency(priceWithItbis(currentProduct.precio_por_mayor))}</div>
                     </div>
                 `;
             }
@@ -1284,12 +1289,15 @@
             }
             const price = selectedPriceType === 'unitario' ? currentProduct.precio : currentProduct.precio_por_mayor;
             const priceLabel = selectedPriceType === 'unitario' ? 'Unitario' : 'Por Mayor';
+            const priceWithTax = priceWithItbis(price);
             selectedProducts.push({
                 ...currentProduct,
                 selectedPrice: price,
+                selectedPriceWithItbis: priceWithTax,
                 priceType: priceLabel,
                 quantity: quantity,
-                subtotal: price * quantity
+                subtotal: price * quantity,
+                subtotalWithItbis: priceWithTax * quantity
             });
             renderSelectedProducts();
             calculateTotals();
@@ -1316,9 +1324,9 @@
                     <td>${product.descripcion}</td>
                     <td>${getBrandName(product.marca)}</td>
                     <td><span style="background: #667eea; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">${product.priceType}</span></td>
-                    <td class="currency">${formatCurrency(product.selectedPrice)}</td>
+                    <td class="currency">${formatCurrency(product.selectedPriceWithItbis ?? priceWithItbis(product.selectedPrice))}</td>
                     <td><strong>${product.quantity}</strong></td>
-                    <td class="currency">${formatCurrency(product.subtotal)}</td>
+                    <td class="currency">${formatCurrency(product.subtotalWithItbis ?? priceWithItbis(product.subtotal))}</td>
                     <td>
                         <button class="btn btn-danger" onclick="removeProduct(${index})">
                             <i class='bx bx-trash'></i>
