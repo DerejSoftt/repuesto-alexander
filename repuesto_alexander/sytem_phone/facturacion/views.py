@@ -7307,6 +7307,19 @@ def roles(request):
     
     # Obtener todos los usuarios
     users = User.objects.all().prefetch_related('groups')
+
+    # Zona horaria República Dominicana para mostrar ultimo acceso en formato 12h
+    import pytz
+    tz_rd = pytz.timezone('America/Santo_Domingo')
+
+    def format_last_access(last_login):
+        if not last_login:
+            return 'Nunca'
+        if timezone.is_aware(last_login):
+            last_login_local = last_login.astimezone(tz_rd)
+        else:
+            last_login_local = timezone.make_aware(last_login, tz_rd)
+        return last_login_local.strftime('%d/%m/%Y %I:%M')
     
     # Procesar datos para los templates
     roles_data = []
@@ -7317,9 +7330,11 @@ def roles(request):
         
         # Obtener módulos asignados al rol
         modulos_asignados = []
+        modulos_codename = []
         for modulo in MODULOS_SISTEMA:
             if f'access_{modulo["codename"]}' in permissions:
                 modulos_asignados.append(modulo["name"])
+                modulos_codename.append(modulo["codename"])
         
         # Determinar si es un grupo especial
         es_especial = group.name in ['Usuario Normal', 'Almacén']
@@ -7331,6 +7346,7 @@ def roles(request):
             'status': 'activo',  # Asumimos que todos están activos
             'userCount': group.user_set.count(),
             'modulos_asignados': modulos_asignados,
+            'modulos_codename': modulos_codename,
             'es_especial': es_especial
         }
         
@@ -7344,14 +7360,19 @@ def roles(request):
     for user in users:
         user_group = user.groups.first()
         role_name = user_group.name if user_group else 'Sin rol'
+        role_id = user_group.id if user_group else ''
         
         users_data.append({
             'id': user.id,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
             'name': f"{user.first_name} {user.last_name}".strip() or user.username,
             'email': user.email,
             'role': role_name,
+            'role_id': role_id,
             'status': 'activo' if user.is_active else 'inactivo',
-            'lastAccess': user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Nunca'
+            'lastAccess': format_last_access(user.last_login)
         })
     
     # Estadísticas
@@ -7599,7 +7620,7 @@ def roles(request):
                     user.email,
                     role_name,
                     'activo' if user.is_active else 'inactivo',
-                    user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Nunca'
+                    format_last_access(user.last_login)
                 ])
             
             return response
@@ -8136,7 +8157,6 @@ def obtener_productoscotizacion(request):
         else:
             producto['imagen_url'] = None
     return JsonResponse(list(productos), safe=False)
-
 
     try:
         # Obtener datos de la cotización
