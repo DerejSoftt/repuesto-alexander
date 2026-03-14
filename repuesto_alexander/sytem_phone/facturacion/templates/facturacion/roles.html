@@ -1263,7 +1263,7 @@
                                 </thead>
                                 <tbody id="usersTableBody">
                                     {% for user in users_data %}
-                                    <tr>
+                                    <tr data-user-id="{{ user.id }}">
                                         <td>{{ user.name }}</td>
                                         <td>{{ user.email }}</td>
                                         <td>{{ user.role }}</td>
@@ -1715,13 +1715,17 @@
 
         // Función para ver detalles del usuario
         function viewUser(userId) {
-            // En una implementación real, aquí harías una petición AJAX para obtener los detalles del usuario
-            // Por ahora, usaremos datos de ejemplo
-            document.getElementById('viewUserName').textContent = 'Usuario ' + userId;
-            document.getElementById('viewUserEmail').textContent = 'usuario' + userId + '@ejemplo.com';
-            document.getElementById('viewUserRole').textContent = 'Administrador';
-            document.getElementById('viewUserStatus').textContent = 'Activo';
-            document.getElementById('viewUserLastAccess').textContent = '2023-10-15 14:30';
+            const row = document.querySelector(`tr[data-user-id="${userId}"]`);
+            if (!row) return;
+
+            const cells = row.querySelectorAll('td');
+            document.getElementById('viewUserName').textContent = cells[0].textContent.trim();
+            document.getElementById('viewUserEmail').textContent = cells[1].textContent.trim();
+            document.getElementById('viewUserRole').textContent = cells[2].textContent.trim();
+            document.getElementById('viewUserStatus').textContent = cells[3].querySelector('.status-badge')
+                ? cells[3].querySelector('.status-badge').textContent.trim()
+                : cells[3].textContent.trim();
+            document.getElementById('viewUserLastAccess').textContent = cells[4].textContent.trim();
             document.getElementById('viewUserModal').classList.add('active');
         }
 
