@@ -321,6 +321,26 @@
             gap: 20px;
             align-items: flex-end;
         }
+        /* Ajuste especifico para el panel de filtros de Roles */
+        .roles-filters-grid {
+            grid-template-columns: minmax(240px, 1.5fr) minmax(180px, 1fr) auto auto;
+            gap: 12px;
+        }
+        .roles-filters-grid .btn {
+            width: auto;
+            min-width: 170px;
+            justify-content: center;
+        }
+        /* Ajuste especifico para el panel de filtros de Usuarios */
+        .users-filters-grid {
+            grid-template-columns: minmax(240px, 1.5fr) minmax(180px, 1fr) minmax(180px, 1fr) auto auto;
+            gap: 12px;
+        }
+        .users-filters-grid .btn {
+            width: auto;
+            min-width: 170px;
+            justify-content: center;
+        }
         .filter-group label {
             display: block;
             margin-bottom: 8px;
@@ -812,6 +832,22 @@
                 overflow: hidden;
             }
         }
+        @media (max-width: 1024px) {
+            .roles-filters-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .roles-filters-grid .btn {
+                width: 100%;
+                min-width: 0;
+            }
+            .users-filters-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .users-filters-grid .btn {
+                width: 100%;
+                min-width: 0;
+            }
+        }
         /* Scrollbar personalizado */
         .sidebar::-webkit-scrollbar,
         .modal-content::-webkit-scrollbar,
@@ -1027,7 +1063,7 @@
                     <!-- Filters Section -->
                     <div class="filters-section">
                         <form method="GET" id="rolesFilterForm">
-                            <div class="filters-grid">
+                            <div class="filters-grid roles-filters-grid">
                                 <div class="filter-group">
                                     <label for="searchRole">Buscar Rol</label>
                                     <input type="text" class="filter-input" placeholder="Nombre o descripción..." 
@@ -1048,15 +1084,9 @@
                                     </button>
                                 </div>
                                 <div class="filter-group">
-                                    <button type="submit" class="btn btn-info" name="action" value="filter">
+                                    <button type="submit" class="btn btn-primary" name="action" value="filter">
                                         <i class='bx bx-search'></i>
                                         Buscar
-                                    </button>
-                                </div>
-                                <div class="filter-group">
-                                    <button type="submit" class="btn btn-info" name="action" value="export_roles_csv">
-                                        <i class='bx bx-download'></i>
-                                        Exportar CSV
                                     </button>
                                 </div>
                             </div>
@@ -1175,7 +1205,7 @@
                     <!-- Filters Section -->
                     <div class="filters-section">
                         <form method="GET" id="usersFilterForm">
-                            <div class="filters-grid">
+                            <div class="filters-grid users-filters-grid">
                                 <div class="filter-group">
                                     <label for="searchUser">Buscar Usuario</label>
                                     <input type="text" class="filter-input" placeholder="Nombre o email..." 
@@ -1205,15 +1235,9 @@
                                     </button>
                                 </div>
                                 <div class="filter-group">
-                                    <button type="submit" class="btn btn-info" name="action" value="filter">
+                                    <button type="submit" class="btn btn-primary" name="action" value="filter">
                                         <i class='bx bx-search'></i>
                                         Buscar
-                                    </button>
-                                </div>
-                                <div class="filter-group">
-                                    <button type="submit" class="btn btn-info" name="action" value="export_users_csv">
-                                        <i class='bx bx-download'></i>
-                                        Exportar CSV
                                     </button>
                                 </div>
                             </div>
