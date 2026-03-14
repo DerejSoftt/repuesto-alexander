@@ -105,6 +105,8 @@ urlpatterns = [
     path('reporte-ventas-usuario-pdf/', views.reporte_ventas_usuario_actual_pdf, name='reporte_ventas_usuario_actual_pdf'),
      path('reporte-ventas-usuario-actual-pdf/', views.reporte_ventas_usuario_actual_pdf, name='reporte_ventas_usuario_actual_pdf'),
     path('reporte-ventas-usuario-actual/', views.reporte_ventas_usuario_actual, name='reporte_ventas_usuario_actual'),
+    
+  path('generar-historial-cliente-pdf/<int:client_id>/', views.generar_historial_cliente_pdf, name='generar_historial_cliente_pdf'),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
     
