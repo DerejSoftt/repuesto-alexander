@@ -10,6 +10,14 @@
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Toastr CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+    <!-- SweetAlert2 CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         * {
             margin: 0;
@@ -1028,6 +1036,10 @@
             <img id="modalImage" style="max-width: 100%; max-height: 70vh; display: block; margin: 0 auto;">
         </div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         // Variable global para almacenar los productos
         let inventoryProducts = [];
@@ -1035,6 +1047,16 @@
         let currentProduct = null;
         let selectedPriceType = null;
         const ITBIS_RATE = 0.18;
+
+        toastr.options = {
+            closeButton: true,
+            progressBar: true,
+            newestOnTop: true,
+            positionClass: 'toast-top-right',
+            preventDuplicates: true,
+            timeOut: 3500,
+            extendedTimeOut: 1200
+        };
 
         function formatCurrency(amount) {
             return `RD$ ${Number(amount || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1052,7 +1074,7 @@
                 console.log("Productos cargados:", inventoryProducts);
             } catch (error) {
                 console.error("Error al cargar productos:", error);
-                alert("Error al cargar los productos. Consulta la consola para más detalles.");
+                toastr.error("Error al cargar los productos. Consulta la consola para más detalles.");
             }
         }
 
@@ -1091,13 +1113,13 @@
             const rncDigits = rncValue.replace(/\D/g, '');
 
             if (phoneValue && phoneDigits.length !== 10) {
-                alert('El teléfono debe tener 10 dígitos con formato 000-000-0000');
+                toastr.warning('El teléfono debe tener 10 dígitos con formato 000-000-0000');
                 document.getElementById('clientPhone').focus();
                 return false;
             }
 
             if (rncValue && rncDigits.length !== 11) {
-                alert('El RNC debe tener 11 dígitos con formato 000-00000000');
+                toastr.warning('El RNC debe tener 11 dígitos con formato 000-00000000');
                 document.getElementById('clientEmail').focus();
                 return false;
             }
@@ -1279,12 +1301,12 @@
         // Agregar producto a la cotización
         function addProductToQuote() {
             if (!selectedPriceType) {
-                alert('Por favor selecciona un tipo de precio');
+                toastr.warning('Por favor selecciona un tipo de precio');
                 return;
             }
             const quantity = parseInt(document.getElementById('productQuantity').value);
             if (quantity < 1) {
-                alert('La cantidad debe ser mayor a 0');
+                toastr.warning('La cantidad debe ser mayor a 0');
                 return;
             }
             const price = selectedPriceType === 'unitario' ? currentProduct.precio : currentProduct.precio_por_mayor;
@@ -1302,6 +1324,7 @@
             renderSelectedProducts();
             calculateTotals();
             closePriceModal();
+            toastr.success('Producto agregado correctamente');
         }
 
         // Renderizar productos seleccionados
@@ -1357,25 +1380,36 @@
         // Limpiar cotización
         function clearQuote() {
             if (selectedProducts.length === 0) return;
-            if (confirm('¿Estás seguro de que deseas limpiar toda la cotización?')) {
-                selectedProducts = [];
-                renderSelectedProducts();
-                calculateTotals();
-                document.getElementById('clientName').value = '';
-                document.getElementById('clientPhone').value = '';
-                document.getElementById('clientEmail').value = '';
-            }
+            Swal.fire({
+                title: '¿Limpiar cotización?',
+                text: 'Se eliminarán todos los productos agregados.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Aceptar',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    selectedProducts = [];
+                    renderSelectedProducts();
+                    calculateTotals();
+                    document.getElementById('clientName').value = '';
+                    document.getElementById('clientPhone').value = '';
+                    document.getElementById('clientEmail').value = '';
+                    toastr.success('Cotización limpiada correctamente');
+                }
+            });
         }
 
         // Imprimir cotización
         function printQuote() {
             if (selectedProducts.length === 0) {
-                alert('No hay productos en la cotización');
+                toastr.info('No hay productos en la cotización');
                 return;
             }
             const clientName = document.getElementById('clientName').value;
             if (!clientName) {
-                alert('Por favor ingresa el nombre del cliente');
+                toastr.warning('Por favor ingresa el nombre del cliente');
                 document.getElementById('clientName').focus();
                 return;
             }
@@ -1385,13 +1419,13 @@
         // Generar Factura HTML
         function generarFactura() {
             if (selectedProducts.length === 0) {
-                alert('No hay productos en la cotización');
+                toastr.info('No hay productos en la cotización');
                 return;
             }
 
             const clientName = document.getElementById('clientName').value;
             if (!clientName) {
-                alert('Por favor ingresa el nombre del cliente');
+                toastr.warning('Por favor ingresa el nombre del cliente');
                 document.getElementById('clientName').focus();
                 return;
             }
@@ -1432,13 +1466,13 @@
         // Versión alternativa por si la anterior no funciona
         function generarFacturaAlternativa() {
             if (selectedProducts.length === 0) {
-                alert('No hay productos en la cotización');
+                toastr.info('No hay productos en la cotización');
                 return;
             }
 
             const clientName = document.getElementById('clientName').value;
             if (!clientName) {
-                alert('Por favor ingresa el nombre del cliente');
+                toastr.warning('Por favor ingresa el nombre del cliente');
                 document.getElementById('clientName').focus();
                 return;
             }
