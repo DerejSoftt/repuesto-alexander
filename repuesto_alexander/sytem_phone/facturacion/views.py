@@ -39,7 +39,8 @@ from django.urls import reverse
 # import time
 
 from django.db.models import Max
-from django.db.models import Sum, Q, F, Avg, Count
+from django.db.models import Sum, Q, F, Avg, Count, ExpressionWrapper, DecimalField, Value
+from django.db.models.functions import Coalesce
 from django.db.models.functions import TruncDate, ExtractMonth
 from datetime import datetime, timedelta, time
 import pandas as pd
@@ -564,69 +565,70 @@ def dashboard_data(request):
         ).count()
 
         # =============================================
-        # NUEVO: CÁLCULOS DEL VALOR DEL INVENTARIO
+        # CÁLCULOS DEL VALOR DEL INVENTARIO (OPTIMIZADOS)
         # =============================================
-        
-        # Obtener todos los productos activos
         productos_activos = EntradaProducto.objects.filter(activo=True)
-        
-        # Calcular valor total del inventario (precio de venta * cantidad)
-        valor_total_inventario = 0
-        inversion_total = 0
-        
-        for producto in productos_activos:
-            # Valor a precio de venta
-            if producto.costo and producto.cantidad:
-                valor_total_inventario += float(producto.costo * producto.cantidad)
-            
-            # Inversión total (costo * cantidad)
-            if producto.precio and producto.cantidad:
-                inversion_total += float(producto.precio_con_itbis* producto.cantidad)
-        
-        # Ganancia potencial
+
+        valor_expr = ExpressionWrapper(
+            F('costo') * F('cantidad'),
+            output_field=DecimalField(max_digits=18, decimal_places=2)
+        )
+        inversion_expr = ExpressionWrapper(
+            Coalesce(F('precio_con_itbis'), F('precio')) * F('cantidad'),
+            output_field=DecimalField(max_digits=18, decimal_places=2)
+        )
+
+        inventario_totales = productos_activos.aggregate(
+            total_value=Coalesce(Sum(valor_expr), Value(0), output_field=DecimalField(max_digits=18, decimal_places=2)),
+            total_investment=Coalesce(Sum(inversion_expr), Value(0), output_field=DecimalField(max_digits=18, decimal_places=2))
+        )
+
+        valor_total_inventario = float(inventario_totales['total_value'] or 0)
+        inversion_total = float(inventario_totales['total_investment'] or 0)
         ganancia_potencial = inversion_total - valor_total_inventario
 
-        # Valor por marca
-        valores_por_marca = []
-        marcas_distintas = productos_activos.values('marca').distinct()
-        
-        for marca_info in marcas_distintas:
-            marca = marca_info['marca']
-            productos_marca = productos_activos.filter(marca=marca)
-            
-            valor_marca = 0
-            for producto in productos_marca:
-                if producto.precio and producto.cantidad:
-                    valor_marca += float(producto.costo * producto.cantidad)
-            
-            # Obtener el nombre legible de la marca
-            nombre_marca = dict(EntradaProducto.MARCAS).get(marca, marca)
-            
-            valores_por_marca.append({
-                'marca': nombre_marca,
-                'valorTotal': round(valor_marca, 2)
-            })
-        
-        # Ordenar marcas por valor descendente
-        valores_por_marca.sort(key=lambda x: x['valorTotal'], reverse=True)
+        marcas_map = dict(EntradaProducto.MARCAS)
 
-        # Productos de mayor valor (top 10 por valor total)
-        productos_con_valor = []
-        for producto in productos_activos:
-            if producto.precio and producto.cantidad:
-                valor_total = float(producto.costo * producto.cantidad)
-                productos_con_valor.append({
-                    'descripcion': producto.descripcion,
-                    'marca': dict(EntradaProducto.MARCAS).get(producto.marca, producto.marca),
-                    'cantidad': producto.cantidad,
-                    'cantidad_minima': producto.cantidad_minima,
-                    'costo': float(producto.costo) if producto.costo else 0,
-                    'precio': float(producto.precio) if producto.precio else 0,
-                    'valorTotal': round(valor_total, 2)
-                })
-        
-        # Ordenar por valor total descendente y tomar los top 10
-        productos_mayor_valor = sorted(productos_con_valor, key=lambda x: x['valorTotal'], reverse=True)[:10]
+        valores_por_marca_qs = (
+            productos_activos
+            .values('marca')
+            .annotate(
+                valor_total=Coalesce(
+                    Sum(valor_expr),
+                    Value(0),
+                    output_field=DecimalField(max_digits=18, decimal_places=2)
+                )
+            )
+            .order_by('-valor_total')
+        )
+
+        valores_por_marca = [
+            {
+                'marca': marcas_map.get(item['marca'], item['marca']),
+                'valorTotal': round(float(item['valor_total'] or 0), 2)
+            }
+            for item in valores_por_marca_qs
+        ]
+
+        productos_mayor_valor_qs = (
+            productos_activos
+            .annotate(valor_total=valor_expr)
+            .values('descripcion', 'marca', 'cantidad', 'cantidad_minima', 'costo', 'precio', 'valor_total')
+            .order_by('-valor_total')[:10]
+        )
+
+        productos_mayor_valor = [
+            {
+                'descripcion': item['descripcion'],
+                'marca': marcas_map.get(item['marca'], item['marca']),
+                'cantidad': item['cantidad'],
+                'cantidad_minima': item['cantidad_minima'],
+                'costo': float(item['costo'] or 0),
+                'precio': float(item['precio'] or 0),
+                'valorTotal': round(float(item['valor_total'] or 0), 2)
+            }
+            for item in productos_mayor_valor_qs
+        ]
 
         data = {
             'sales': {
