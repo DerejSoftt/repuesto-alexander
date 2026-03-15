@@ -1109,10 +1109,11 @@
         }
     });
     
-    // Manejar el cierre de sesión con SweetAlert2
-    document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
+// Manejar el cierre de sesión con SweetAlert2
+const logoutLink = document.querySelector("a[href='{% url 'logout' %}']");
+if (logoutLink) {
+    logoutLink.addEventListener("click", function(e) {
         e.preventDefault();
-
         Swal.fire({
             title: '¿Cerrar Sesión?',
             text: '¿Está seguro de que desea cerrar la sesión?',
@@ -1125,10 +1126,12 @@
             backdrop: true
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = "{% url 'index' %}";
+                window.location.href = "{% url 'logout' %}";
             }
         });
     });
+}
+
 
     // Confirmación para limpiar formulario con SweetAlert2
     document.querySelector('button[type="reset"]').addEventListener('click', function(e) {

@@ -2509,7 +2509,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Manejar el cierre de sesión con SweetAlert2
-    const logoutLink = document.querySelector("a[href*='index']");
+    const logoutLink = document.querySelector("a[href='{% url 'logout' %}']");
     if (logoutLink) {
         logoutLink.addEventListener("click", function(e) {
             e.preventDefault();
@@ -2525,11 +2525,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 backdrop: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = logoutLink.href;
+                    window.location.href = "{% url 'logout' %}";
                 }
             });
         });
     }
+
 
     // Manejar redimensionamiento de ventana
     window.addEventListener('resize', function() {
