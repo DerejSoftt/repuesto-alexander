@@ -7,6 +7,7 @@ urlpatterns = [
     # path('logout/', views.logout_view, name='logout'),  
     path('', views.index, name='login'),  # Página de login
     path("" , views.index, name="index"),
+    path('logout/', views.logout_view, name='logout'),  # Ruta para cerrar sesión
     path("dashboard" , views.dashboard, name="dashboard"),
     path('dashboard/data/', views.dashboard_data, name='dashboard_data'),
     path("inventario", views.inventario, name="inventario"),

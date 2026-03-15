@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404 
 from .models import EntradaProducto, Proveedor,  Cliente, Caja, Venta, DetalleVenta, MovimientoStock, CuentaPorCobrar, PagoCuentaPorCobrar, CierreCaja, ComprobantePago, Rol, CuentaPorPagar, DetalleCuentaPorPagar
 from django.contrib import messages
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils import timezone
 from django.template.loader import get_template
 from django.http import JsonResponse
@@ -130,7 +132,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from decimal import Decimal
 import json
-
+from django.contrib.auth import authenticate, logout, login as auth_login
 
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
@@ -188,6 +190,8 @@ def check_module_access(module_name):
 #==============================================================================================
 #==============================inicio de seccion===============================================
 #==============================================================================================
+@ensure_csrf_cookie
+@never_cache
 def index(request):
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -227,6 +231,12 @@ def index(request):
     return render(request, 'facturacion/index.html')
 
 
+def logout_view(request):
+    """Vista para cerrar sesión"""
+    logout(request)
+    request.session.flush()
+    messages.success(request, 'Sesión cerrada exitosamente')
+    return redirect('index')
 
 #==============================================================================================
 #==============================Dashboard - Vista principal con KPIs y gráficos=================
