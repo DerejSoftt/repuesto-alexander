@@ -22,6 +22,7 @@ from datetime import date, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login
 from django.apps import apps
+import pytz
 from reportlab.lib.pagesizes import A4, portrait
 from reportlab.pdfgen import canvas
 from django.http import HttpResponse
@@ -422,6 +423,8 @@ def dashboard(request):
 #==============================================================================================
 def dashboard_data(request):
     try:
+        # Zona horaria República Dominicana para mostrar horas en el dashboard
+        tz_rd = pytz.timezone('America/Santo_Domingo')
         hoy = timezone.now().date()
         inicio_mes = hoy.replace(day=1)
         inicio_semana = hoy - timedelta(days=hoy.weekday())
@@ -659,8 +662,8 @@ def dashboard_data(request):
                 'id': venta.id,
                 'producto': f"{venta.cliente_nombre} - {venta.numero_factura}",
                 'monto': float(venta.total),
-                'fecha': venta.fecha_venta.strftime('%Y-%m-%d'),
-                'hora': venta.fecha_venta.strftime('%H:%M'),
+                'fecha': venta.fecha_venta.strftime('%d-%m-%Y'),
+                'hora': timezone.localtime(venta.fecha_venta, tz_rd).strftime('%I:%M'),
                 'estado': 'completada',
                 'cantidad': 1
             } for venta in ultimas_ventas],
@@ -864,6 +867,8 @@ def dashboard_tradicional(request):
 #==============================================================================================
 def dashboard_data_tradicional(request):
     """Versión tradicional sin pandas para JSON"""
+    # Zona horaria República Dominicana para mostrar horas en el dashboard
+    tz_rd = pytz.timezone('America/Santo_Domingo')
     hoy = timezone.now().date()
     inicio_mes = hoy.replace(day=1)
     inicio_semana = hoy - timedelta(days=hoy.weekday())
@@ -1041,8 +1046,8 @@ def dashboard_data_tradicional(request):
             'id': venta.id,
             'producto': f"{venta.cliente_nombre} - {venta.numero_factura}",
             'monto': float(venta.total),
-            'fecha': venta.fecha_venta.strftime('%Y-%m-%d'),
-            'hora': venta.fecha_venta.strftime('%H:%M'),
+            'fecha': venta.fecha_venta.strftime('%d-%m-%Y'),
+            'hora': timezone.localtime(venta.fecha_venta, tz_rd).strftime('%I:%M'),
             'estado': 'completada',
             'cantidad': 1
         } for venta in ultimas_ventas],
@@ -1062,6 +1067,15 @@ def movimientos_stock(request):
         movimientos_data = []
         limite_total = 300
         limite_fuente = 200
+        tz_rd = pytz.timezone('America/Santo_Domingo')
+
+        def format_rd_datetime(dt):
+            if not dt:
+                return "Fecha no disponible"
+            try:
+                return timezone.localtime(dt, tz_rd).strftime('%d-%m-%Y %I:%M')
+            except Exception:
+                return dt.strftime('%d-%m-%Y %I:%M')
         
         # =============================================
         # 1. OBTENER ENTRADAS DE PRODUCTOS (COMPRAS)
@@ -1190,11 +1204,11 @@ def movimientos_stock(request):
                 # Obtener fecha
                 fecha_str = "Fecha no disponible"
                 if hasattr(entrada, 'fecha_entrada') and entrada.fecha_entrada:
-                    fecha_str = entrada.fecha_entrada.strftime('%Y-%m-%d %H:%M')
+                    fecha_str = entrada.fecha_entrada.strftime('%d-%m-%Y %I:%M')
                 elif hasattr(entrada, 'fecha_registro') and entrada.fecha_registro:
-                    fecha_str = entrada.fecha_registro.strftime('%Y-%m-%d %H:%M')
+                    fecha_str = format_rd_datetime(entrada.fecha_registro)
                 elif hasattr(entrada, 'created_at') and entrada.created_at:
-                    fecha_str = entrada.created_at.strftime('%Y-%m-%d %H:%M')
+                    fecha_str = format_rd_datetime(entrada.created_at)
                 
                 # Obtener cantidad
                 cantidad = 0
@@ -1267,7 +1281,7 @@ def movimientos_stock(request):
                     producto_nombre = str(mov.producto)
                 
                 movimientos_data.append({
-                    'fecha_movimiento': mov.fecha_movimiento.strftime('%Y-%m-%d %H:%M'),
+                    'fecha_movimiento': format_rd_datetime(mov.fecha_movimiento),
                     'producto': producto_nombre,
                     'tipo_movimiento': mov.tipo_movimiento,
                     'tipo_operacion': tipo_operacion,
@@ -1308,7 +1322,7 @@ def movimientos_stock(request):
                     producto_nombre = str(producto)
                 
                 movimientos_data.append({
-                    'fecha_movimiento': venta.fecha_venta.strftime('%Y-%m-%d %H:%M'),
+                    'fecha_movimiento': format_rd_datetime(venta.fecha_venta),
                     'producto': producto_nombre,
                     'tipo_movimiento': 'venta',
                     'tipo_operacion': 'salida',
@@ -9531,3 +9545,5 @@ def exportar_reporte_pdf(request):
     response.write(pdf)
     
     return response
+
+
