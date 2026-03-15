@@ -130,6 +130,8 @@ USE_I18N = True
 TIME_ZONE = 'UTC'
 USE_TZ = True
 
+LOGIN_URL = 'index'
+LOGIN_REDIRECT_URL = '/'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
