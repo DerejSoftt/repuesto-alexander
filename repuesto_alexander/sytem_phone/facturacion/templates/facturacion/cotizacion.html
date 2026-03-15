@@ -10,6 +10,14 @@
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Toastr CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+    <!-- SweetAlert2 CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         * {
             margin: 0;
@@ -903,11 +911,11 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="clientPhone">Teléfono</label>
-                            <input type="tel" id="clientPhone" class="form-input">
+                            <input type="tel" id="clientPhone" class="form-input" inputmode="numeric" autocomplete="off" placeholder="000-000-0000">
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="clientEmail">RNC</label>
-                            <input type="text" id="clientEmail" class="form-input">
+                            <input type="text" id="clientEmail" class="form-input" inputmode="numeric" autocomplete="off" placeholder="000-00000000">
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="quoteDate">Fecha</label>
@@ -1028,12 +1036,35 @@
             <img id="modalImage" style="max-width: 100%; max-height: 70vh; display: block; margin: 0 auto;">
         </div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         // Variable global para almacenar los productos
         let inventoryProducts = [];
         let selectedProducts = [];
         let currentProduct = null;
         let selectedPriceType = null;
+        const ITBIS_RATE = 0.18;
+
+        toastr.options = {
+            closeButton: true,
+            progressBar: true,
+            newestOnTop: true,
+            positionClass: 'toast-top-right',
+            preventDuplicates: true,
+            timeOut: 3500,
+            extendedTimeOut: 1200
+        };
+
+        function formatCurrency(amount) {
+            return `RD$ ${Number(amount || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+
+        function priceWithItbis(amount) {
+            return Number(amount || 0) * (1 + ITBIS_RATE);
+        }
 
         // Función para cargar los productos desde Django
         async function cargarProductos() {
@@ -1043,14 +1074,64 @@
                 console.log("Productos cargados:", inventoryProducts);
             } catch (error) {
                 console.error("Error al cargar productos:", error);
-                alert("Error al cargar los productos. Consulta la consola para más detalles.");
+                toastr.error("Error al cargar los productos. Consulta la consola para más detalles.");
             }
+        }
+
+        // Formateadores de campos
+        function formatPhone(value) {
+            const digits = value.replace(/\D/g, '').slice(0, 10);
+            if (digits.length <= 3) return digits;
+            if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+            return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+        }
+
+        function formatRNC(value) {
+            const digits = value.replace(/\D/g, '').slice(0, 11);
+            if (digits.length <= 3) return digits;
+            return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+        }
+
+        function setupFieldFormatting() {
+            const phoneInput = document.getElementById('clientPhone');
+            const rncInput = document.getElementById('clientEmail');
+
+            phoneInput.addEventListener('input', function() {
+                this.value = formatPhone(this.value);
+            });
+
+            rncInput.addEventListener('input', function() {
+                this.value = formatRNC(this.value);
+            });
+        }
+
+        function validateOptionalFormattedFields() {
+            const phoneValue = document.getElementById('clientPhone').value;
+            const rncValue = document.getElementById('clientEmail').value;
+
+            const phoneDigits = phoneValue.replace(/\D/g, '');
+            const rncDigits = rncValue.replace(/\D/g, '');
+
+            if (phoneValue && phoneDigits.length !== 10) {
+                toastr.warning('El teléfono debe tener 10 dígitos con formato 000-000-0000');
+                document.getElementById('clientPhone').focus();
+                return false;
+            }
+
+            if (rncValue && rncDigits.length !== 11) {
+                toastr.warning('El RNC debe tener 11 dígitos con formato 000-00000000');
+                document.getElementById('clientEmail').focus();
+                return false;
+            }
+
+            return true;
         }
 
         // Inicialización
         document.addEventListener('DOMContentLoaded', function() {
             cargarProductos();
             document.getElementById('quoteDate').valueAsDate = new Date();
+            setupFieldFormatting();
             const searchInput = document.getElementById('productSearch');
             searchInput.addEventListener('input', handleSearch);
             document.addEventListener('click', function(e) {
@@ -1115,12 +1196,12 @@
                     <div class="product-prices">
                         <div>
                             <div class="price-label">Unitario</div>
-                            <div class="price-value">RD$ ${product.precio.toLocaleString()}</div>
+                            <div class="price-value">${formatCurrency(priceWithItbis(product.precio))}</div>
                         </div>
                         ${product.precio_por_mayor ? `
                         <div style="margin-top: 5px;">
                             <div class="price-label">Por Mayor</div>
-                            <div class="price-value">RD$ ${product.precio_por_mayor.toLocaleString()}</div>
+                            <div class="price-value">${formatCurrency(priceWithItbis(product.precio_por_mayor))}</div>
                         </div>
                         ` : ''}
                     </div>
@@ -1179,7 +1260,7 @@
                         <h3>Precio Unitario</h3>
                         <p>Precio de venta al detalle</p>
                     </div>
-                    <div class="price-option-value">RD$ ${currentProduct.precio.toLocaleString()}</div>
+                    <div class="price-option-value">${formatCurrency(priceWithItbis(currentProduct.precio))}</div>
                 </div>
             `;
             if (currentProduct.precio_por_mayor) {
@@ -1189,7 +1270,7 @@
                             <h3>Precio Por Mayor</h3>
                             <p>Precio de venta al por mayor</p>
                         </div>
-                        <div class="price-option-value">RD$ ${currentProduct.precio_por_mayor.toLocaleString()}</div>
+                        <div class="price-option-value">${formatCurrency(priceWithItbis(currentProduct.precio_por_mayor))}</div>
                     </div>
                 `;
             }
@@ -1220,26 +1301,30 @@
         // Agregar producto a la cotización
         function addProductToQuote() {
             if (!selectedPriceType) {
-                alert('Por favor selecciona un tipo de precio');
+                toastr.warning('Por favor selecciona un tipo de precio');
                 return;
             }
             const quantity = parseInt(document.getElementById('productQuantity').value);
             if (quantity < 1) {
-                alert('La cantidad debe ser mayor a 0');
+                toastr.warning('La cantidad debe ser mayor a 0');
                 return;
             }
             const price = selectedPriceType === 'unitario' ? currentProduct.precio : currentProduct.precio_por_mayor;
             const priceLabel = selectedPriceType === 'unitario' ? 'Unitario' : 'Por Mayor';
+            const priceWithTax = priceWithItbis(price);
             selectedProducts.push({
                 ...currentProduct,
                 selectedPrice: price,
+                selectedPriceWithItbis: priceWithTax,
                 priceType: priceLabel,
                 quantity: quantity,
-                subtotal: price * quantity
+                subtotal: price * quantity,
+                subtotalWithItbis: priceWithTax * quantity
             });
             renderSelectedProducts();
             calculateTotals();
             closePriceModal();
+            toastr.success('Producto agregado correctamente');
         }
 
         // Renderizar productos seleccionados
@@ -1262,9 +1347,9 @@
                     <td>${product.descripcion}</td>
                     <td>${getBrandName(product.marca)}</td>
                     <td><span style="background: #667eea; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">${product.priceType}</span></td>
-                    <td class="currency">RD$ ${product.selectedPrice.toLocaleString()}</td>
+                    <td class="currency">${formatCurrency(product.selectedPriceWithItbis ?? priceWithItbis(product.selectedPrice))}</td>
                     <td><strong>${product.quantity}</strong></td>
-                    <td class="currency">RD$ ${product.subtotal.toLocaleString()}</td>
+                    <td class="currency">${formatCurrency(product.subtotalWithItbis ?? priceWithItbis(product.subtotal))}</td>
                     <td>
                         <button class="btn btn-danger" onclick="removeProduct(${index})">
                             <i class='bx bx-trash'></i>
@@ -1295,25 +1380,36 @@
         // Limpiar cotización
         function clearQuote() {
             if (selectedProducts.length === 0) return;
-            if (confirm('¿Estás seguro de que deseas limpiar toda la cotización?')) {
-                selectedProducts = [];
-                renderSelectedProducts();
-                calculateTotals();
-                document.getElementById('clientName').value = '';
-                document.getElementById('clientPhone').value = '';
-                document.getElementById('clientEmail').value = '';
-            }
+            Swal.fire({
+                title: '¿Limpiar cotización?',
+                text: 'Se eliminarán todos los productos agregados.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Aceptar',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    selectedProducts = [];
+                    renderSelectedProducts();
+                    calculateTotals();
+                    document.getElementById('clientName').value = '';
+                    document.getElementById('clientPhone').value = '';
+                    document.getElementById('clientEmail').value = '';
+                    toastr.success('Cotización limpiada correctamente');
+                }
+            });
         }
 
         // Imprimir cotización
         function printQuote() {
             if (selectedProducts.length === 0) {
-                alert('No hay productos en la cotización');
+                toastr.info('No hay productos en la cotización');
                 return;
             }
             const clientName = document.getElementById('clientName').value;
             if (!clientName) {
-                alert('Por favor ingresa el nombre del cliente');
+                toastr.warning('Por favor ingresa el nombre del cliente');
                 document.getElementById('clientName').focus();
                 return;
             }
@@ -1323,16 +1419,21 @@
         // Generar Factura HTML
         function generarFactura() {
             if (selectedProducts.length === 0) {
-                alert('No hay productos en la cotización');
+                toastr.info('No hay productos en la cotización');
                 return;
             }
 
             const clientName = document.getElementById('clientName').value;
             if (!clientName) {
-                alert('Por favor ingresa el nombre del cliente');
+                toastr.warning('Por favor ingresa el nombre del cliente');
                 document.getElementById('clientName').focus();
                 return;
             }
+
+            if (!validateOptionalFormattedFields()) {
+                return;
+            }
+
             // Crear formulario temporal para enviar datos
             const form = document.createElement('form');
             form.method = 'GET';
@@ -1365,16 +1466,21 @@
         // Versión alternativa por si la anterior no funciona
         function generarFacturaAlternativa() {
             if (selectedProducts.length === 0) {
-                alert('No hay productos en la cotización');
+                toastr.info('No hay productos en la cotización');
                 return;
             }
 
             const clientName = document.getElementById('clientName').value;
             if (!clientName) {
-                alert('Por favor ingresa el nombre del cliente');
+                toastr.warning('Por favor ingresa el nombre del cliente');
                 document.getElementById('clientName').focus();
                 return;
             }
+
+            if (!validateOptionalFormattedFields()) {
+                return;
+            }
+
             // Construir URL manualmente
             let url = '/generar-factura/?';
             url += `cliente_nombre=${encodeURIComponent(clientName)}`;

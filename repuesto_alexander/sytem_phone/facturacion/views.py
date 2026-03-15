@@ -4283,6 +4283,12 @@ def editar_cliente(request, cliente_id):
             credit_limit = Decimal(credit_limit)
         except (InvalidOperation, ValueError):
             credit_limit = Decimal('0')
+
+        if credit_limit < Decimal('0') or credit_limit > Decimal('99999999.99'):
+            return JsonResponse({
+                'success': False,
+                'message': 'El límite de crédito debe estar entre RD$ 0.00 y RD$ 99,999,999.99'
+            })
         cliente.credit_limit = credit_limit
 
         cliente.save()
@@ -4334,6 +4340,12 @@ def guardar_cliente(request):
             credit_limit = Decimal(credit_limit)
         except (InvalidOperation, ValueError):
             credit_limit = Decimal('0')
+
+        if credit_limit < Decimal('0') or credit_limit > Decimal('99999999.99'):
+            return JsonResponse({
+                'success': False,
+                'message': 'El límite de crédito debe estar entre RD$ 0.00 y RD$ 99,999,999.99'
+            })
         
         # Crear y guardar el nuevo cliente
         cliente = Cliente(
