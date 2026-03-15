@@ -241,7 +241,7 @@ def logout_view(request):
 #==============================================================================================
 #==============================Dashboard - Vista principal con KPIs y gráficos=================
 #==============================================================================================
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 @login_required
 def dashboard(request):
     hoy = timezone.now().date()
@@ -3385,7 +3385,7 @@ def inventario_eliminar(request, id):
 #================================================================================================
 #============================ Vista para renderizar la página de ventas ============================
 #================================================================================================
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 @check_module_access('ventas')
 def ventas(request):
@@ -4201,7 +4201,7 @@ def detalle_venta(request, venta_id):
         'detalles': venta.detalles.all()
     })
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def listadecliente(request):
     return render(request, "facturacion/listadecliente.html")
@@ -4315,7 +4315,7 @@ def editar_cliente(request, cliente_id):
         })
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def registrodecliente(request):
     return render(request, "facturacion/registrodecliente.html")
@@ -4568,7 +4568,7 @@ def agregar_nuevo_producto(request):
 
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_almacen, login_url='/')
 @csrf_exempt
 def entrada(request):
     """Vista principal para registro de entradas de productos (inventario)"""
@@ -5044,7 +5044,7 @@ def lista_comprobantes(request):
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def cuentaporcobrar(request):
     search = request.GET.get('search', '')
@@ -6172,7 +6172,7 @@ def generar_historial_cliente_pdf(request, client_id):
 #==================================================================================================
 #==============================Gestión de Suplidores (Proveedores)=================================
 #==================================================================================================
-@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_almacen, login_url='/')
 @login_required
 def gestiondesuplidores(request):
     proveedores = Proveedor.objects.all().order_by('nombre_empresa')
@@ -6316,7 +6316,7 @@ def get_proveedor_data(request, id):
     return JsonResponse(data)
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_almacen, login_url='/')
 @login_required
 def registrosuplidores(request):
     if request.method == 'POST':
@@ -6961,7 +6961,7 @@ def cuadre(request):
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 @login_required
 def reavastecer(request):
     # Obtener todos los productos activos
@@ -7147,7 +7147,7 @@ def registrar_movimiento_cuenta(cuenta, monto, tipo_movimiento, usuario, observa
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 @csrf_exempt
 @require_http_methods(["POST"])
 @transaction.atomic
@@ -7271,7 +7271,7 @@ def procesar_devolucion(request):
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 def roles(request):
     # Definir los módulos del sistema
     MODULOS_SISTEMA = [
@@ -7733,7 +7733,7 @@ def crear_grupos_especiales(sender, **kwargs):
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 @login_required
 def anular(request):
     return render(request, "facturacion/anular.html")
@@ -7872,7 +7872,7 @@ def anular_factura(request):
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def reimprimir_factura(request):
     # Esta vista renderiza la página de reimpresión
@@ -8163,7 +8163,7 @@ def ultimo_comprobante(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def cotizacion(request):
     return render(request, "facturacion/cotizacion.html")
@@ -8381,7 +8381,7 @@ def ver_factura(request):
     return render(request, 'facturacion/ver_factura.html', factura_data)
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_almacen, login_url='/')
 @login_required
 def compras(request):
     proveedores = Proveedor.objects.filter(activo=True)
@@ -8483,7 +8483,7 @@ def guardar_cuenta_por_pagar(request):
 
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def cuentaporpagar(request):
     return render(request, "facturacion/cuentaporpagar.html") 
