@@ -1560,6 +1560,9 @@ let dashboardData = {
 
 // Variables para los gráficos
 let weeklySalesChart, salesChart, inventoryChart, brandValueChart;
+let ventasUsuarioController = null;
+let ventasUsuarioRequestInFlight = false;
+let lastVentasUsuarioUrl = '';
 
 function chartsAvailable() {
     return typeof Chart !== 'undefined';
@@ -2114,6 +2117,19 @@ function buscarVentasPorUsuario() {
     if (params.toString()) {
         url += '?' + params.toString();
     }
+
+    // Evitar duplicados exactos si ya hay una solicitud igual en curso.
+    if (ventasUsuarioRequestInFlight && url === lastVentasUsuarioUrl) {
+        return;
+    }
+
+    // Cancelar una solicitud previa para conservar solo la más reciente.
+    if (ventasUsuarioController) {
+        ventasUsuarioController.abort();
+    }
+    ventasUsuarioController = new AbortController();
+    ventasUsuarioRequestInFlight = true;
+    lastVentasUsuarioUrl = url;
     
     console.log("Buscando ventas con URL:", url); // Para depuración
     
@@ -2124,7 +2140,8 @@ function buscarVentasPorUsuario() {
     fetch(url, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
-        }
+        },
+        signal: ventasUsuarioController.signal
     })
         .then(response => {
             if (!response.ok) {
@@ -2174,8 +2191,14 @@ function buscarVentasPorUsuario() {
             });
         })
         .catch(error => {
+            if (error.name === 'AbortError') {
+                return;
+            }
             console.error('Error al buscar ventas por usuario:', error);
             Swal.fire('Error', 'No se pudieron cargar las ventas', 'error');
+        })
+        .finally(() => {
+            ventasUsuarioRequestInFlight = false;
         });
 }
 
@@ -2508,13 +2531,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 text: 'No se pudieron cargar los datos del dashboard. Inténtalo de nuevo más tarde.'
             });
         });
-
-    // Configurar eventos para las pestañas
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-        tab.addEventListener('click', function() {
-            showView(this.dataset.view);
-        });
-    });
 
     // Manejar el cierre de sesión con SweetAlert2
     const logoutLink = document.querySelector("a[href='{% url 'logout' %}']");
