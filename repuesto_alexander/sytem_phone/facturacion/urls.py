@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from django.conf import settings
-from django.conf.urls.static import static
+
 
 urlpatterns = [
     # path('logout/', views.logout_view, name='logout'),  
@@ -107,7 +107,7 @@ urlpatterns = [
     path('reporte-ventas-usuario-actual/', views.reporte_ventas_usuario_actual, name='reporte_ventas_usuario_actual'),
     
   path('generar-historial-cliente-pdf/<int:client_id>/', views.generar_historial_cliente_pdf, name='generar_historial_cliente_pdf'),
-]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
 
     
 
