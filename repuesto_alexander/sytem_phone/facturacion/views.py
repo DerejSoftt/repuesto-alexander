@@ -5947,9 +5947,10 @@ def generar_historial_cliente_pdf(request, client_id):
     Genera un PDF con el historial detallado de un cliente.
     Incluye clamp en monto_pagado para evitar que supere monto_total.
     Horas en zona horaria de República Dominicana (UTC-4) en formato 12h.
+    Ahora muestra las observaciones de cada pago en una columna adicional.
     """
     try:
-        from .models import Cliente, CuentaPorCobrar, PagoCuentaPorCobrar, ComprobantePago
+        from .models import Cliente, CuentaPorCobrar, PagoCuentaPorCobrar
         from django.contrib.auth import get_user_model
         from django.utils import timezone
         from reportlab.lib.pagesizes import A4
@@ -5969,12 +5970,10 @@ def generar_historial_cliente_pdf(request, client_id):
             if dt is None:
                 return 'N/A'
             if timezone.is_aware(dt):
-                # ✅ convertir directo desde UTC a RD, sin pasar por timezone.localtime()
                 dt = dt.astimezone(tz_rd)
             else:
-                # Si llega naive, asumir UTC y convertir
                 dt = pytz.utc.localize(dt).astimezone(tz_rd)
-            return dt.strftime('%d/%m/%Y %I:%M')
+            return dt.strftime('%d/%m/%Y %I:%M %p')
 
         User = get_user_model()
         cliente = get_object_or_404(Cliente, id=client_id)
@@ -5996,7 +5995,6 @@ def generar_historial_cliente_pdf(request, client_id):
             return HttpResponse("El cliente no tiene cuentas registradas.", content_type='text/plain')
 
         response = HttpResponse(content_type='application/pdf')
-        # ✅ fecha del archivo también en hora RD
         fecha_reporte = datetime.now(tz_rd).strftime('%Y%m%d_%H%M%S')
         nombre_limpio = "".join(c for c in cliente.full_name if c.isalnum() or c in "._- ").strip()
         response['Content-Disposition'] = f'attachment; filename="historial_{nombre_limpio}_{fecha_reporte}.pdf"'
@@ -6029,12 +6027,11 @@ def generar_historial_cliente_pdf(request, client_id):
         contenido.append(Paragraph(f"<b>Cédula/RNC:</b> {cliente.identification_number or 'N/A'}", info_style))
         contenido.append(Paragraph(f"<b>Teléfono:</b> {cliente.primary_phone or 'N/A'}", info_style))
 
-        # ✅ fecha del reporte en hora RD formato 12h
         fecha_reporte_str = datetime.now(tz_rd).strftime('%d/%m/%Y %I:%M %p')
         contenido.append(Paragraph(f"<b>Fecha del reporte:</b> {fecha_reporte_str}", info_style))
         contenido.append(Spacer(1, 0.5*cm))
 
-        # ✅ clamp en monto_pagado antes de calcular totales
+        # Calcular totales con clamp
         total_deuda = Decimal('0.00')
         total_pagado = Decimal('0.00')
         for cuenta in cuentas:
@@ -6064,6 +6061,7 @@ def generar_historial_cliente_pdf(request, client_id):
         contenido.append(resumen_table)
         contenido.append(Spacer(1, 0.7*cm))
 
+        # Recorrer cada cuenta
         for cuenta in cuentas:
             factura_text = f"<b>Factura N°:</b> {cuenta.venta.numero_factura if cuenta.venta else 'N/A'}"
             if cuenta.venta and cuenta.venta.vendedor:
@@ -6071,12 +6069,10 @@ def generar_historial_cliente_pdf(request, client_id):
                 factura_text += f" | <b>Vendedor:</b> {vendedor.get_full_name() or vendedor.username}"
             contenido.append(Paragraph(factura_text, styles['Heading4']))
 
-            # ✅ pasar datetime crudo al helper, sin timezone.localtime()
             fecha_venta_local = formato_hora_rd(cuenta.venta.fecha_venta) if cuenta.venta and cuenta.venta.fecha_venta else 'N/A'
             fecha_venc = cuenta.fecha_vencimiento.strftime('%d/%m/%Y') if cuenta.fecha_vencimiento else 'N/A'
             estado = cuenta.get_estado_display()
 
-            # ✅ clamp por factura individual
             monto_total = Decimal(str(cuenta.monto_total))
             monto_pagado_real = min(Decimal(str(cuenta.monto_pagado)), monto_total)
             saldo = max(monto_total - monto_pagado_real, Decimal('0.00'))
@@ -6103,9 +6099,9 @@ def generar_historial_cliente_pdf(request, client_id):
             pagos = cuenta.pagos.all().order_by('-fecha_pago')
             if pagos:
                 contenido.append(Paragraph("<b>Pagos realizados:</b>", styles['Normal']))
-                pago_data = [["Fecha", "Monto", "Método", "Referencia", "Comprobante", "Cobró"]]
+                # Cabecera con 7 columnas (incluye Observaciones)
+                pago_data = [["Fecha", "Monto", "Método", "Referencia", "Comprobante", "Cobró", "Observaciones"]]
 
-                # ✅ clamp proporcional si suma de pagos supera monto_total
                 suma_pagos = Decimal('0.00')
                 for pago in pagos:
                     suma_pagos += Decimal(str(pago.monto))
@@ -6115,7 +6111,6 @@ def generar_historial_cliente_pdf(request, client_id):
                     factor_ajuste = monto_total / suma_pagos
 
                 for pago in pagos:
-                    # ✅ pasar datetime crudo al helper, sin timezone.localtime()
                     fecha_pago_local = formato_hora_rd(pago.fecha_pago)
                     comprobante = getattr(pago, 'comprobante', None)
                     comp_num = comprobante.numero_comprobante if comprobante else 'N/A'
@@ -6125,6 +6120,8 @@ def generar_historial_cliente_pdf(request, client_id):
                     if factor_ajuste is not None:
                         monto_pago = (monto_pago * factor_ajuste).quantize(Decimal('0.01'))
 
+                    observaciones = pago.observaciones.strip() if pago.observaciones else 'N/A'
+
                     pago_data.append([
                         fecha_pago_local,
                         f"RD$ {monto_pago:,.2f}",
@@ -6132,18 +6129,33 @@ def generar_historial_cliente_pdf(request, client_id):
                         pago.referencia or 'N/A',
                         comp_num,
                         usuario,
+                        observaciones,   # ← nueva columna
                     ])
 
-                tabla_pagos = Table(pago_data, colWidths=[2.5*cm, 2.5*cm, 2.5*cm, 3*cm, 3*cm, 3*cm])
+                # Anchos de columna para 7 columnas (total ~16 cm, cabe en A4)
+                tabla_pagos = Table(
+                    pago_data,
+                    colWidths=[
+                        2.2*cm,   # Fecha
+                        2.2*cm,   # Monto
+                        2.2*cm,   # Método
+                        2.2*cm,   # Referencia
+                        2.2*cm,   # Comprobante
+                        2.2*cm,   # Cobró
+                        2.8*cm    # Observaciones (más ancha)
+                    ]
+                )
                 tabla_pagos.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1,  0), colors.HexColor('#667eea')),
-                    ('TEXTCOLOR',  (0, 0), (-1,  0), colors.white),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+                    ('TEXTCOLOR',  (0, 0), (-1, 0), colors.white),
                     ('ALIGN',      (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME',   (0, 0), (-1,  0), 'Helvetica-Bold'),
-                    ('FONTSIZE',   (0, 0), (-1,  0), 8),
+                    ('FONTNAME',   (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE',   (0, 0), (-1, 0), 8),
                     ('FONTSIZE',   (0, 1), (-1, -1), 8),
                     ('GRID',       (0, 0), (-1, -1), 0.5, colors.grey),
                     ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                    # Ajuste de texto para la columna de observaciones
+                    ('WORDWRAP', (6, 1), (6, -1), True),
                 ]))
                 contenido.append(tabla_pagos)
             else:
