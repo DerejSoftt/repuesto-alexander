@@ -1149,7 +1149,7 @@
                         <div class="filter-group">
                             <label for="searchClient">Buscar Cliente</label>
                             <input type="text" class="filter-input" placeholder="Nombre del cliente..."
-                                id="searchClient">
+                                id="searchClient" autocomplete="off">
                         </div>
                         <div class="filter-group">
                             <label for="statusFilter">Estado</label>
@@ -2529,6 +2529,12 @@
         document.addEventListener('DOMContentLoaded', function () {
             console.log('DOM cargado, inicializando...');
 
+            // Limpiar búsqueda al cargar/recargar
+            const searchClientInput = document.getElementById('searchClient');
+            if (searchClientInput) {
+                searchClientInput.value = '';
+            }
+
             document.getElementById('searchClient').addEventListener('input', applyFilters);
             document.getElementById('statusFilter').addEventListener('change', applyFilters);
             document.getElementById('dateFrom').addEventListener('change', applyFilters);
@@ -2644,6 +2650,15 @@
         window.addEventListener('resize', function () {
             if (window.innerWidth > 768) {
                 closeSidebar();
+            }
+        });
+
+        // Algunos navegadores restauran campos al recargar (bfcache): limpiar nuevamente
+        window.addEventListener('pageshow', function () {
+            const searchClientInput = document.getElementById('searchClient');
+            if (searchClientInput && searchClientInput.value) {
+                searchClientInput.value = '';
+                applyFilters();
             }
         });
     </script>
