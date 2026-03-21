@@ -321,6 +321,26 @@
             gap: 20px;
             align-items: flex-end;
         }
+        /* Ajuste especifico para el panel de filtros de Roles */
+        .roles-filters-grid {
+            grid-template-columns: minmax(240px, 1.5fr) minmax(180px, 1fr) auto auto;
+            gap: 12px;
+        }
+        .roles-filters-grid .btn {
+            width: auto;
+            min-width: 170px;
+            justify-content: center;
+        }
+        /* Ajuste especifico para el panel de filtros de Usuarios */
+        .users-filters-grid {
+            grid-template-columns: minmax(240px, 1.5fr) minmax(180px, 1fr) minmax(180px, 1fr) auto auto;
+            gap: 12px;
+        }
+        .users-filters-grid .btn {
+            width: auto;
+            min-width: 170px;
+            justify-content: center;
+        }
         .filter-group label {
             display: block;
             margin-bottom: 8px;
@@ -812,6 +832,22 @@
                 overflow: hidden;
             }
         }
+        @media (max-width: 1024px) {
+            .roles-filters-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .roles-filters-grid .btn {
+                width: 100%;
+                min-width: 0;
+            }
+            .users-filters-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .users-filters-grid .btn {
+                width: 100%;
+                min-width: 0;
+            }
+        }
         /* Scrollbar personalizado */
         .sidebar::-webkit-scrollbar,
         .modal-content::-webkit-scrollbar,
@@ -947,7 +983,7 @@
     {% endif %}
 
     <!-- Cerrar sesión para todos -->
-    <a href="{% url 'index' %}" class="menu-item">
+    <a href="{% url 'logout' %}" class="menu-item">
         <i class='bx bx-log-out'></i>
         <span>Cerrar Sesión</span>
     </a>
@@ -1027,7 +1063,7 @@
                     <!-- Filters Section -->
                     <div class="filters-section">
                         <form method="GET" id="rolesFilterForm">
-                            <div class="filters-grid">
+                            <div class="filters-grid roles-filters-grid">
                                 <div class="filter-group">
                                     <label for="searchRole">Buscar Rol</label>
                                     <input type="text" class="filter-input" placeholder="Nombre o descripción..." 
@@ -1048,15 +1084,9 @@
                                     </button>
                                 </div>
                                 <div class="filter-group">
-                                    <button type="submit" class="btn btn-info" name="action" value="filter">
+                                    <button type="submit" class="btn btn-primary" name="action" value="filter">
                                         <i class='bx bx-search'></i>
                                         Buscar
-                                    </button>
-                                </div>
-                                <div class="filter-group">
-                                    <button type="submit" class="btn btn-info" name="action" value="export_roles_csv">
-                                        <i class='bx bx-download'></i>
-                                        Exportar CSV
                                     </button>
                                 </div>
                             </div>
@@ -1082,7 +1112,7 @@
                                 </thead>
                                 <tbody id="rolesTableBody">
                                     {% for role in roles_data %}
-                                    <tr data-role-id="{{ role.id }}" data-modulos="{{ role.modulos_asignados|join:',' }}">
+                                    <tr data-role-id="{{ role.id }}" data-role-name="{{ role.name }}" data-modulos="{{ role.modulos_codename|join:',' }}">
                                         <td>
                                             {{ role.name }}
                                             {% if role.es_especial %}
@@ -1175,7 +1205,7 @@
                     <!-- Filters Section -->
                     <div class="filters-section">
                         <form method="GET" id="usersFilterForm">
-                            <div class="filters-grid">
+                            <div class="filters-grid users-filters-grid">
                                 <div class="filter-group">
                                     <label for="searchUser">Buscar Usuario</label>
                                     <input type="text" class="filter-input" placeholder="Nombre o email..." 
@@ -1205,15 +1235,9 @@
                                     </button>
                                 </div>
                                 <div class="filter-group">
-                                    <button type="submit" class="btn btn-info" name="action" value="filter">
+                                    <button type="submit" class="btn btn-primary" name="action" value="filter">
                                         <i class='bx bx-search'></i>
                                         Buscar
-                                    </button>
-                                </div>
-                                <div class="filter-group">
-                                    <button type="submit" class="btn btn-info" name="action" value="export_users_csv">
-                                        <i class='bx bx-download'></i>
-                                        Exportar CSV
                                     </button>
                                 </div>
                             </div>
@@ -1239,7 +1263,15 @@
                                 </thead>
                                 <tbody id="usersTableBody">
                                     {% for user in users_data %}
-                                    <tr>
+                                    <tr
+                                        data-user-id="{{ user.id }}"
+                                        data-username="{{ user.username }}"
+                                        data-email="{{ user.email }}"
+                                        data-first-name="{{ user.first_name }}"
+                                        data-last-name="{{ user.last_name }}"
+                                        data-role-id="{{ user.role_id }}"
+                                        data-status="{{ user.status }}"
+                                    >
                                         <td>{{ user.name }}</td>
                                         <td>{{ user.email }}</td>
                                         <td>{{ user.role }}</td>
@@ -1644,11 +1676,12 @@
         // Función para abrir el modal de editar rol
         function openEditRoleModal(roleId) {
             const row = document.querySelector(`tr[data-role-id="${roleId}"]`);
-            const modulos = row.getAttribute('data-modulos').split(',');
+            const modulosAttr = row.getAttribute('data-modulos') || '';
+            const modulos = modulosAttr ? modulosAttr.split(',').map(m => m.trim()).filter(Boolean) : [];
             const isEspecial = row.querySelector('small.text-muted') !== null;
             
             document.getElementById('editRoleId').value = roleId;
-            document.getElementById('editRoleName').value = row.querySelector('td').textContent.trim();
+            document.getElementById('editRoleName').value = row.getAttribute('data-role-name') || row.querySelector('td').textContent.trim();
             
             // Marcar los checkboxes correspondientes a los módulos del rol
             document.querySelectorAll('#editRolePermissions input[type="checkbox"]').forEach(checkbox => {
@@ -1670,7 +1703,18 @@
 
         // Función para abrir el modal de editar usuario
         function openEditUserModal(userId) {
+            const row = document.querySelector(`tr[data-user-id="${userId}"]`);
+            if (!row) return;
+
             document.getElementById('editUserId').value = userId;
+            document.getElementById('editUsername').value = row.getAttribute('data-username') || '';
+            document.getElementById('editEmail').value = row.getAttribute('data-email') || '';
+            document.getElementById('editFirstName').value = row.getAttribute('data-first-name') || '';
+            document.getElementById('editLastName').value = row.getAttribute('data-last-name') || '';
+            document.getElementById('editRoleId').value = row.getAttribute('data-role-id') || '';
+            document.getElementById('editUserStatus').value = row.getAttribute('data-status') || 'activo';
+            document.getElementById('editPassword').value = '';
+
             document.getElementById('editUserModal').classList.add('active');
         }
 
@@ -1690,13 +1734,17 @@
 
         // Función para ver detalles del usuario
         function viewUser(userId) {
-            // En una implementación real, aquí harías una petición AJAX para obtener los detalles del usuario
-            // Por ahora, usaremos datos de ejemplo
-            document.getElementById('viewUserName').textContent = 'Usuario ' + userId;
-            document.getElementById('viewUserEmail').textContent = 'usuario' + userId + '@ejemplo.com';
-            document.getElementById('viewUserRole').textContent = 'Administrador';
-            document.getElementById('viewUserStatus').textContent = 'Activo';
-            document.getElementById('viewUserLastAccess').textContent = '2023-10-15 14:30';
+            const row = document.querySelector(`tr[data-user-id="${userId}"]`);
+            if (!row) return;
+
+            const cells = row.querySelectorAll('td');
+            document.getElementById('viewUserName').textContent = cells[0].textContent.trim();
+            document.getElementById('viewUserEmail').textContent = cells[1].textContent.trim();
+            document.getElementById('viewUserRole').textContent = cells[2].textContent.trim();
+            document.getElementById('viewUserStatus').textContent = cells[3].querySelector('.status-badge')
+                ? cells[3].querySelector('.status-badge').textContent.trim()
+                : cells[3].textContent.trim();
+            document.getElementById('viewUserLastAccess').textContent = cells[4].textContent.trim();
             document.getElementById('viewUserModal').classList.add('active');
         }
 
@@ -1750,25 +1798,28 @@
         });
 
         // Manejar el cierre de sesión con SweetAlert2
-        document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
-            e.preventDefault();
-
-            Swal.fire({
-                title: '¿Cerrar Sesión?',
-                text: '¿Está seguro de que desea cerrar la sesión?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#667eea',
-                cancelButtonColor: '#dc3545',
-                confirmButtonText: 'Sí, Cerrar Sesión',
-                cancelButtonText: 'Cancelar',
-                backdrop: true
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = "{% url 'index' %}";
-                }
+        const logoutLink = document.querySelector("a[href='{% url 'logout' %}']");
+        if (logoutLink) {
+            logoutLink.addEventListener("click", function(e) {
+                e.preventDefault();
+                Swal.fire({
+                    title: '¿Cerrar Sesión?',
+                    text: '¿Está seguro de que desea cerrar la sesión?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#667eea',
+                    cancelButtonColor: '#dc3545',
+                    confirmButtonText: 'Sí, Cerrar Sesión',
+                    cancelButtonText: 'Cancelar',
+                    backdrop: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = "{% url 'logout' %}";
+                    }
+                });
             });
-        });      
+        }
+     
 
         // Cerrar modales al hacer clic fuera del contenido
         document.querySelectorAll('.modal').forEach(modal => {

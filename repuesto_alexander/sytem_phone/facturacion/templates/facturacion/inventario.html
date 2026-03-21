@@ -881,7 +881,7 @@
     {% endif %}
 
     <!-- Cerrar sesión para todos -->
-    <a href="{% url 'index' %}" class="menu-item">
+    <a href="{% url 'logout' %}" class="menu-item">
         <i class='bx bx-log-out'></i>
         <span>Cerrar Sesión</span>
     </a>
@@ -1517,11 +1517,10 @@ function loadDataFromServer() {
 }
 
 // Manejar el cierre de sesión con SweetAlert2
-const logoutLink = document.querySelector("a[href*='index']");
+const logoutLink = document.querySelector("a[href='{% url 'logout' %}']");
 if (logoutLink) {
     logoutLink.addEventListener("click", function(e) {
         e.preventDefault();
-        const href = this.getAttribute('href');
         Swal.fire({
             title: '¿Cerrar Sesión?',
             text: '¿Está seguro de que desea cerrar la sesión?',
@@ -1534,11 +1533,12 @@ if (logoutLink) {
             backdrop: true
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = href;
+                window.location.href = "{% url 'logout' %}";
             }
         });
     });
 }
+
 
 // Inicializar la página
 window.addEventListener('load', function() {

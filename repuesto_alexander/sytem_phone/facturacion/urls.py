@@ -1,12 +1,13 @@
 from django.urls import path
 from . import views
 from django.conf import settings
-from django.conf.urls.static import static
+
 
 urlpatterns = [
     # path('logout/', views.logout_view, name='logout'),  
     path('', views.index, name='login'),  # Página de login
     path("" , views.index, name="index"),
+    path('logout/', views.logout_view, name='logout'),  # Ruta para cerrar sesión
     path("dashboard" , views.dashboard, name="dashboard"),
     path('dashboard/data/', views.dashboard_data, name='dashboard_data'),
     path("inventario", views.inventario, name="inventario"),
@@ -105,7 +106,10 @@ urlpatterns = [
     path('reporte-ventas-usuario-pdf/', views.reporte_ventas_usuario_actual_pdf, name='reporte_ventas_usuario_actual_pdf'),
      path('reporte-ventas-usuario-actual-pdf/', views.reporte_ventas_usuario_actual_pdf, name='reporte_ventas_usuario_actual_pdf'),
     path('reporte-ventas-usuario-actual/', views.reporte_ventas_usuario_actual, name='reporte_ventas_usuario_actual'),
-]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    
+  path('generar-historial-cliente-pdf/<int:client_id>/', views.generar_historial_cliente_pdf, name='generar_historial_cliente_pdf'),
+  path('generar-reporte-vencidas-pdf/', views.generar_reporte_vencidas_pdf, name='generar_reporte_vencidas_pdf'),
+]
 
     
 

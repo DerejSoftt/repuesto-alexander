@@ -434,15 +434,16 @@
             content: "$";
             position: absolute;
             left: 15px;
-            top: 50%;
+            top: calc(50% + 14px);
             transform: translateY(-50%);
             color: #666;
             font-weight: 600;
+            font-size: 1.3rem;
             z-index: 1;
         }
         
         .currency-input .form-input {
-            padding-left: 30px;
+            padding-left: 34px;
         }
 
         @keyframes slideIn {
@@ -674,7 +675,7 @@
     {% endif %}
 
     <!-- Cerrar sesión para todos -->
-    <a href="{% url 'index' %}" class="menu-item">
+    <a href="{% url 'logout' %}" class="menu-item">
         <i class='bx bx-log-out'></i>
         <span>Cerrar Sesión</span>
     </a>
@@ -750,8 +751,8 @@
                             <!-- Fila 3 - Nuevo campo de límite de crédito --> 
                              <div class="form-group currency-input">
                                 <label class="form-label" for="creditLimit">Límite de Crédito (RD$)</label>
-                                <input type="number" id="creditLimit" name="creditLimit" class="form-input" 
-                                       placeholder="0.00" step="0.01" min="0">
+                                    <input type="text" id="creditLimit" name="creditLimit" class="form-input" inputmode="decimal"
+                                    placeholder="0.00" step="0.01" min="0" max="99999999.99">
                                 <div class="error-message" id="creditLimitError"></div>
                             </div> 
 
@@ -851,6 +852,81 @@
     document.getElementById('primaryPhone').addEventListener('input', formatPhone);
     document.getElementById('secondaryPhone').addEventListener('input', formatPhone);
 
+    // Formato de moneda para límite de crédito
+    const creditLimitInput = document.getElementById('creditLimit');
+
+    function normalizeCreditLimitValue(rawValue) {
+        let value = (rawValue || '').replace(/,/g, '').replace(/[^\d.]/g, '');
+
+        const firstDot = value.indexOf('.');
+        if (firstDot !== -1) {
+            const integerPart = value.slice(0, firstDot).replace(/\./g, '');
+            const decimalPart = value.slice(firstDot + 1).replace(/\./g, '');
+            value = `${integerPart}.${decimalPart}`;
+        }
+
+        const parts = value.split('.');
+        parts[0] = (parts[0] || '').slice(0, 8);
+
+        if (parts.length > 1) {
+            parts[1] = (parts[1] || '').slice(0, 2);
+            value = `${parts[0]}.${parts[1]}`;
+        } else {
+            value = parts[0];
+        }
+
+        if (value) {
+            const numericValue = Number(value);
+            if (!Number.isNaN(numericValue) && numericValue > 99999999.99) {
+                value = '99999999.99';
+            }
+        }
+
+        return value;
+    }
+
+    function formatCreditLimitCurrency(rawValue) {
+        const normalized = normalizeCreditLimitValue(rawValue);
+        if (!normalized) return '';
+
+        const numericValue = Number(normalized);
+        if (Number.isNaN(numericValue)) return '';
+
+        return numericValue.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function formatCreditLimitTyping(rawValue) {
+        const normalized = normalizeCreditLimitValue(rawValue);
+        if (!normalized) return '';
+
+        const parts = normalized.split('.');
+        const integerPart = parts[0] || '0';
+        const formattedInteger = Number(integerPart).toLocaleString('en-US', {
+            maximumFractionDigits: 0
+        });
+
+        if (parts.length > 1) {
+            return `${formattedInteger}.${parts[1]}`;
+        }
+
+        return formattedInteger;
+    }
+
+    creditLimitInput.addEventListener('input', function(e) {
+        e.target.value = formatCreditLimitTyping(e.target.value);
+    });
+
+    creditLimitInput.addEventListener('focus', function(e) {
+        e.target.value = formatCreditLimitTyping(e.target.value);
+    });
+
+    creditLimitInput.addEventListener('blur', function(e) {
+        e.target.value = formatCreditLimitCurrency(e.target.value);
+    });
+
     // Configuración de Toastr
     toastr.options = {
         "closeButton": false,
@@ -934,6 +1010,19 @@
                 isValid = false;
             }
         });
+
+        const creditLimitField = document.getElementById('creditLimit');
+        const creditLimitValue = normalizeCreditLimitValue(creditLimitField.value.trim());
+        if (creditLimitValue) {
+            const creditLimitNumber = Number(creditLimitValue);
+            if (Number.isNaN(creditLimitNumber) || creditLimitNumber < 0) {
+                showError('creditLimit', 'El límite de crédito debe ser un número válido mayor o igual a 0');
+                isValid = false;
+            } else if (creditLimitNumber > 99999999.99) {
+                showError('creditLimit', 'El límite de crédito máximo permitido es RD$ 99,999,999.99');
+                isValid = false;
+            }
+        }
         
         if (!isValid) {
             return;
@@ -962,7 +1051,7 @@
             'address': document.getElementById('address').value,
             'primaryPhone': document.getElementById('primaryPhone').value,
             'secondaryPhone': document.getElementById('secondaryPhone').value,
-            'creditLimit': document.getElementById('creditLimit').value || '0' // Agregado el campo creditLimit
+            'creditLimit': normalizeCreditLimitValue(document.getElementById('creditLimit').value) || '0' // Agregado el campo creditLimit
         };
         
         try {
@@ -1020,10 +1109,11 @@
         }
     });
     
-    // Manejar el cierre de sesión con SweetAlert2
-    document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
+// Manejar el cierre de sesión con SweetAlert2
+const logoutLink = document.querySelector("a[href='{% url 'logout' %}']");
+if (logoutLink) {
+    logoutLink.addEventListener("click", function(e) {
         e.preventDefault();
-
         Swal.fire({
             title: '¿Cerrar Sesión?',
             text: '¿Está seguro de que desea cerrar la sesión?',
@@ -1036,10 +1126,12 @@
             backdrop: true
         }).then((result) => {
             if (result.isConfirmed) {
-                window.location.href = "{% url 'index' %}";
+                window.location.href = "{% url 'logout' %}";
             }
         });
     });
+}
+
 
     // Confirmación para limpiar formulario con SweetAlert2
     document.querySelector('button[type="reset"]').addEventListener('click', function(e) {

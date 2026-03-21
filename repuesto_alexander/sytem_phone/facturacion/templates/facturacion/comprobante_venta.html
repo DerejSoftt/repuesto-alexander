@@ -2,11 +2,12 @@
 {% load humanize %}
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Factura de Consumidores Finales</title>
-    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}" type="image/x-icon">
     <style>
         /* Estilos generales */
         body {
@@ -16,9 +17,10 @@
             font-size: 13px;
             background-color: #f5f5f5;
         }
-        
+
         .invoice-container {
-            width: 21cm; /* Tamaño A4 */
+            width: 21cm;
+            /* Tamaño A4 */
             height: 29.7cm;
             padding: 0.7cm;
             margin: 0 auto;
@@ -29,7 +31,7 @@
             display: flex;
             flex-direction: column;
         }
-        
+
         /* Encabezado */
         .header {
             display: flex;
@@ -38,7 +40,7 @@
             border-bottom: 2px solid #000;
             padding-bottom: 8px;
         }
-        
+
         .logo {
             width: 130px;
             height: 70px;
@@ -50,13 +52,13 @@
             border: 1px solid #999;
             font-size: 14px;
         }
-        
+
         .company-info {
             text-align: right;
             font-size: 13px;
             line-height: 1.2;
         }
-        
+
         /* Título de la factura */
         .invoice-title {
             text-align: center;
@@ -65,7 +67,7 @@
             margin: 8px 0;
             text-decoration: underline;
         }
-        
+
         /* Detalles de la factura */
         .invoice-details {
             display: grid;
@@ -74,16 +76,16 @@
             margin-bottom: 12px;
             font-size: 13px;
         }
-        
+
         .invoice-details div {
             display: flex;
         }
-        
+
         .invoice-details strong {
             min-width: 90px;
             display: inline-block;
         }
-        
+
         /* Tabla de productos */
         .invoice-table {
             width: 100%;
@@ -92,32 +94,33 @@
             font-size: 12px;
             table-layout: fixed;
         }
-        
-        .invoice-table th, .invoice-table td {
+
+        .invoice-table th,
+        .invoice-table td {
             border: 1px solid #000;
             padding: 4px;
             text-align: left;
             overflow: hidden;
         }
-        
+
         .invoice-table th {
             background-color: #f0f0f0;
             font-size: 12px;
         }
-        
+
         /* Totales */
         .totals {
             width: 100%;
             margin-bottom: 12px;
             font-size: 13px;
         }
-        
+
         .totals div {
             display: flex;
             justify-content: space-between;
             padding: 2px 0;
         }
-        
+
         /* Nota */
         .note {
             margin: 12px 0;
@@ -126,7 +129,7 @@
             border-bottom: 1px solid #000;
             font-size: 13px;
         }
-        
+
         /* Firmas - Posicionadas al final */
         .signatures {
             display: flex;
@@ -134,7 +137,7 @@
             margin-top: 20px;
             padding-top: 20px;
         }
-        
+
         .signature-box {
             width: 220px;
             border-top: 1px solid #000;
@@ -142,7 +145,7 @@
             text-align: center;
             font-size: 13px;
         }
-        
+
         /* Pie de página */
         .footer-note {
             text-align: center;
@@ -150,13 +153,13 @@
             font-style: italic;
             font-size: 13px;
         }
-        
+
         /* Controles para añadir productos */
         .controls {
             margin-top: 20px;
             text-align: center;
         }
-        
+
         button {
             padding: 8px 15px;
             background-color: #2c3e50;
@@ -166,11 +169,11 @@
             margin: 0 5px;
             font-family: 'Courier New', monospace;
         }
-        
+
         button:hover {
             background-color: #1a252f;
         }
-        
+
         /* Estilos para impresión */
         @media print {
             body {
@@ -178,25 +181,25 @@
                 padding: 0;
                 margin: 0;
             }
-            
+
             .invoice-container {
                 width: 100%;
                 height: auto;
                 padding: 0.5cm;
                 box-shadow: none;
             }
-            
+
             .controls {
                 display: none;
             }
         }
 
-        .header img{
+        .header img {
             width: 120px;
             height: auto;
             transform: translateY(-20px);
         }
-        
+
         /* Asegurar que el contenido no se desborde */
         .content-wrapper {
             flex: 1;
@@ -205,6 +208,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="invoice-container">
         <div class="content-wrapper">
@@ -217,9 +221,9 @@
                     <div>Direccion: C/Principal, #1 Loma de Castañuelas, Montecristi</div>
                 </div>
             </div>
-            
+
             <div class="invoice-title">FACTURA DE CONSUMIDORES FINALES</div>
-            
+
             <div class="invoice-details">
                 <div><strong>Fecha:</strong> {{ now }}</div>
                 <div><strong>No.:</strong> {{ venta.numero_factura }}</div>
@@ -228,7 +232,7 @@
                 {% endif %}
                 <div><strong>NCF:</strong> {{ venta.ncf|default:"" }}</div>
                 <div><strong>Cliente:</strong> {{ venta.cliente_nombre }}</div>
-                <div><strong>RNC/Céd:</strong> {{ venta.cliente_documento|default:""  }}</div>
+                <div><strong>RNC/Céd:</strong> {{ venta.cliente_documento|default:"" }}</div>
                 <div><strong>Tipo:</strong> {{ venta.get_tipo_venta_display }}</div>
                 {% if venta.cliente and venta.cliente.telefono %}
                 <div><strong>TEL:</strong> {{ venta.cliente.telefono }}</div>
@@ -236,11 +240,12 @@
                 {% if venta.cliente and venta.cliente.direccion %}
                 <div><strong>Dirección:</strong> {{ venta.cliente.direccion }}</div>
                 {% endif %}
-                {% if venta.tipo_venta == 'credito' and venta.fecha_vencimiento %}
-                <div><strong>Válido Hasta:</strong> {{ venta.fecha_vencimiento|date:"d/m/Y" }}</div>
+                <!-- Aquí va la condición corregida -->
+                {% if venta.tipo_venta == 'credito' and fecha_vencimiento %}
+                <div><strong>Válido Hasta:</strong> {{ fecha_vencimiento|date:"d/m/Y" }}</div>
                 {% endif %}
             </div>
-            
+
             <table class="invoice-table">
                 <thead>
                     <tr>
@@ -254,7 +259,7 @@
                 <tbody id="productos">
                     {% for detalle in detalles %}
                     <tr>
-                       <td>{{ detalle.producto.codigo_producto }}</td>
+                        <td>{{ detalle.producto.codigo_producto }}</td>
                         <td>{{ detalle.cantidad }}</td>
                         <td>{{ detalle.producto.nombre_producto }}
                             {% if detalle.producto.descripcion %}
@@ -267,7 +272,7 @@
                     {% endfor %}
                 </tbody>
             </table>
-            
+
             <div class="totals">
                 <div>
                     <strong>Artículos:</strong>
@@ -296,15 +301,15 @@
                     <span>${{ venta.total|floatformat:2|intcomma }}</span>
                 </div>
             </div>
-            
+
             <div class="note">
-                <p><strong>Nota:</strong> 
+                <p><strong>Nota:</strong>
                 <p><strong>Tipo Pago:</strong> {{ venta.get_metodo_pago_display }}.</p>
                 {% if venta.tipo_venta == 'credito' %}
                 <!-- <p><strong>Venta a Crédito:</strong> Cliente: {{ venta.cliente_nombre }} - Documento: {{ venta.cliente_documento }}</p> -->
                 {% endif %}
             </div>
-            
+
             <div class="signatures">
                 <div class="signature-box">
                     Entregado Por: {{ venta.vendedor.get_full_name|default:venta.vendedor.username }}
@@ -313,12 +318,12 @@
                     Recibido Por: {{ venta.cliente_nombre }}
                 </div>
             </div>
-            
+
             <div class="footer-note">
                 No se Aceptan Devoluciones. Gracias por su Compra!
             </div>
         </div>
-        
+
         <div class="controls">
             <button onclick="window.print()">Imprimir Factura</button>
             <button onclick="window.history.back()">Volver a Ventas</button>
@@ -338,53 +343,53 @@
                 <td>$0.00</td>
             `;
             tbody.appendChild(newRow);
-            
+
             // Añadir event listeners para cálculo automático
             const inputs = newRow.querySelectorAll('input');
             inputs[1].addEventListener('input', calculateRowTotal);
             inputs[3].addEventListener('input', calculateRowTotal);
-            
+
             // Recalcular totales
             calculateTotals();
         }
-        
+
         // Función para calcular el total de una fila
         function calculateRowTotal() {
             const row = this.parentElement.parentElement;
             const cantidad = row.querySelector('input:nth-child(2)').value || 0;
             const precio = row.querySelector('input:nth-child(4)').value || 0;
             const importe = cantidad * precio;
-            
-            row.querySelector('td:last-child').textContent = `$${importe.toLocaleString('es-DO', {minimumFractionDigits: 2})}`;
-            
+
+            row.querySelector('td:last-child').textContent = `$${importe.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
+
             // Recalcular totales
             calculateTotals();
         }
-        
+
         // Función para calcular los totales generales
         function calculateTotals() {
             let totalArticulos = 0;
             let subtotal = 0;
-            
+
             document.querySelectorAll('#productos tr').forEach(row => {
                 const cells = row.querySelectorAll('td');
-                const cantidad = cells[1].querySelector('input') ? 
-                                 parseInt(cells[1].querySelector('input').value || 0) : 
-                                 parseInt(cells[1].textContent);
+                const cantidad = cells[1].querySelector('input') ?
+                    parseInt(cells[1].querySelector('input').value || 0) :
+                    parseInt(cells[1].textContent);
                 const importe = parseFloat(cells[4].textContent.replace('$', '').replace(/,/g, '') || 0);
-                
+
                 totalArticulos += cantidad;
                 subtotal += importe;
             });
-            
+
             // Actualizar totales
             document.querySelector('.totals div:first-child span').textContent = totalArticulos;
-            document.querySelector('.totals div:nth-child(2) span').textContent = `$${subtotal.toLocaleString('es-DO', {minimumFractionDigits: 2})}`;
-            document.querySelector('.totals div:last-child span').textContent = `$${subtotal.toLocaleString('es-DO', {minimumFractionDigits: 2})}`;
+            document.querySelector('.totals div:nth-child(2) span').textContent = `$${subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
+            document.querySelector('.totals div:last-child span').textContent = `$${subtotal.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
         }
-        
+
         // Inicializar event listeners para inputs existentes
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             document.querySelectorAll('#productos input').forEach(input => {
                 if (input.type === 'number') {
                     input.addEventListener('input', calculateRowTotal);
@@ -393,4 +398,5 @@
         });
     </script>
 </body>
+
 </html>
