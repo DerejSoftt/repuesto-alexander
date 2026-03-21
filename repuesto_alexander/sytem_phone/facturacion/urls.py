@@ -108,6 +108,7 @@ urlpatterns = [
     path('reporte-ventas-usuario-actual/', views.reporte_ventas_usuario_actual, name='reporte_ventas_usuario_actual'),
     
   path('generar-historial-cliente-pdf/<int:client_id>/', views.generar_historial_cliente_pdf, name='generar_historial_cliente_pdf'),
+  path('generar-reporte-vencidas-pdf/', views.generar_reporte_vencidas_pdf, name='generar_reporte_vencidas_pdf'),
 ]
 
     
