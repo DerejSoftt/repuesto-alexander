@@ -3498,7 +3498,6 @@ def procesar_venta(request):
         payment_type = data.get('payment_type', 'contado')
         payment_method = data.get('payment_method', 'efectivo')
         
-        # Usar safe_decimal para todos los campos decimales
         subtotal_sin_itbis = safe_decimal(data.get('subtotal'), 0)
         itbis_monto = safe_decimal(data.get('itbis_monto'), 0)
         itbis_porcentaje = safe_decimal(data.get('itbis_porcentaje', 18.00))
@@ -3513,11 +3512,8 @@ def procesar_venta(request):
         # VALIDACIÓN DE DESCUENTO - SOLO PARA SUPERUSUARIOS
         # ============================================
         if not user.is_superuser:
-            # Para usuarios normales, forzar descuento a 0
             discount_percentage = Decimal('0.00')
             discount_amount = Decimal('0.00')
-            
-            # Verificar si intentaron aplicar descuento
             received_discount = safe_decimal(data.get('discount_percentage', 0))
             if received_discount > 0:
                 return JsonResponse({
@@ -3525,7 +3521,6 @@ def procesar_venta(request):
                     'message': 'No tiene permisos para aplicar descuentos. Solo el administrador puede hacerlo.'
                 })
         else:
-            # Para superusuarios, usar los valores recibidos CON safe_decimal
             discount_percentage = safe_decimal(data.get('discount_percentage', 0))
             discount_amount = safe_decimal(data.get('discount_amount', 0))
 
@@ -3546,7 +3541,6 @@ def procesar_venta(request):
         if total <= 0:
             return JsonResponse({'success': False, 'message': 'El total debe ser mayor a 0'})
 
-        # Validar porcentaje de descuento (solo para superusuarios)
         if user.is_superuser and (discount_percentage < 0 or discount_percentage > 100):
             return JsonResponse({
                 'success': False, 
@@ -3558,7 +3552,6 @@ def procesar_venta(request):
         # ============================================
         subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
 
-        # Validar que el ITBIS sea consistente
         itbis_calculado = subtotal_sin_itbis * (itbis_porcentaje / Decimal('100.00'))
         if abs(itbis_monto - itbis_calculado) > Decimal('0.01'):
             print(f"Advertencia: ITBIS inconsistente. Recibido: {itbis_monto}, Calculado: {itbis_calculado}")
@@ -3582,13 +3575,10 @@ def procesar_venta(request):
                 print(f"Advertencia: Total inconsistente. Recibido: {total}, Calculado: {total_calculado}")
                 total = total_calculado
         else:
-            # Para usuarios normales, asegurarse de que el descuento sea 0
             discount_amount = Decimal('0.00')
             discount_percentage = Decimal('0.00')
-            # Recalcular total sin descuento
             total = subtotal_con_itbis
 
-        # Si el total cambió, actualizar total_a_pagar
         if abs(total_a_pagar - total) > Decimal('0.01'):
             total_a_pagar = total
 
@@ -3609,7 +3599,6 @@ def procesar_venta(request):
                 from .models import Cliente, CuentaPorCobrar
                 cliente = Cliente.objects.get(id=client_id, status=True)
                 
-                # Validar límite de crédito
                 cuentas_pendientes = CuentaPorCobrar.objects.filter(
                     cliente=cliente,
                     anulada=False,
@@ -3632,7 +3621,7 @@ def procesar_venta(request):
                 return JsonResponse({'success': False, 'message': 'Debe ingresar el nombre del cliente'})
 
         # ============================================
-        # PROCESAR ITEMS DE LA VENTA - USANDO safe_int y safe_decimal
+        # PROCESAR ITEMS DE LA VENTA
         # ============================================
         sale_items_json = data.get('sale_items')
         if not sale_items_json:
@@ -3646,7 +3635,6 @@ def procesar_venta(request):
         if not sale_items:
             return JsonResponse({'success': False, 'message': 'No hay productos en la venta'})
 
-        # Verificar stock y validar productos
         from .models import EntradaProducto
         productos_validados = []
         
@@ -3713,24 +3701,12 @@ def procesar_venta(request):
         )
         venta.save()
 
-        # ============================================
-        # LOG DE LA VENTA PARA DEBUGGING
-        # ============================================
         print(f"=== VENTA CREADA ===")
         print(f"Factura: {venta.numero_factura}")
-        print(f"Usuario: {user.username} (Superusuario: {user.is_superuser})")
-        print(f"Subtotal (sin ITBIS): RD${venta.subtotal:.2f}")
-        print(f"ITBIS ({venta.itbis_porcentaje}%): RD${venta.itbis_monto:.2f}")
-        print(f"Subtotal (con ITBIS): RD${venta.subtotal + venta.itbis_monto:.2f}")
-        print(f"Descuento %: {venta.descuento_porcentaje}%")
-        print(f"Descuento monto: RD${venta.descuento_monto:.2f}")
         print(f"Total: RD${venta.total:.2f}")
-        print(f"Total a pagar: RD${venta.total_a_pagar:.2f}")
-        print(f"Efectivo recibido: RD${venta.efectivo_recibido:.2f}")
-        print(f"Cambio: RD${venta.cambio:.2f}")
 
         # ============================================
-        # PROCESAR DETALLES DE VENTA Y DESCONTAR STOCK
+        # PROCESAR DETALLES Y DESCONTAR STOCK
         # ============================================
         productos_para_cuenta = []
         for item_data in productos_validados:
@@ -3739,20 +3715,16 @@ def procesar_venta(request):
             precio_unitario = item_data['precio_unitario']
             subtotal_item = item_data['subtotal']
             
-            # Validar subtotal
             calculated_subtotal = precio_unitario * cantidad
             if abs(calculated_subtotal - subtotal_item) > Decimal('0.01'):
-                print(f"Advertencia: Subtotal inconsistente para {item_data['nombre']}. Usando: {calculated_subtotal}")
                 subtotal_item = calculated_subtotal
             
-            # Actualizar stock
             producto.cantidad -= cantidad
             producto.save(update_fields=['cantidad'])
             
             nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
-            print(f"Stock actualizado: {nombre_producto} -{cantidad} unidades (Nuevo stock: {producto.cantidad})")
+            print(f"Stock actualizado: {nombre_producto} -{cantidad} (Nuevo stock: {producto.cantidad})")
             
-            # Crear detalle de venta
             detalle = DetalleVenta(
                 venta=venta,
                 producto=producto,
@@ -3770,7 +3742,16 @@ def procesar_venta(request):
         if payment_type == 'credito' and cliente:
             try:
                 from .models import CuentaPorCobrar
-                fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
+                from datetime import datetime
+
+                # MODIFICACIÓN: leer fecha del input del formulario
+                fecha_vencimiento_str = data.get('fecha_vencimiento')
+                if fecha_vencimiento_str:
+                    fecha_vencimiento = datetime.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+                else:
+                    # fallback: 30 días si por alguna razón no llega la fecha
+                    fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
+
                 productos_str = "\n".join(productos_para_cuenta)
                 
                 cuenta_por_cobrar = CuentaPorCobrar(
@@ -3789,8 +3770,8 @@ Productos:
                 cuenta_por_cobrar.save()
                 
                 print(f"Cuenta por cobrar creada: {cuenta_por_cobrar.id}")
+                print(f"Fecha vencimiento: {fecha_vencimiento}")
                 print(f"Monto total: RD${total:.2f}")
-                print(f"Saldo pendiente: RD${cuenta_por_cobrar.saldo_pendiente:.2f}")
                 
             except Exception as e:
                 transaction.set_rollback(True)
@@ -3803,30 +3784,21 @@ Productos:
             from django.core.mail import EmailMessage
             from django.conf import settings
             
-            # Verificar si el correo está configurado en settings
             email_configured = hasattr(settings, 'EMAIL_HOST') and settings.EMAIL_HOST
             
             if email_configured:
-                # Lista de destinatarios - puedes personalizar esto
                 recipient_list = []
                 
-                # Agregar al vendedor si tiene email
                 if user.email:
                     recipient_list.append(user.email)
                 
-                # Agregar al cliente si tiene email (solo para ventas a crédito)
                 if payment_type == 'credito' and cliente and hasattr(cliente, 'email') and cliente.email:
                     recipient_list.append(cliente.email)
                 
-                # También puedes agregar correos fijos (como el administrador)
-                recipient_list.append('superbestiard16@gmail.com')  # Cambia por el correo real
-                
-                # Eliminar duplicados
+                recipient_list.append('superbestiard16@gmail.com')
                 recipient_list = list(set(recipient_list))
                 
-                # Solo enviar si hay destinatarios
                 if recipient_list:
-                    # Importar la función de generar PDF
                     try:
                         from .utils import generar_pdf_venta # type: ignore
                         pdf_buffer = generar_pdf_venta(venta)
@@ -3853,30 +3825,22 @@ Se adjunta el comprobante en PDF.
 Saludos,
 Sistema de Ventas - Super Bestia
 '''
-                        
-                        # Crear el email
                         email = EmailMessage(
                             subject=subject,
                             body=message,
                             from_email=settings.DEFAULT_FROM_EMAIL,
                             to=recipient_list,
                         )
-                        
-                        # Adjuntar el PDF
                         email.attach(
                             filename=f'factura_{venta.numero_factura}.pdf',
                             content=pdf_buffer.getvalue(),
                             mimetype='application/pdf'
                         )
-                        
-                        # Enviar el correo
                         email.send(fail_silently=False)
-                        
-                        print(f"✓ Correo enviado exitosamente a {recipient_list}")
-                        print(f"✓ Factura: {venta.numero_factura}")
+                        print(f"✓ Correo enviado a {recipient_list}")
                         
                     except ImportError as e:
-                        print(f"✗ Error: Función generar_pdf_venta no encontrada: {str(e)}")
+                        print(f"✗ Error: generar_pdf_venta no encontrada: {str(e)}")
                     except Exception as e:
                         print(f"✗ Error al enviar correo: {str(e)}")
                 else:
@@ -3885,7 +3849,6 @@ Sistema de Ventas - Super Bestia
                 print("ℹ️ Configuración de correo no encontrada en settings.py")
                 
         except Exception as e:
-            # Si falla el envío del correo, no revertimos la venta, solo lo registramos
             print(f"⚠️ Advertencia: Error en envío de correo: {str(e)}")
 
         # ============================================
@@ -3923,7 +3886,6 @@ Sistema de Ventas - Super Bestia
             'error_type': str(type(e).__name__),
             'traceback': error_traceback if settings.DEBUG else None
         })
-
 
 # ========================================================================================
 #=========================== FUNCIÓN PARA GENERAR PDF (SIN CAMBIOS) ========================
@@ -4114,21 +4076,18 @@ def comprobante_venta(request, venta_id):
     detalles = venta.detalles.all()
     total_articulos = sum(detalle.cantidad for detalle in detalles)
     
+    # Obtener fecha de vencimiento si es venta a crédito
+    fecha_vencimiento = None
+    if venta.tipo_venta == 'credito' and hasattr(venta, 'cuenta_por_cobrar'):
+        fecha_vencimiento = venta.cuenta_por_cobrar.fecha_vencimiento
+
     # Calcular los totales correctamente
-    subtotal_sin_itbis = venta.subtotal  # Esto ya viene sin ITBIS de la venta
+    subtotal_sin_itbis = venta.subtotal
     itbis_monto = venta.itbis_monto
-    subtotal_con_itbis = subtotal_sin_itbis + itbis_monto  # Subtotal con ITBIS
+    subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
     descuento_monto = venta.descuento_monto
-    total_final = venta.total  # Este es el total final después de descuentos
-    
-    print(f"=== DEBUG COMPROBANTE ===")
-    print(f"Subtotal sin ITBIS: {subtotal_sin_itbis}")
-    print(f"ITBIS monto: {itbis_monto}")
-    print(f"Subtotal con ITBIS: {subtotal_con_itbis}")
-    print(f"Descuento monto: {descuento_monto}")
-    print(f"Total final: {total_final}")
-    print(f"Total a pagar: {venta.total_a_pagar}")
-    
+    total_final = venta.total
+
     return render(request, 'facturacion/comprobante_venta.html', {
         'venta': venta,
         'detalles': detalles,
@@ -4138,10 +4097,9 @@ def comprobante_venta(request, venta_id):
         'itbis_monto': itbis_monto,
         'descuento_monto': descuento_monto,
         'total_final': total_final,
+        'fecha_vencimiento': fecha_vencimiento,  # pasar al template
         'now': timezone.now().strftime('%d/%m/%Y')
     })
-
-
 
 
 @login_required
@@ -5043,7 +5001,6 @@ def lista_comprobantes(request):
     
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
-
 @user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
 @login_required
 def cuentaporcobrar(request):
@@ -5051,51 +5008,66 @@ def cuentaporcobrar(request):
     status_filter = request.GET.get('status', '')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
- 
+
+    # ===== ACTUALIZAR ESTADOS VENCIDOS AUTOMÁTICAMENTE =====
+    hoy = timezone.now().date()
+    # Obtener todas las cuentas pendientes o parciales que no estén anuladas/eliminadas
+    cuentas_pendientes = CuentaPorCobrar.objects.filter(
+        anulada=False,
+        eliminada=False,
+        estado__in=['pendiente', 'parcial']
+    )
+    for cuenta in cuentas_pendientes:
+        if cuenta.fecha_vencimiento and hoy > cuenta.fecha_vencimiento:
+            saldo = Decimal(str(cuenta.monto_total)) - Decimal(str(cuenta.monto_pagado))
+            if saldo > 0:
+                cuenta.estado = 'vencida'
+                cuenta.save(update_fields=['estado'])
+    # =====================================================
+
+    # Obtener todas las cuentas (excluyendo anuladas y eliminadas) para los filtros
     cuentas = CuentaPorCobrar.objects.select_related('venta', 'cliente').filter(
         anulada=False,
         eliminada=False
     )
- 
+
+    # Aplicar filtros
     if search:
         cuentas = cuentas.filter(
             Q(cliente__full_name__icontains=search) |
             Q(venta__numero_factura__icontains=search) |
             Q(cliente__identification_number__icontains=search)
         )
- 
     if status_filter:
         cuentas = cuentas.filter(estado=status_filter)
- 
     if date_from:
         cuentas = cuentas.filter(venta__fecha_venta__gte=date_from)
- 
     if date_to:
         cuentas = cuentas.filter(venta__fecha_venta__lte=date_to)
- 
+
     # Calcular estadísticas
     total_pendiente = Decimal('0.00')
     total_vencido = Decimal('0.00')
     total_por_cobrar = Decimal('0.00')
- 
+
     for cuenta in cuentas:
         monto_total_original = Decimal(str(cuenta.monto_total))
         saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
- 
+
         if saldo_pendiente < 0:
             saldo_pendiente = Decimal('0.00')
             if cuenta.monto_pagado > monto_total_original:
                 cuenta.monto_pagado = monto_total_original
                 cuenta.save()
- 
+
         if cuenta.estado in ['pendiente', 'parcial']:
             total_pendiente += saldo_pendiente
         elif cuenta.estado == 'vencida':
             total_vencido += saldo_pendiente
- 
+
         if cuenta.estado != 'pagada':
             total_por_cobrar += saldo_pendiente
- 
+
     # Pagos del mes actual
     mes_actual = timezone.now().month
     año_actual = timezone.now().year
@@ -5105,69 +5077,55 @@ def cuentaporcobrar(request):
         cuenta__anulada=False,
         cuenta__eliminada=False
     ).aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
- 
+
     # Preparar datos para el template
     cuentas_data = []
     for cuenta in cuentas:
         monto_total_original = float(cuenta.monto_total)
- 
+        monto_pagado = float(cuenta.monto_pagado)
+        # Asegurar que el monto pagado no exceda el total
+        if monto_pagado >= monto_total_original:
+            monto_pagado = monto_total_original
+        saldo_pendiente = max(0.0, monto_total_original - monto_pagado)
+
+        # Productos de la venta
         productos = []
         if cuenta.venta and hasattr(cuenta.venta, 'detalles'):
             for detalle in cuenta.venta.detalles.all():
                 nombre_producto = 'Servicio'
                 precio_sin_itbis = float(detalle.precio_unitario)
- 
                 if hasattr(detalle, 'producto') and detalle.producto:
                     nombre_producto = detalle.producto.descripcion
                 elif hasattr(detalle, 'servicio') and detalle.servicio:
                     nombre_producto = detalle.servicio.nombre
                 elif hasattr(detalle, 'descripcion') and detalle.descripcion:
                     nombre_producto = detalle.descripcion
- 
                 cantidad = 1
                 if hasattr(detalle, 'cantidad'):
                     cantidad = float(detalle.cantidad)
- 
                 productos.append({
                     'nombre': nombre_producto,
                     'cantidad': cantidad,
                     'precio': precio_sin_itbis,
                 })
- 
-        client_name = 'Cliente no disponible'
-        client_phone = 'N/A'
-        if cuenta.cliente:
-            client_name = cuenta.cliente.full_name or 'Cliente sin nombre'
-            client_phone = cuenta.cliente.primary_phone or 'N/A'
- 
-        invoice_number = 'N/A'
-        sale_date = ''
-        if cuenta.venta:
-            invoice_number = cuenta.venta.numero_factura or 'N/A'
-            if cuenta.venta.fecha_venta:
-                sale_date = cuenta.venta.fecha_venta.strftime('%Y-%m-%d')
- 
-        due_date = ''
-        if cuenta.fecha_vencimiento:
-            due_date = cuenta.fecha_vencimiento.strftime('%Y-%m-%d')
- 
-        monto_pagado = float(cuenta.monto_pagado)
- 
-        # ✅ CORRECCIÓN: si monto_pagado >= monto_total y estado no es 'pagada',
-        # corregir en BD y ajustar los valores locales para el frontend.
-        if monto_pagado >= monto_total_original and cuenta.estado != 'pagada':
-            cuenta.monto_pagado = Decimal(str(monto_total_original)).quantize(Decimal('0.01'))
-            cuenta.estado = 'pagada'
-            cuenta.save()
-            monto_pagado = monto_total_original
- 
-        saldo_pendiente = max(0.0, monto_total_original - monto_pagado)
- 
+
+        client_name = cuenta.cliente.full_name if cuenta.cliente else 'Cliente no disponible'
+        client_phone = cuenta.cliente.primary_phone if cuenta.cliente else 'N/A'
+        invoice_number = cuenta.venta.numero_factura if cuenta.venta else 'N/A'
+        # CORRECCIÓN: usar fecha_venta en lugar de fecha_vencimiento
+        sale_date = cuenta.venta.fecha_venta.strftime('%Y-%m-%d') if cuenta.venta and cuenta.venta.fecha_venta else ''
+        due_date = cuenta.fecha_vencimiento.strftime('%Y-%m-%d') if cuenta.fecha_vencimiento else ''
         puede_eliminar = cuenta.estado == 'pagada'
- 
+
+        # ===== CÁLCULO DE DÍAS VENCIDO =====
+        dias_vencido = None
+        if cuenta.fecha_vencimiento and hoy > cuenta.fecha_vencimiento and saldo_pendiente > 0:
+            dias_vencido = (hoy - cuenta.fecha_vencimiento).days
+        # ===================================
+
         cuentas_data.append({
             'id': cuenta.id,
-            'clientId': cuenta.cliente.id,
+            'clientId': cuenta.cliente.id if cuenta.cliente else None,
             'invoiceNumber': invoice_number,
             'clientName': client_name,
             'clientPhone': client_phone,
@@ -5181,10 +5139,11 @@ def cuentaporcobrar(request):
             'observations': cuenta.observaciones or '',
             'puede_eliminar': puede_eliminar,
             'totalConItbis': float(cuenta.venta.total) if cuenta.venta else 0,
+            'dias_vencido': dias_vencido,  # Nuevo campo
         })
- 
+
     cuentas_json = json.dumps(cuentas_data)
- 
+
     context = {
         'cuentas_json': cuentas_json,
         'total_pendiente': float(total_pendiente),
@@ -5196,9 +5155,8 @@ def cuentaporcobrar(request):
         'date_from': date_from,
         'date_to': date_to,
     }
- 
+
     return render(request, "facturacion/cuentaporcobrar.html", context)
- 
 
 def sincronizar_cuentas_ventas():
     """
@@ -6180,6 +6138,146 @@ def generar_historial_cliente_pdf(request, client_id):
 
     except Exception as e:
         return HttpResponse(f"Error al generar el historial: {str(e)}", content_type='text/plain')
+    
+    
+    
+
+
+@login_required
+def generar_reporte_vencidas_pdf(request):
+    """
+    Genera un PDF con todas las facturas vencidas, mostrando días de atraso.
+    """
+    try:
+        from datetime import date
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from decimal import Decimal
+        import io
+
+        # Obtener cuentas vencidas (no anuladas ni eliminadas)
+        cuentas = CuentaPorCobrar.objects.filter(
+            estado='vencida',
+            anulada=False,
+            eliminada=False
+        ).select_related('cliente', 'venta').order_by('fecha_vencimiento')
+
+        if not cuentas.exists():
+            return HttpResponse("No hay facturas vencidas en este momento.", content_type='text/plain')
+
+        hoy = timezone.now().date()
+        data = []
+        total_vencido = Decimal('0.00')
+        for cuenta in cuentas:
+            monto_pendiente = Decimal(str(cuenta.monto_total)) - Decimal(str(cuenta.monto_pagado))
+            if monto_pendiente < 0:
+                monto_pendiente = Decimal('0.00')
+            dias_vencido = (hoy - cuenta.fecha_vencimiento).days if cuenta.fecha_vencimiento else 0
+            total_vencido += monto_pendiente
+            data.append({
+                'cliente': cuenta.cliente.full_name if cuenta.cliente else 'Cliente no disponible',
+                'telefono': cuenta.cliente.primary_phone if cuenta.cliente else 'N/A',
+                'factura': cuenta.venta.numero_factura if cuenta.venta else 'N/A',
+                'fecha_vencimiento': cuenta.fecha_vencimiento.strftime('%d/%m/%Y') if cuenta.fecha_vencimiento else 'N/A',
+                'dias_vencido': dias_vencido,
+                'monto_pendiente': monto_pendiente,
+            })
+
+        # Crear PDF
+        response = HttpResponse(content_type='application/pdf')
+        fecha_reporte = datetime.now().strftime('%Y%m%d_%H%M%S')
+        response['Content-Disposition'] = f'attachment; filename="facturas_vencidas_{fecha_reporte}.pdf"'
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=1.5*cm,
+            leftMargin=1.5*cm,
+            topMargin=1.5*cm,
+            bottomMargin=1.5*cm
+        )
+
+        styles = getSampleStyleSheet()
+        contenido = []
+
+        # Título
+        titulo_style = ParagraphStyle(
+            'Titulo',
+            parent=styles['Title'],
+            fontSize=16,
+            spaceAfter=10,
+            alignment=1
+        )
+        contenido.append(Paragraph("REPORTE DE FACTURAS VENCIDAS", titulo_style))
+        contenido.append(Spacer(1, 0.5*cm))
+
+        # Subtítulo con fecha de generación
+        fecha_actual = datetime.now().strftime('%d/%m/%Y %H:%M')
+        contenido.append(Paragraph(f"Generado: {fecha_actual}", styles['Normal']))
+        contenido.append(Spacer(1, 0.5*cm))
+
+        # Tabla de facturas vencidas
+        encabezados = [
+            "Cliente", "Teléfono", "Factura", "Fecha Vencimiento",
+            "Días Vencido", "Monto Pendiente"
+        ]
+        datos_tabla = [encabezados]
+
+        for item in data:
+            fila = [
+                item['cliente'],
+                item['telefono'],
+                item['factura'],
+                item['fecha_vencimiento'],
+                str(item['dias_vencido']),
+                f"RD$ {item['monto_pendiente']:,.2f}"
+            ]
+            datos_tabla.append(fila)
+
+        # Calcular ancho de columnas
+        col_widths = [4.5*cm, 2.8*cm, 2.5*cm, 2.8*cm, 2.2*cm, 3*cm]
+        tabla = Table(datos_tabla, colWidths=col_widths)
+
+        tabla.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dc3545')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('ALIGN', (4, 1), (4, -1), 'CENTER'),
+            ('ALIGN', (5, 1), (5, -1), 'RIGHT'),
+        ]))
+
+        contenido.append(tabla)
+        contenido.append(Spacer(1, 0.7*cm))
+
+        # Totales
+        total_texto = f"<b>Total deuda vencida:</b> RD$ {total_vencido:,.2f}"
+        contenido.append(Paragraph(total_texto, styles['Normal']))
+
+        # Nota
+        nota = Paragraph(
+            "Este reporte incluye todas las facturas que actualmente están vencidas.",
+            ParagraphStyle('Nota', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
+        )
+        contenido.append(Spacer(1, 1*cm))
+        contenido.append(nota)
+
+        doc.build(contenido)
+        pdf = buffer.getvalue()
+        buffer.close()
+        response.write(pdf)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Error al generar reporte: {str(e)}", content_type='text/plain')
 
 #==================================================================================================
 #==============================Gestión de Suplidores (Proveedores)=================================

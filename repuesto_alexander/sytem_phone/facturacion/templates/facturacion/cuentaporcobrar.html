@@ -14,7 +14,7 @@
     <!-- SweetAlert2 CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.12/dist/sweetalert2.min.css">
     <style>
-        /* (Todo el estilo original se mantiene igual) */
+        /* Todo el estilo original se mantiene igual */
         * {
             margin: 0;
             padding: 0;
@@ -1180,18 +1180,25 @@
                 <div class="table-container">
                     <div class="table-header">
                         <h2 class="table-title">Lista de Cuentas por Cobrar</h2>
-                        <div style="display: flex; gap: 10px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <!-- Botón para Exportar -->
                             <button class="btn btn-primary" onclick="exportData()">
                                 <i class='bx bx-download'></i>
                                 Exportar CSV
                             </button>
 
-                            <!-- NUEVO BOTÓN PARA IMPRIMIR REPORTE -->
+                            <!-- Botón para Imprimir Reporte General -->
                             <button class="btn btn-primary" onclick="imprimirReporteDeudas()"
                                 style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
                                 <i class='bx bx-printer'></i>
                                 Imprimir Reporte
+                            </button>
+
+                            <!-- NUEVO BOTÓN: Reporte de Facturas Vencidas -->
+                            <button class="btn btn-primary" onclick="imprimirReporteVencidas()"
+                                style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">
+                                <i class='bx bx-error-alt'></i>
+                                Imprimir Vencidas
                             </button>
                         </div>
                     </div>
@@ -1272,6 +1279,11 @@
                 <div class="detail-item">
                     <span class="detail-label">Monto Pendiente:</span>
                     <span class="detail-value currency" id="detailPendingAmount"></span>
+                </div>
+                <!-- Nuevo item para días vencidos -->
+                <div class="detail-item" id="detailDaysOverdue" style="display: none;">
+                    <span class="detail-label">Días Vencido:</span>
+                    <span class="detail-value" id="detailDaysOverdueValue"></span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Estado:</span>
@@ -1358,7 +1370,7 @@
         console.log('Inicializando sistema de cuentas por cobrar...');
 
         // Obtener información del usuario desde Django
-        const isSuperuser = {% if user.is_superuser %}true{% else %} false{% endif %};   // <-- CORREGIDO
+        const isSuperuser = {% if user.is_superuser %}true{% else %} false{% endif %};
         console.log('Usuario es superusuario:', isSuperuser);
 
         // Cargar datos desde Django
@@ -1469,7 +1481,7 @@
                 const clientKey = `${account.clientName}-${account.clientPhone}`;
                 if (!clientsMap[clientKey]) {
                     clientsMap[clientKey] = {
-                        clientId: account.clientId,               // <-- AGREGADO
+                        clientId: account.clientId,
                         clientName: account.clientName,
                         clientPhone: account.clientPhone,
                         invoices: [],
@@ -1490,14 +1502,15 @@
                     products: account.products,
                     saleDate: account.saleDate,
                     dueDate: account.dueDate,
-                    totalAmount: account.totalAmount, // Monto total SIN ITBIS
+                    totalAmount: account.totalAmount,
                     paidAmount: account.paidAmount,
-                    pendingBalance: pendingBalance, // Saldo pendiente
+                    pendingBalance: pendingBalance,
                     status: account.status,
                     observations: account.observations,
                     isExpanded: isInvoiceExpanded,
                     anulada: account.status === 'anulada',
-                    puede_eliminar: account.puede_eliminar || false
+                    puede_eliminar: account.puede_eliminar || false,
+                    diasVencido: account.dias_vencido   // <--- NUEVO
                 });
 
                 clientsMap[clientKey].totalPending += pendingBalance;
@@ -1619,7 +1632,6 @@
                                 <i class='bx bx-dollar'></i>
                                 Pagar Todo
                             </button>
-                            <!-- NUEVO BOTÓN HISTORIAL -->
                             <button class="btn btn-primary" onclick="generarHistorialCliente(${client.clientId})" title="Ver historial completo del cliente">
                                 <i class='bx bx-history'></i>
                                 Historial
@@ -1627,22 +1639,24 @@
                         </div>
                     </td>
                 </tr>
-            `;
+                `;
 
                 if (isClientExpanded) {
                     client.invoices.forEach(invoice => {
                         const isInvoiceExpanded = invoice.isExpanded;
                         const hasMultipleProducts = invoice.products && invoice.products.length > 1;
+                        // Mostrar días vencidos si corresponde
+                        const overdueSpan = invoice.diasVencido ? `<span style="color: #dc3545; margin-left: 10px; font-size: 0.85rem;">
+                            ⚠️ Vencida hace ${invoice.diasVencido} días
+                        </span>` : '';
                         tableRowsHTML += `
                         <tr class="invoice-row expanded" data-client-key="${client.clientName}-${client.clientPhone}" data-invoice-id="${invoice.id}">
-                            <td colspan="2"></td>
-                            <td>
+                            <td colspan="2">
                                 <strong>Factura: ${invoice.invoiceNumber}</strong>
-                                ${hasMultipleProducts ? `
-                                    <button class="product-toggle-btn" onclick="toggleInvoiceProducts(${invoice.id}, '${client.clientName}-${client.clientPhone}')">
-                                        <i class='bx bx-${isInvoiceExpanded ? 'minus' : 'plus'}'></i>
-                                    </button>
-                                ` : ''}
+                                ${hasMultipleProducts ? `<button class="product-toggle-btn" onclick="toggleInvoiceProducts(${invoice.id}, '${client.clientName}-${client.clientPhone}')">
+                                    <i class='bx bx-${isInvoiceExpanded ? 'minus' : 'plus'}'></i>
+                                </button>` : ''}
+                                ${overdueSpan}
                             </td>
                             <td class="currency">RD$ ${invoice.pendingBalance.toLocaleString('es-DO')}</td>
                             <td>
@@ -1674,7 +1688,7 @@
                                 </div>
                             </td>
                         </tr>
-                    `;
+                        `;
 
                         if (hasMultipleProducts && isInvoiceExpanded) {
                             tableRowsHTML += `
@@ -1688,7 +1702,7 @@
                                     </ul>
                                 </td>
                             </tr>
-                        `;
+                            `;
                         }
                     });
                 }
@@ -1893,18 +1907,22 @@
             document.getElementById('detailSaleDate').textContent = formatDate(account.saleDate);
             document.getElementById('detailDueDate').textContent = formatDate(account.dueDate);
 
-            // Monto Total Original (SIN ITBIS)
             document.getElementById('detailTotalAmount').textContent = `RD$ ${account.totalAmount.toLocaleString('es-DO')}`;
-
-            // Monto Pagado
             document.getElementById('detailPaidAmount').textContent = `RD$ ${account.paidAmount.toLocaleString('es-DO')}`;
-
-            // Monto Pendiente
             document.getElementById('detailPendingAmount').textContent = `RD$ ${account.pendingBalance.toLocaleString('es-DO')}`;
+
+            // Mostrar días vencidos si aplica
+            const daysOverdueDiv = document.getElementById('detailDaysOverdue');
+            const daysOverdueValue = document.getElementById('detailDaysOverdueValue');
+            if (account.dias_vencido && account.dias_vencido > 0) {
+                daysOverdueDiv.style.display = 'flex';
+                daysOverdueValue.textContent = `${account.dias_vencido} días`;
+            } else {
+                daysOverdueDiv.style.display = 'none';
+            }
 
             document.getElementById('detailStatus').textContent = getStatusName(account.status);
             document.getElementById('detailStatus').className = `detail-value status-badge ${getStatusClass(account.status)}`;
-
             document.getElementById('detailObservations').textContent = cleanObservations(account.observations);
 
             const payButton = document.getElementById('payFromDetailsBtn');
@@ -1958,7 +1976,6 @@
                 return;
             }
 
-            // Asegurar precisión decimal
             const currentPendingBalance = parseFloat(account.pendingBalance);
 
             if (currentPendingBalance <= 0) {
@@ -1973,16 +1990,11 @@
 
             document.getElementById('paymentModalPendingAmount').textContent = `RD$ ${currentPendingBalance.toFixed(2)}`;
             document.getElementById('paymentAccountId').value = id;
-
-            // Establecer el valor del pago como el saldo pendiente exacto
             document.getElementById('paymentAmountInput').value = currentPendingBalance.toFixed(2);
             document.getElementById('paymentAmountInput').placeholder = `Ej: ${currentPendingBalance.toFixed(2)}`;
-
-            // Permitir decimales (centavos)
             document.getElementById('paymentAmountInput').max = currentPendingBalance;
-            document.getElementById('paymentAmountInput').step = "0.01"; // Permitir centavos
+            document.getElementById('paymentAmountInput').step = "0.01";
 
-            // Limpiar errores anteriores
             document.getElementById('paymentAmountError').style.display = 'none';
 
             const modalBody = document.querySelector('#paymentModal .modal-body');
@@ -2056,11 +2068,8 @@
                 return;
             }
 
-            // Obtener saldo pendiente
             const currentPendingBalance = parseFloat(currentAccount.pendingBalance);
 
-            // Validación: el monto no debe exceder el saldo pendiente
-            // Usar tolerancia de 0.01 centavos para manejar errores de redondeo
             if (amount > currentPendingBalance + 0.01) {
                 document.getElementById('paymentAmountError').textContent =
                     `El monto (${amount.toFixed(2)}) excede el saldo pendiente de RD$ ${currentPendingBalance.toFixed(2)}`;
@@ -2068,10 +2077,8 @@
                 return;
             }
 
-            // Limpiar error si todo está bien
             document.getElementById('paymentAmountError').style.display = 'none';
 
-            // Mostrar confirmación con diferencia
             const exactDifference = currentPendingBalance - amount;
             Swal.fire({
                 title: 'Confirmar Pago',
@@ -2152,7 +2159,6 @@
                                         if (result.isConfirmed) {
                                             window.open(`/generar-comprobante-pdf/${data.comprobante_id}/`, '_blank');
                                         }
-                                        // Forzar recarga completa para reflejar cambios de devoluciones
                                         setTimeout(() => {
                                             window.location.reload();
                                         }, 500);
@@ -2171,7 +2177,6 @@
                                         icon: 'success',
                                         confirmButtonColor: '#28a745'
                                     }).then(() => {
-                                        // Forzar recarga completa para reflejar cambios de devoluciones
                                         window.location.reload();
                                     });
                                 }
@@ -2197,46 +2202,10 @@
             });
         }
 
-        function updateLocalAccountData(accountId, paymentAmount, serverResponse) {
-            const accountIndex = accounts.findIndex(acc => acc.id == accountId);
-            if (accountIndex !== -1) {
-                accounts[accountIndex].paidAmount = parseFloat(accounts[accountIndex].paidAmount) + parseFloat(paymentAmount);
-                accounts[accountIndex].pendingBalance = parseFloat(accounts[accountIndex].totalAmount) - parseFloat(accounts[accountIndex].paidAmount);
-
-                // Asegurar que no sea negativo
-                if (accounts[accountIndex].pendingBalance < 0) {
-                    accounts[accountIndex].pendingBalance = 0;
-                }
-
-                // Actualizar estado
-                if (serverResponse.estado_actual) {
-                    accounts[accountIndex].status = serverResponse.estado_actual;
-                } else {
-                    if (accounts[accountIndex].pendingBalance <= 0.01) { // Tolerancia de 1 centavo
-                        accounts[accountIndex].status = 'pagada';
-                    } else if (accounts[accountIndex].paidAmount > 0) {
-                        accounts[accountIndex].status = 'parcial';
-                    } else {
-                        accounts[accountIndex].status = 'pendiente';
-                    }
-                }
-
-                // Actualizar filteredAccounts
-                const filteredIndex = filteredAccounts.findIndex(acc => acc.id == accountId);
-                if (filteredIndex !== -1) {
-                    filteredAccounts[filteredIndex] = { ...accounts[accountIndex] };
-                }
-
-                updateStats();
-                renderTable(filteredAccounts);
-            }
-        }
-
         function anularCuenta(id) {
             const account = accounts.find(acc => acc.id === id);
             if (!account) return;
 
-            // Verificar si ya está anulada
             if (account.status === 'anulada') {
                 Swal.fire({
                     title: 'Cuenta ya anulada',
@@ -2247,7 +2216,6 @@
                 return;
             }
 
-            // Verificar si tiene pagos
             if (account.paidAmount > 0) {
                 Swal.fire({
                     title: 'Cuenta con pagos',
@@ -2325,7 +2293,6 @@
                                     window.location.reload();
                                 });
                             } else {
-                                // Mostrar mensaje de error específico para permisos
                                 if (data.message.includes('No tiene permisos') || data.message.includes('superusuario')) {
                                     Swal.fire({
                                         title: 'Permiso denegado',
@@ -2416,14 +2383,11 @@
         // ===== FUNCIÓN PARA IMPRIMIR REPORTE DE DEUDAS =====
         function imprimirReporteDeudas() {
             console.log('Generando reporte de deudas...');
-
-            // Obtener valores actuales de los filtros
             const searchTerm = document.getElementById('searchClient').value;
             const statusFilter = document.getElementById('statusFilter').value;
             const dateFrom = document.getElementById('dateFrom').value;
             const dateTo = document.getElementById('dateTo').value;
 
-            // Construir URL con parámetros de filtro
             let url = '/generar-reporte-deudas-pdf/';
             const params = [];
 
@@ -2436,7 +2400,6 @@
                 url += '?' + params.join('&');
             }
 
-            // Mostrar mensaje de confirmación
             Swal.fire({
                 title: '¿Generar reporte de deudas?',
                 html: `
@@ -2462,7 +2425,6 @@
                 cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // Mostrar mensaje de procesamiento
                     Swal.fire({
                         title: 'Generando reporte...',
                         text: 'Por favor espere mientras se genera el PDF.',
@@ -2475,8 +2437,6 @@
                             Swal.showLoading();
                         }
                     });
-
-                    // Crear un enlace temporal y hacer clic en él
                     const link = document.createElement('a');
                     link.href = url;
                     link.target = '_blank';
@@ -2484,8 +2444,6 @@
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-
-                    // Cerrar el loading después de un momento
                     setTimeout(() => {
                         Swal.close();
                         Swal.fire({
@@ -2501,10 +2459,37 @@
             });
         }
 
-        // ===== NUEVA FUNCIÓN PARA GENERAR PDF DEL HISTORIAL DEL CLIENTE =====
+        // ===== NUEVA FUNCIÓN PARA IMPRIMIR REPORTE DE FACTURAS VENCIDAS =====
+        function imprimirReporteVencidas() {
+            console.log('Generando reporte de facturas vencidas...');
+            Swal.fire({
+                title: '¿Generar reporte de facturas vencidas?',
+                text: 'Se generará un PDF con todas las facturas vencidas y los días de atraso.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, generar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Generando reporte...',
+                        text: 'Por favor espere.',
+                        icon: 'info',
+                        allowOutsideClick: false,
+                        showConfirmButton: false,
+                        didOpen: () => { Swal.showLoading(); }
+                    });
+                    window.open('/generar-reporte-vencidas-pdf/', '_blank');
+                    setTimeout(() => { Swal.close(); }, 1500);
+                }
+            });
+        }
+
+        // ===== FUNCIÓN PARA GENERAR PDF DEL HISTORIAL DEL CLIENTE =====
         function generarHistorialCliente(clientId) {
             console.log('Generando historial para cliente ID:', clientId);
-
             Swal.fire({
                 title: 'Generando historial...',
                 text: 'Por favor espere mientras se genera el PDF.',
@@ -2516,12 +2501,8 @@
                     Swal.showLoading();
                 }
             });
-
-            // Abrir el PDF en una nueva pestaña
             const url = `/generar-historial-cliente-pdf/${clientId}/`;
             window.open(url, '_blank');
-
-            // Cerrar el mensaje de carga después de un momento
             setTimeout(() => {
                 Swal.close();
             }, 1500);
@@ -2545,12 +2526,10 @@
                     if (account) {
                         const maxAmount = parseFloat(account.pendingBalance);
                         const errorElement = document.getElementById('paymentAmountError');
-
-                        // Validación mejorada
                         if (isNaN(amount) || amount <= 0) {
                             errorElement.textContent = 'El monto debe ser mayor a 0';
                             errorElement.style.display = 'block';
-                        } else if (amount > maxAmount + 0.01) { // Tolerancia de 1 centavo
+                        } else if (amount > maxAmount + 0.01) {
                             const diferencia = amount - maxAmount;
                             errorElement.innerHTML = `
                             El monto (${amount.toFixed(2)}) excede el saldo pendiente de RD$ ${maxAmount.toFixed(2)}<br>
@@ -2565,7 +2544,6 @@
                     }
                 });
 
-                // Agregar botón para pagar saldo completo
                 const paymentFormGroup = paymentAmountInput.closest('.payment-form-group');
                 if (paymentFormGroup) {
                     const fullBalanceButton = document.createElement('button');
@@ -2589,7 +2567,7 @@
             // Manejar el cierre de sesión con SweetAlert2
             const logoutLink = document.querySelector("a[href='{% url 'logout' %}']");
             if (logoutLink) {
-                logoutLink.addEventListener("click", function(e) {
+                logoutLink.addEventListener("click", function (e) {
                     e.preventDefault();
                     Swal.fire({
                         title: '¿Cerrar Sesión?',
@@ -2609,12 +2587,10 @@
                 });
             }
 
-
             // Cerrar modales al hacer clic fuera
             document.getElementById('detailsModal').addEventListener('click', function (e) {
                 if (e.target === this) closeDetailsModal();
             });
-
             document.getElementById('paymentModal').addEventListener('click', function (e) {
                 if (e.target === this) closePaymentModal();
             });

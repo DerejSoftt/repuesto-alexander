@@ -1249,6 +1249,12 @@
                                     </div>
                                     {% endfor %}
                                 </div>
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <label for="fecha-vencimiento" class="form-label">
+                                        <i class='bx bx-calendar-x' style="color: #ee5a24;"></i> Fecha de Vencimiento
+                                    </label>
+                                    <input type="date" id="fecha-vencimiento" class="form-control">
+                                </div>
                             </div>
                             <!-- Total de la Venta -->
                             <div class="total-display">
@@ -1497,13 +1503,14 @@
         <input type="hidden" name="itbis_porcentaje" id="itbis-porcentaje">
 
         <input type="hidden" name="discount_percentage" id="discount-percentage">
-        <input type="hidden" name="discount_amount" id="discount-amount">
+        <input type="hidden" name="discount_amount" id="discount-amount-field">
         <input type="hidden" name="total" id="total">
         <input type="hidden" name="cash_received" id="cash-received-field">
         <input type="hidden" name="change_amount" id="change-amount-field">
         <input type="hidden" name="sale_items" id="sale-items-field">
         <!-- Campos adicionales para crédito -->
         <input type="hidden" name="total_a_pagar" id="total-a-pagar-field">
+        <input type="hidden" name="fecha_vencimiento" id="fecha-vencimiento-field">
     </form>
  <script>
     // Funciones para el sidebar
@@ -1571,12 +1578,13 @@
             clientDocumentField: document.getElementById('client-document'),
             subtotalField: document.getElementById('subtotal'),
             discountPercentageField: document.getElementById('discount-percentage'),
-            discountAmountField: document.getElementById('discount-amount'),
+            discountAmountField: document.getElementById('discount-amount-field'),
             totalField: document.getElementById('total'),
             cashReceivedField: document.getElementById('cash-received-field'),
             changeAmountField: document.getElementById('change-amount-field'),
             saleItemsField: document.getElementById('sale-items-field'),
             totalAPagarField: document.getElementById('total-a-pagar-field'),
+            fechaVencimientoField: document.getElementById('fecha-vencimiento-field'),
             itbisMontoField: document.getElementById('itbis-monto'),
             itbisPorcentajeField: document.getElementById('itbis-porcentaje'),
             priceModal: document.getElementById('price-modal'),
@@ -2079,6 +2087,12 @@
             
             DOM.saleItemsField.value = JSON.stringify(safeItems);
 
+            // Copiar fecha de vencimiento si es venta a crédito
+            const fechaVencInput = document.getElementById('fecha-vencimiento');
+            if (fechaVencInput) {
+                DOM.fechaVencimientoField.value = fechaVencInput.value;
+            }
+
             console.log('Datos preparados para enviar:', {
                 subtotal: DOM.subtotalField.value,
                 itbis_monto: DOM.itbisMontoField.value,
@@ -2098,6 +2112,11 @@
             if (state.paymentType === 'credito') {
                 if (!state.selectedClient) {
                     showAlert('Debe seleccionar un cliente para venta a crédito', 'error');
+                    return;
+                }
+                const fechaVenc = document.getElementById('fecha-vencimiento').value;
+                if (!fechaVenc) {
+                    showAlert('Debe ingresar la fecha de vencimiento para venta a crédito', 'error');
                     return;
                 }
             } else {
