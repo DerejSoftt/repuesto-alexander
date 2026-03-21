@@ -1944,6 +1944,50 @@
             DOM.wholesaleSaleBtn.classList.toggle('active', type === 'mayor');
         };
 
+        // Limpiar toda la interfaz de venta (carrito, cliente y campos)
+        const resetSaleForm = () => {
+            state.selectedClient = null;
+            state.selectedProduct = null;
+            state.saleItems = [];
+            state.totalSales = 0;
+            state.subtotalSinITBIS = 0;
+            state.itbisAmount = 0;
+            state.discountPercentage = 0;
+            state.discountAmount = 0;
+            state.finalTotal = 0;
+            state.cashReceived = 0;
+            state.changeAmount = 0;
+
+            if (DOM.saleForm) {
+                DOM.saleForm.reset();
+            }
+
+            DOM.clientSearch.value = '';
+            DOM.cashClientName.value = '';
+            DOM.cashClientDocument.value = '';
+            DOM.productSearch.value = '';
+            DOM.productQuantity.value = '1';
+            DOM.cashReceivedInput.value = '';
+            DOM.changeAmountDisplay.textContent = formatCurrency(0);
+
+            if (DOM.discountInput) {
+                DOM.discountInput.value = 0;
+            }
+
+            const fechaVencInput = document.getElementById('fecha-vencimiento');
+            if (fechaVencInput) {
+                fechaVencInput.value = '';
+            }
+
+            setPaymentType('contado');
+            setPaymentMethod('efectivo');
+            setSaleType('unitaria');
+            renderClientResults('');
+            renderSaleItems();
+            updateTotal();
+            searchProducts('');
+        };
+
         // Seleccionar cliente
         const selectClient = (clientElement) => {
             const clientId = clientElement.getAttribute('data-id');
@@ -2158,6 +2202,8 @@
                 
                 if (result.success) {
                     showAlert('Venta procesada correctamente. Redirigiendo al comprobante...', 'success');
+                    sessionStorage.setItem('ventaDebeLimpiarse', '1');
+                    resetSaleForm();
                     setTimeout(() => {
                         window.location.href = `/comprobante-venta/${result.venta_id}/`;
                     }, 2000);
@@ -2253,12 +2299,20 @@
             DOM.discountInput.disabled = true;
         }
 
-        // Inicializar la interfaz
-        setPaymentType('contado');
-        setPaymentMethod('efectivo');
-        setSaleType('unitaria');
-        renderSaleItems();
-        updateTotal();
+        // Inicializar la interfaz limpia
+        resetSaleForm();
+
+        // Limpiar también al volver con cache del navegador (back/forward) o recargar
+        window.addEventListener('pageshow', () => {
+            const navEntry = performance.getEntriesByType('navigation')[0];
+            const esRecarga = navEntry && navEntry.type === 'reload';
+            const limpiarPendiente = sessionStorage.getItem('ventaDebeLimpiarse') === '1';
+
+            if (esRecarga || limpiarPendiente) {
+                resetSaleForm();
+                sessionStorage.removeItem('ventaDebeLimpiarse');
+            }
+        });
 
         // Permitir agregar producto con Enter
         DOM.productSearch.addEventListener('keypress', (e) => {

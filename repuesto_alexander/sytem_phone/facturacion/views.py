@@ -7483,7 +7483,10 @@ def roles(request):
         if created:
             for permiso_codename in grupo_info['permisos']:
                 try:
-                    permiso = Permission.objects.get(codename=f'access_{permiso_codename}')
+                    permiso = Permission.objects.get(
+                        codename=f'access_{permiso_codename}',
+                        content_type=content_type
+                    )
                     group.permissions.add(permiso)
                 except Permission.DoesNotExist:
                     continue
@@ -7632,7 +7635,10 @@ def roles(request):
                 # Asignar permisos basados en los módulos seleccionados
                 for modulo_codename in modulos_seleccionados:
                     try:
-                        permiso = Permission.objects.get(codename=f'access_{modulo_codename}')
+                        permiso = Permission.objects.get(
+                            codename=f'access_{modulo_codename}',
+                            content_type=content_type
+                        )
                         group.permissions.add(permiso)
                     except Permission.DoesNotExist:
                         continue
@@ -7664,7 +7670,10 @@ def roles(request):
                     group.permissions.clear()
                     for modulo_codename in modulos_seleccionados:
                         try:
-                            permiso = Permission.objects.get(codename=f'access_{modulo_codename}')
+                            permiso = Permission.objects.get(
+                                codename=f'access_{modulo_codename}',
+                                content_type=content_type
+                            )
                             group.permissions.add(permiso)
                         except Permission.DoesNotExist:
                             continue
