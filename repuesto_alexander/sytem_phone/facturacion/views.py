@@ -5636,8 +5636,11 @@ def generar_reporte_deudas_pdf(request):
         
         # Crear el PDF
         response = HttpResponse(content_type='application/pdf')
-        fecha_reporte = datetime.now().strftime('%Y%m%d_%H%M%S')
-        response['Content-Disposition'] = f'attachment; filename="reporte_deudas_{fecha_reporte}.pdf"'
+        tz_rd = pytz.timezone('America/Santo_Domingo')
+        ahora_local = timezone.now().astimezone(tz_rd)
+        fecha_reporte = ahora_local.strftime('%d/%m/%Y %I:%M ')
+        fecha_archivo = ahora_local.strftime('%Y%m%d_%H%M%S')
+        response['Content-Disposition'] = f'attachment; filename="reporte_deudas_{fecha_archivo}.pdf"'
         
         # Configurar el documento A4
         buffer = io.BytesIO()
@@ -5695,7 +5698,7 @@ def generar_reporte_deudas_pdf(request):
         contenido.append(Paragraph("REPORTE DE DEUDAS POR CLIENTE", titulo_style))
         
         # Información del reporte
-        fecha_actual = datetime.now().strftime('%d/%m/%Y %H:%M')
+        fecha_actual = fecha_reporte
         filtros = []
         if search:
             filtros.append(f"Búsqueda: {search}")
@@ -5720,10 +5723,11 @@ def generar_reporte_deudas_pdf(request):
         
         resumen_table = Table(resumen_data, colWidths=[4*cm, 4*cm])
         resumen_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.white),
             ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ('TOPPADDING', (0, 0), (-1, -1), 6),
@@ -5772,7 +5776,7 @@ def generar_reporte_deudas_pdf(request):
             # Estilos de la tabla
             tabla.setStyle(TableStyle([
                 # Encabezado
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8a8178')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -6002,20 +6006,29 @@ def generar_historial_cliente_pdf(request, client_id):
             saldo = max(monto_total - monto_pagado_real, Decimal('0.00'))
 
             info_factura = [
-                ["Fecha venta:",     fecha_venta_local],
-                ["Vencimiento:",     fecha_venc],
-                ["Monto total:",     f"RD$ {monto_total:,.2f}"],
-                ["Monto pagado:",    f"RD$ {monto_pagado_real:,.2f}"],
-                ["Saldo pendiente:", f"RD$ {saldo:,.2f}"],
-                ["Estado:",          estado],
+                ["Campo",            "Valor"],
+                ["Fecha venta",      fecha_venta_local],
+                ["Vencimiento",      fecha_venc],
+                ["Monto total",      f"RD$ {monto_total:,.2f}"],
+                ["Monto pagado",     f"RD$ {monto_pagado_real:,.2f}"],
+                ["Saldo pendiente",  f"RD$ {saldo:,.2f}"],
+                ["Estado",           estado],
             ]
-            tabla_factura = Table(info_factura, colWidths=[4*cm, 8*cm])
+            tabla_factura = Table(info_factura, colWidths=[4.2*cm, 7.8*cm])
             tabla_factura.setStyle(TableStyle([
-                ('FONTNAME',      (0, 0), (-1, -1), 'Helvetica'),
+                ('BACKGROUND',    (0, 0), (-1, 0), colors.HexColor('#6c757d')),
+                ('TEXTCOLOR',     (0, 0), (-1, 0), colors.white),
+                ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTNAME',      (0, 1), (0, -1), 'Helvetica-Bold'),
+                ('FONTNAME',      (1, 1), (1, -1), 'Helvetica'),
                 ('FONTSIZE',      (0, 0), (-1, -1), 9),
-                ('ALIGN',         (0, 0), (0, -1),  'LEFT'),
-                ('ALIGN',         (1, 0), (1, -1),  'LEFT'),
+                ('ALIGN',         (0, 0), (-1, 0),  'CENTER'),
+                ('ALIGN',         (0, 1), (0, -1),  'LEFT'),
+                ('ALIGN',         (1, 1), (1, -1),  'LEFT'),
                 ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID',          (0, 0), (-1, -1), 0.5, colors.grey),
+                ('BACKGROUND',    (0, 1), (-1, -1), colors.whitesmoke),
+                ('TOPPADDING',    (0, 0), (-1, -1), 4),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ]))
             contenido.append(tabla_factura)
@@ -6023,8 +6036,38 @@ def generar_historial_cliente_pdf(request, client_id):
             pagos = cuenta.pagos.all().order_by('-fecha_pago')
             if pagos:
                 contenido.append(Paragraph("<b>Pagos realizados:</b>", styles['Normal']))
+                encabezado_pagos_style = ParagraphStyle(
+                    'EncabezadoPagos',
+                    parent=styles['Normal'],
+                    fontSize=8,
+                    leading=9,
+                    alignment=1,
+                    textColor=colors.white
+                )
+                celda_pagos_style = ParagraphStyle(
+                    'CeldaPagos',
+                    parent=styles['Normal'],
+                    fontSize=7,
+                    leading=8,
+                    alignment=0,
+                    wordWrap='CJK'
+                )
+                monto_pagos_style = ParagraphStyle(
+                    'MontoPagos',
+                    parent=celda_pagos_style,
+                    alignment=2
+                )
+
                 # Cabecera con 7 columnas (incluye Observaciones)
-                pago_data = [["Fecha", "Monto", "Método", "Referencia", "Comprobante", "Cobró", "Observaciones"]]
+                pago_data = [[
+                    Paragraph("Fecha", encabezado_pagos_style),
+                    Paragraph("Monto", encabezado_pagos_style),
+                    Paragraph("Metodo", encabezado_pagos_style),
+                    Paragraph("Referencia", encabezado_pagos_style),
+                    Paragraph("Comprobante", encabezado_pagos_style),
+                    Paragraph("Cobro", encabezado_pagos_style),
+                    Paragraph("Observaciones", encabezado_pagos_style),
+                ]]
 
                 suma_pagos = Decimal('0.00')
                 for pago in pagos:
@@ -6047,39 +6090,44 @@ def generar_historial_cliente_pdf(request, client_id):
                     observaciones = pago.observaciones.strip() if pago.observaciones else 'N/A'
 
                     pago_data.append([
-                        fecha_pago_local,
-                        f"RD$ {monto_pago:,.2f}",
-                        pago.get_metodo_pago_display(),
-                        pago.referencia or 'N/A',
-                        comp_num,
-                        usuario,
-                        observaciones,   # ← nueva columna
+                        Paragraph(fecha_pago_local, celda_pagos_style),
+                        Paragraph(f"RD$ {monto_pago:,.2f}", monto_pagos_style),
+                        Paragraph(pago.get_metodo_pago_display(), celda_pagos_style),
+                        Paragraph(pago.referencia or 'N/A', celda_pagos_style),
+                        Paragraph(comp_num, celda_pagos_style),
+                        Paragraph(usuario, celda_pagos_style),
+                        Paragraph(observaciones, celda_pagos_style),
                     ])
 
-                # Anchos de columna para 7 columnas (total ~16 cm, cabe en A4)
+                # Anchos de columna para 7 columnas (total 18 cm, aprovecha mejor A4)
                 tabla_pagos = Table(
                     pago_data,
                     colWidths=[
-                        2.2*cm,   # Fecha
-                        2.2*cm,   # Monto
-                        2.2*cm,   # Método
-                        2.2*cm,   # Referencia
-                        2.2*cm,   # Comprobante
-                        2.2*cm,   # Cobró
-                        2.8*cm    # Observaciones (más ancha)
+                        2.9*cm,   # Fecha
+                        2.1*cm,   # Monto
+                        2.0*cm,   # Metodo
+                        2.3*cm,   # Referencia
+                        2.5*cm,   # Comprobante
+                        2.0*cm,   # Cobro
+                        4.2*cm    # Observaciones
                     ]
                 )
                 tabla_pagos.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8a8178')),
                     ('TEXTCOLOR',  (0, 0), (-1, 0), colors.white),
-                    ('ALIGN',      (0, 0), (-1, -1), 'CENTER'),
+                    ('ALIGN',      (0, 0), (-1, 0), 'CENTER'),
+                    ('ALIGN',      (0, 1), (-1, -1), 'LEFT'),
+                    ('ALIGN',      (1, 1), (1, -1), 'RIGHT'),
                     ('FONTNAME',   (0, 0), (-1, 0), 'Helvetica-Bold'),
                     ('FONTSIZE',   (0, 0), (-1, 0), 8),
-                    ('FONTSIZE',   (0, 1), (-1, -1), 8),
+                    ('FONTSIZE',   (0, 1), (-1, -1), 7),
                     ('GRID',       (0, 0), (-1, -1), 0.5, colors.grey),
                     ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                    # Ajuste de texto para la columna de observaciones
-                    ('WORDWRAP', (6, 1), (6, -1), True),
+                    ('VALIGN',     (0, 0), (-1, -1), 'MIDDLE'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ]))
                 contenido.append(tabla_pagos)
             else:
