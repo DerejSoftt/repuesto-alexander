@@ -6134,7 +6134,12 @@ def generar_reporte_vencidas_pdf(request):
         if not cuentas.exists():
             return HttpResponse("No hay facturas vencidas en este momento.", content_type='text/plain')
 
-        hoy = timezone.now().date()
+        # Zona horaria República Dominicana
+        tz_rd = pytz.timezone('America/Santo_Domingo')
+        ahora_local = timezone.now().astimezone(tz_rd)
+        fecha_reporte = ahora_local.strftime('%d/%m/%Y %I:%M %p')
+
+        hoy = ahora_local.date()
         data = []
         total_vencido = Decimal('0.00')
         for cuenta in cuentas:
@@ -6154,8 +6159,8 @@ def generar_reporte_vencidas_pdf(request):
 
         # Crear PDF
         response = HttpResponse(content_type='application/pdf')
-        fecha_reporte = datetime.now().strftime('%Y%m%d_%H%M%S')
-        response['Content-Disposition'] = f'attachment; filename="facturas_vencidas_{fecha_reporte}.pdf"'
+        fecha_reporte_archivo = ahora_local.strftime('%Y%m%d_%H%M%S')
+        response['Content-Disposition'] = f'attachment; filename="facturas_vencidas_{fecha_reporte_archivo}.pdf"'
 
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
@@ -6182,8 +6187,7 @@ def generar_reporte_vencidas_pdf(request):
         contenido.append(Spacer(1, 0.5*cm))
 
         # Subtítulo con fecha de generación
-        fecha_actual = datetime.now().strftime('%d/%m/%Y %H:%M')
-        contenido.append(Paragraph(f"Generado: {fecha_actual}", styles['Normal']))
+        contenido.append(Paragraph(f"Generado: {fecha_reporte}", styles['Normal']))
         contenido.append(Spacer(1, 0.5*cm))
 
         # Tabla de facturas vencidas
