@@ -6124,22 +6124,24 @@ def generar_reporte_vencidas_pdf(request):
         from decimal import Decimal
         import io
 
-        # Obtener cuentas vencidas (no anuladas ni eliminadas)
-        cuentas = CuentaPorCobrar.objects.filter(
-            estado='vencida',
-            anulada=False,
-            eliminada=False
-        ).select_related('cliente', 'venta').order_by('fecha_vencimiento')
-
-        if not cuentas.exists():
-            return HttpResponse("No hay facturas vencidas en este momento.", content_type='text/plain')
-
         # Zona horaria República Dominicana
         tz_rd = pytz.timezone('America/Santo_Domingo')
         ahora_local = timezone.now().astimezone(tz_rd)
         fecha_reporte = ahora_local.strftime('%d/%m/%Y %I:%M %p')
 
         hoy = ahora_local.date()
+
+        # Obtener solo cuentas realmente vencidas (1 día o más de atraso)
+        cuentas = CuentaPorCobrar.objects.filter(
+            estado='vencida',
+            anulada=False,
+            eliminada=False,
+            fecha_vencimiento__lt=hoy
+        ).select_related('cliente', 'venta').order_by('fecha_vencimiento')
+
+        if not cuentas.exists():
+            return HttpResponse("No hay facturas vencidas en este momento.", content_type='text/plain')
+
         data = []
         total_vencido = Decimal('0.00')
         for cuenta in cuentas:
@@ -6147,6 +6149,8 @@ def generar_reporte_vencidas_pdf(request):
             if monto_pendiente < 0:
                 monto_pendiente = Decimal('0.00')
             dias_vencido = (hoy - cuenta.fecha_vencimiento).days if cuenta.fecha_vencimiento else 0
+            if dias_vencido < 1:
+                continue
             total_vencido += monto_pendiente
             data.append({
                 'cliente': cuenta.cliente.full_name if cuenta.cliente else 'Cliente no disponible',
@@ -6156,6 +6160,9 @@ def generar_reporte_vencidas_pdf(request):
                 'dias_vencido': dias_vencido,
                 'monto_pendiente': monto_pendiente,
             })
+
+        if not data:
+            return HttpResponse("No hay facturas vencidas en este momento.", content_type='text/plain')
 
         # Crear PDF
         response = HttpResponse(content_type='application/pdf')
@@ -6190,16 +6197,50 @@ def generar_reporte_vencidas_pdf(request):
         contenido.append(Paragraph(f"Generado: {fecha_reporte}", styles['Normal']))
         contenido.append(Spacer(1, 0.5*cm))
 
+        # Resumen en 2 columnas (arriba)
+        resumen_data = [
+            ["Total deuda vencida", "Total registros"],
+            [f"RD$ {total_vencido:,.2f}", str(len(data))]
+        ]
+        tabla_resumen = Table(resumen_data, colWidths=[7*cm, 7*cm])
+        tabla_resumen.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#6c757d')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('BACKGROUND', (0, 1), (-1, 1), colors.whitesmoke),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        contenido.append(tabla_resumen)
+        contenido.append(Spacer(1, 0.5*cm))
+
         # Tabla de facturas vencidas
+        encabezado_style = ParagraphStyle(
+            'EncabezadoVencidas',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=9,
+            alignment=1,
+            textColor=colors.white
+        )
         encabezados = [
-            "Cliente", "Teléfono", "Factura", "Fecha Vencimiento",
-            "Días Vencido", "Monto Pendiente"
+            Paragraph("Cliente", encabezado_style),
+            Paragraph("Teléfono", encabezado_style),
+            Paragraph("Factura", encabezado_style),
+            Paragraph("Fecha. Venc.", encabezado_style),
+            Paragraph("Días", encabezado_style),
+            Paragraph("Monto Pendiente", encabezado_style)
         ]
         datos_tabla = [encabezados]
 
         for item in data:
+            cliente_corto = item['cliente'] if len(item['cliente']) <= 22 else f"{item['cliente'][:19]}..."
             fila = [
-                item['cliente'],
+                cliente_corto,
                 item['telefono'],
                 item['factura'],
                 item['fecha_vencimiento'],
@@ -6213,7 +6254,7 @@ def generar_reporte_vencidas_pdf(request):
         tabla = Table(datos_tabla, colWidths=col_widths)
 
         tabla.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dc3545')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#6c757d')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -6227,10 +6268,6 @@ def generar_reporte_vencidas_pdf(request):
 
         contenido.append(tabla)
         contenido.append(Spacer(1, 0.7*cm))
-
-        # Totales
-        total_texto = f"<b>Total deuda vencida:</b> RD$ {total_vencido:,.2f}"
-        contenido.append(Paragraph(total_texto, styles['Normal']))
 
         # Nota
         nota = Paragraph(
