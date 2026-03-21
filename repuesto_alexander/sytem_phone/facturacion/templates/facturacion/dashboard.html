@@ -1560,6 +1560,13 @@ let dashboardData = {
 
 // Variables para los gráficos
 let weeklySalesChart, salesChart, inventoryChart, brandValueChart;
+let ventasUsuarioController = null;
+let ventasUsuarioRequestInFlight = false;
+let lastVentasUsuarioUrl = '';
+
+function chartsAvailable() {
+    return typeof Chart !== 'undefined';
+}
 
 // Formatear moneda
 function formatCurrency(amount) {
@@ -1685,7 +1692,7 @@ function updateOverview() {
 
     // Crear/actualizar gráfico de ventas semanales
     const weeklyCanvas = document.getElementById('weeklySalesChart');
-    if (weeklyCanvas && weeklyCanvas.getContext) {
+    if (weeklyCanvas && weeklyCanvas.getContext && chartsAvailable()) {
         if (weeklySalesChart) {
             weeklySalesChart.destroy();
         }
@@ -1790,7 +1797,7 @@ function updateSalesView() {
     }
 
     const salesCanvas = document.getElementById('salesChart');
-    if (salesCanvas && salesCanvas.getContext) {
+    if (salesCanvas && salesCanvas.getContext && chartsAvailable()) {
         const salesCtx = salesCanvas.getContext('2d');
         salesChart = new Chart(salesCtx, {
             type: 'line',
@@ -1865,7 +1872,7 @@ function updateInventoryView() {
 
     // Crear/actualizar gráfico de categorías
     const inventoryCanvas = document.getElementById('inventoryChart');
-    if (inventoryCanvas && inventoryCanvas.getContext) {
+    if (inventoryCanvas && inventoryCanvas.getContext && chartsAvailable()) {
         if (inventoryChart) {
             inventoryChart.destroy();
         }
@@ -1965,7 +1972,7 @@ function updateInventoryValueView() {
 
     // Crear/actualizar gráfico de valor por marca
     const brandValueCanvas = document.getElementById('brandValueChart');
-    if (brandValueCanvas && brandValueCanvas.getContext) {
+    if (brandValueCanvas && brandValueCanvas.getContext && chartsAvailable()) {
         const brandValueCtx = brandValueCanvas.getContext('2d');
         
         if (brandValueChart) {
@@ -2110,6 +2117,19 @@ function buscarVentasPorUsuario() {
     if (params.toString()) {
         url += '?' + params.toString();
     }
+
+    // Evitar duplicados exactos si ya hay una solicitud igual en curso.
+    if (ventasUsuarioRequestInFlight && url === lastVentasUsuarioUrl) {
+        return;
+    }
+
+    // Cancelar una solicitud previa para conservar solo la más reciente.
+    if (ventasUsuarioController) {
+        ventasUsuarioController.abort();
+    }
+    ventasUsuarioController = new AbortController();
+    ventasUsuarioRequestInFlight = true;
+    lastVentasUsuarioUrl = url;
     
     console.log("Buscando ventas con URL:", url); // Para depuración
     
@@ -2120,7 +2140,8 @@ function buscarVentasPorUsuario() {
     fetch(url, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
-        }
+        },
+        signal: ventasUsuarioController.signal
     })
         .then(response => {
             if (!response.ok) {
@@ -2170,8 +2191,14 @@ function buscarVentasPorUsuario() {
             });
         })
         .catch(error => {
+            if (error.name === 'AbortError') {
+                return;
+            }
             console.error('Error al buscar ventas por usuario:', error);
             Swal.fire('Error', 'No se pudieron cargar las ventas', 'error');
+        })
+        .finally(() => {
+            ventasUsuarioRequestInFlight = false;
         });
 }
 
@@ -2490,7 +2517,11 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             dashboardData = data;
-            updateOverview();
+            try {
+                updateOverview();
+            } catch (renderError) {
+                console.error('Error renderizando dashboard:', renderError);
+            }
         })
         .catch(error => {
             console.error('Error al cargar datos iniciales:', error);
@@ -2500,13 +2531,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 text: 'No se pudieron cargar los datos del dashboard. Inténtalo de nuevo más tarde.'
             });
         });
-
-    // Configurar eventos para las pestañas
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-        tab.addEventListener('click', function() {
-            showView(this.dataset.view);
-        });
-    });
 
     // Manejar el cierre de sesión con SweetAlert2
     const logoutLink = document.querySelector("a[href='{% url 'logout' %}']");

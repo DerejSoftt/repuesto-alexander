@@ -21,6 +21,8 @@ from django.utils import timezone
 from datetime import date, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login
+from django.apps import apps
+import pytz
 from reportlab.lib.pagesizes import A4, portrait
 from reportlab.pdfgen import canvas
 from django.http import HttpResponse
@@ -39,7 +41,8 @@ from django.urls import reverse
 # import time
 
 from django.db.models import Max
-from django.db.models import Sum, Q, F, Avg, Count
+from django.db.models import Sum, Q, F, Avg, Count, ExpressionWrapper, DecimalField, Value
+from django.db.models.functions import Coalesce
 from django.db.models.functions import TruncDate, ExtractMonth
 from datetime import datetime, timedelta, time
 import pandas as pd
@@ -241,7 +244,7 @@ def logout_view(request):
 #==============================================================================================
 #==============================Dashboard - Vista principal con KPIs y gráficos=================
 #==============================================================================================
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 @login_required
 def dashboard(request):
     hoy = timezone.now().date()
@@ -420,6 +423,8 @@ def dashboard(request):
 #==============================================================================================
 def dashboard_data(request):
     try:
+        # Zona horaria República Dominicana para mostrar horas en el dashboard
+        tz_rd = pytz.timezone('America/Santo_Domingo')
         hoy = timezone.now().date()
         inicio_mes = hoy.replace(day=1)
         inicio_semana = hoy - timedelta(days=hoy.weekday())
@@ -564,69 +569,70 @@ def dashboard_data(request):
         ).count()
 
         # =============================================
-        # NUEVO: CÁLCULOS DEL VALOR DEL INVENTARIO
+        # CÁLCULOS DEL VALOR DEL INVENTARIO (OPTIMIZADOS)
         # =============================================
-        
-        # Obtener todos los productos activos
         productos_activos = EntradaProducto.objects.filter(activo=True)
-        
-        # Calcular valor total del inventario (precio de venta * cantidad)
-        valor_total_inventario = 0
-        inversion_total = 0
-        
-        for producto in productos_activos:
-            # Valor a precio de venta
-            if producto.costo and producto.cantidad:
-                valor_total_inventario += float(producto.costo * producto.cantidad)
-            
-            # Inversión total (costo * cantidad)
-            if producto.precio and producto.cantidad:
-                inversion_total += float(producto.precio_con_itbis* producto.cantidad)
-        
-        # Ganancia potencial
+
+        valor_expr = ExpressionWrapper(
+            F('costo') * F('cantidad'),
+            output_field=DecimalField(max_digits=18, decimal_places=2)
+        )
+        inversion_expr = ExpressionWrapper(
+            Coalesce(F('precio_con_itbis'), F('precio')) * F('cantidad'),
+            output_field=DecimalField(max_digits=18, decimal_places=2)
+        )
+
+        inventario_totales = productos_activos.aggregate(
+            total_value=Coalesce(Sum(valor_expr), Value(0), output_field=DecimalField(max_digits=18, decimal_places=2)),
+            total_investment=Coalesce(Sum(inversion_expr), Value(0), output_field=DecimalField(max_digits=18, decimal_places=2))
+        )
+
+        valor_total_inventario = float(inventario_totales['total_value'] or 0)
+        inversion_total = float(inventario_totales['total_investment'] or 0)
         ganancia_potencial = inversion_total - valor_total_inventario
 
-        # Valor por marca
-        valores_por_marca = []
-        marcas_distintas = productos_activos.values('marca').distinct()
-        
-        for marca_info in marcas_distintas:
-            marca = marca_info['marca']
-            productos_marca = productos_activos.filter(marca=marca)
-            
-            valor_marca = 0
-            for producto in productos_marca:
-                if producto.precio and producto.cantidad:
-                    valor_marca += float(producto.costo * producto.cantidad)
-            
-            # Obtener el nombre legible de la marca
-            nombre_marca = dict(EntradaProducto.MARCAS).get(marca, marca)
-            
-            valores_por_marca.append({
-                'marca': nombre_marca,
-                'valorTotal': round(valor_marca, 2)
-            })
-        
-        # Ordenar marcas por valor descendente
-        valores_por_marca.sort(key=lambda x: x['valorTotal'], reverse=True)
+        marcas_map = dict(EntradaProducto.MARCAS)
 
-        # Productos de mayor valor (top 10 por valor total)
-        productos_con_valor = []
-        for producto in productos_activos:
-            if producto.precio and producto.cantidad:
-                valor_total = float(producto.costo * producto.cantidad)
-                productos_con_valor.append({
-                    'descripcion': producto.descripcion,
-                    'marca': dict(EntradaProducto.MARCAS).get(producto.marca, producto.marca),
-                    'cantidad': producto.cantidad,
-                    'cantidad_minima': producto.cantidad_minima,
-                    'costo': float(producto.costo) if producto.costo else 0,
-                    'precio': float(producto.precio) if producto.precio else 0,
-                    'valorTotal': round(valor_total, 2)
-                })
-        
-        # Ordenar por valor total descendente y tomar los top 10
-        productos_mayor_valor = sorted(productos_con_valor, key=lambda x: x['valorTotal'], reverse=True)[:10]
+        valores_por_marca_qs = (
+            productos_activos
+            .values('marca')
+            .annotate(
+                valor_total=Coalesce(
+                    Sum(valor_expr),
+                    Value(0),
+                    output_field=DecimalField(max_digits=18, decimal_places=2)
+                )
+            )
+            .order_by('-valor_total')
+        )
+
+        valores_por_marca = [
+            {
+                'marca': marcas_map.get(item['marca'], item['marca']),
+                'valorTotal': round(float(item['valor_total'] or 0), 2)
+            }
+            for item in valores_por_marca_qs
+        ]
+
+        productos_mayor_valor_qs = (
+            productos_activos
+            .annotate(valor_total=valor_expr)
+            .values('descripcion', 'marca', 'cantidad', 'cantidad_minima', 'costo', 'precio', 'valor_total')
+            .order_by('-valor_total')[:10]
+        )
+
+        productos_mayor_valor = [
+            {
+                'descripcion': item['descripcion'],
+                'marca': marcas_map.get(item['marca'], item['marca']),
+                'cantidad': item['cantidad'],
+                'cantidad_minima': item['cantidad_minima'],
+                'costo': float(item['costo'] or 0),
+                'precio': float(item['precio'] or 0),
+                'valorTotal': round(float(item['valor_total'] or 0), 2)
+            }
+            for item in productos_mayor_valor_qs
+        ]
 
         data = {
             'sales': {
@@ -656,8 +662,8 @@ def dashboard_data(request):
                 'id': venta.id,
                 'producto': f"{venta.cliente_nombre} - {venta.numero_factura}",
                 'monto': float(venta.total),
-                'fecha': venta.fecha_venta.strftime('%Y-%m-%d'),
-                'hora': venta.fecha_venta.strftime('%H:%M'),
+                'fecha': venta.fecha_venta.strftime('%d-%m-%Y'),
+                'hora': timezone.localtime(venta.fecha_venta, tz_rd).strftime('%I:%M'),
                 'estado': 'completada',
                 'cantidad': 1
             } for venta in ultimas_ventas],
@@ -861,6 +867,8 @@ def dashboard_tradicional(request):
 #==============================================================================================
 def dashboard_data_tradicional(request):
     """Versión tradicional sin pandas para JSON"""
+    # Zona horaria República Dominicana para mostrar horas en el dashboard
+    tz_rd = pytz.timezone('America/Santo_Domingo')
     hoy = timezone.now().date()
     inicio_mes = hoy.replace(day=1)
     inicio_semana = hoy - timedelta(days=hoy.weekday())
@@ -927,6 +935,40 @@ def dashboard_data_tradicional(request):
         total_dia = float(ventas_contado_dia + ventas_credito_dia)
         ventas_semana.append(total_dia)
 
+    # Tendencia mensual (enero-diciembre del año actual)
+    monthly_trend = [0.0] * 12
+
+    ventas_contado_por_mes = Venta.objects.filter(
+        fecha_venta__year=hoy.year,
+        anulada=False,
+        tipo_venta='contado'
+    ).annotate(
+        mes=ExtractMonth('fecha_venta')
+    ).values('mes').annotate(
+        total=Sum('total')
+    )
+
+    ventas_credito_por_mes = CuentaPorCobrar.objects.filter(
+        venta__fecha_venta__year=hoy.year,
+        venta__anulada=False,
+        venta__tipo_venta='credito',
+        anulada=False
+    ).annotate(
+        mes=ExtractMonth('venta__fecha_venta')
+    ).values('mes').annotate(
+        total=Sum('monto_pagado')
+    )
+
+    for item in ventas_contado_por_mes:
+        mes = item.get('mes')
+        if mes:
+            monthly_trend[mes - 1] += float(item.get('total') or 0)
+
+    for item in ventas_credito_por_mes:
+        mes = item.get('mes')
+        if mes:
+            monthly_trend[mes - 1] += float(item.get('total') or 0)
+
     # Inventario
     total_stock = EntradaProducto.objects.filter(activo=True).aggregate(
         total=Sum('cantidad')
@@ -943,7 +985,7 @@ def dashboard_data_tradicional(request):
         venta__anulada=False,
         venta__fecha_venta__date__gte=fecha_30_dias
     ).values(
-        'producto__nombre_producto'
+        'producto__descripcion'
     ).annotate(
         total_vendido=Sum('cantidad')
     ).order_by('-total_vendido')[:5]
@@ -956,16 +998,16 @@ def dashboard_data_tradicional(request):
     # Inventario
     productos_inventario = list(EntradaProducto.objects.filter(
         activo=True
-    ).values('nombre_producto', 'marca', 'cantidad', 'costo_venta', 'cantidad_minima')[:10])
+    ).values('descripcion', 'marca', 'cantidad', 'precio', 'cantidad_minima')[:10])
 
     # Alertas
     alertas_stock = EntradaProducto.objects.filter(
         activo=True,
         cantidad__lte=F('cantidad_minima')
-    ).values('nombre_producto', 'cantidad', 'cantidad_minima')
+    ).values('descripcion', 'cantidad', 'cantidad_minima')
 
     alertas = [
-        f"{p['nombre_producto']} - Solo {p['cantidad']} unidades restantes (mínimo: {p['cantidad_minima']})"
+        f"{p['descripcion']} - Solo {p['cantidad']} unidades restantes (mínimo: {p['cantidad_minima']})"
         for p in alertas_stock
     ]
 
@@ -997,15 +1039,15 @@ def dashboard_data_tradicional(request):
             ]
         },
         'topProducts': [{
-            'nombre_producto': item['producto__nombre_producto'],
+            'nombre_producto': item['producto__descripcion'],
             'total_vendido': item['total_vendido']
         } for item in top_productos],
         'recentSales': [{
             'id': venta.id,
             'producto': f"{venta.cliente_nombre} - {venta.numero_factura}",
             'monto': float(venta.total),
-            'fecha': venta.fecha_venta.strftime('%Y-%m-%d'),
-            'hora': venta.fecha_venta.strftime('%H:%M'),
+            'fecha': venta.fecha_venta.strftime('%d-%m-%Y'),
+            'hora': timezone.localtime(venta.fecha_venta, tz_rd).strftime('%I:%M'),
             'estado': 'completada',
             'cantidad': 1
         } for venta in ultimas_ventas],
@@ -1023,6 +1065,17 @@ def movimientos_stock(request):
     """API para obtener movimientos de stock - INCLUYENDO VENTAS Y ENTRADAS"""
     try:
         movimientos_data = []
+        limite_total = 300
+        limite_fuente = 200
+        tz_rd = pytz.timezone('America/Santo_Domingo')
+
+        def format_rd_datetime(dt):
+            if not dt:
+                return "Fecha no disponible"
+            try:
+                return timezone.localtime(dt, tz_rd).strftime('%d-%m-%Y %I:%M')
+            except Exception:
+                return dt.strftime('%d-%m-%Y %I:%M')
         
         # =============================================
         # 1. OBTENER ENTRADAS DE PRODUCTOS (COMPRAS)
@@ -1031,19 +1084,18 @@ def movimientos_stock(request):
         # Probablemente EntradaProducto ES el producto en sí mismo, no tiene relación con otro modelo Producto
         
         print("=== DEBUG: Obteniendo entradas de productos ===")
-        
-        # Obtener entradas sin select_related a 'producto' ya que no existe
+
+        # Definir entradas sin slicing para poder filtrar correctamente por fecha.
         try:
-            entradas = EntradaProducto.objects.all().order_by('-fecha_entrada')[:500]
-            print(f"Entradas encontradas (ordenadas por fecha_entrada): {entradas.count()}")
-        except:
-            # Intentar con otro campo de fecha si fecha_entrada no existe
+            entradas = EntradaProducto.objects.select_related('proveedor').all().order_by('-fecha_entrada')
+            campo_fecha_entrada = 'fecha_entrada'
+        except Exception:
             try:
-                entradas = EntradaProducto.objects.all().order_by('-fecha_registro')[:500]
-                print(f"Entradas encontradas (ordenadas por fecha_registro): {entradas.count()}")
-            except:
-                entradas = EntradaProducto.objects.all().order_by('-id')[:500]
-                print(f"Entradas encontradas (ordenadas por ID): {entradas.count()}")
+                entradas = EntradaProducto.objects.select_related('proveedor').all().order_by('-fecha_registro')
+                campo_fecha_entrada = 'fecha_registro'
+            except Exception:
+                entradas = EntradaProducto.objects.select_related('proveedor').all().order_by('-id')
+                campo_fecha_entrada = None
         
         # =============================================
         # 2. OBTENER MOVIMIENTOS DE STOCK (AJUSTES, ETC.)
@@ -1071,25 +1123,21 @@ def movimientos_stock(request):
         # Aplicar filtros a entradas
         if fecha_desde:
             try:
-                entradas = entradas.filter(fecha_entrada__date__gte=fecha_desde)
-                print(f"Entradas filtradas por fecha_desde: {entradas.count()}")
+                if campo_fecha_entrada == 'fecha_entrada':
+                    entradas = entradas.filter(fecha_entrada__gte=fecha_desde)
+                elif campo_fecha_entrada == 'fecha_registro':
+                    entradas = entradas.filter(fecha_registro__date__gte=fecha_desde)
             except Exception as e:
                 print(f"Error filtrando fecha_desde en entradas: {e}")
-                try:
-                    entradas = entradas.filter(fecha_registro__date__gte=fecha_desde)
-                except:
-                    pass
         
         if fecha_hasta:
             try:
-                entradas = entradas.filter(fecha_entrada__date__lte=fecha_hasta)
-                print(f"Entradas filtradas por fecha_hasta: {entradas.count()}")
+                if campo_fecha_entrada == 'fecha_entrada':
+                    entradas = entradas.filter(fecha_entrada__lte=fecha_hasta)
+                elif campo_fecha_entrada == 'fecha_registro':
+                    entradas = entradas.filter(fecha_registro__date__lte=fecha_hasta)
             except Exception as e:
                 print(f"Error filtrando fecha_hasta en entradas: {e}")
-                try:
-                    entradas = entradas.filter(fecha_registro__date__lte=fecha_hasta)
-                except:
-                    pass
         
         if tipo_movimiento and tipo_movimiento != 'entrada':
             entradas = entradas.none()
@@ -1114,14 +1162,15 @@ def movimientos_stock(request):
             # Si se filtra por otro tipo, excluir ventas
             ventas = ventas.none()
         
-        # Limitar registros
-        movimientos = movimientos[:500]
-        ventas = ventas[:500]
+        # Limitar registros por fuente después de aplicar filtros
+        entradas = entradas[:limite_fuente]
+        movimientos = movimientos[:limite_fuente]
+        ventas = ventas[:limite_fuente]
         
         # =============================================
         # 5. PROCESAR ENTRADAS DE PRODUCTOS
         # =============================================
-        print(f"Procesando {entradas.count()} entradas...")
+        print("Procesando entradas...")
         
         for entrada in entradas:
             try:
@@ -1155,11 +1204,11 @@ def movimientos_stock(request):
                 # Obtener fecha
                 fecha_str = "Fecha no disponible"
                 if hasattr(entrada, 'fecha_entrada') and entrada.fecha_entrada:
-                    fecha_str = entrada.fecha_entrada.strftime('%Y-%m-%d %H:%M')
+                    fecha_str = entrada.fecha_entrada.strftime('%d-%m-%Y %I:%M')
                 elif hasattr(entrada, 'fecha_registro') and entrada.fecha_registro:
-                    fecha_str = entrada.fecha_registro.strftime('%Y-%m-%d %H:%M')
+                    fecha_str = format_rd_datetime(entrada.fecha_registro)
                 elif hasattr(entrada, 'created_at') and entrada.created_at:
-                    fecha_str = entrada.created_at.strftime('%Y-%m-%d %H:%M')
+                    fecha_str = format_rd_datetime(entrada.created_at)
                 
                 # Obtener cantidad
                 cantidad = 0
@@ -1204,7 +1253,7 @@ def movimientos_stock(request):
         # =============================================
         # 6. PROCESAR MOVIMIENTOS DE STOCK
         # =============================================
-        print(f"Procesando {movimientos.count()} movimientos de stock...")
+        print("Procesando movimientos de stock...")
         
         for mov in movimientos:
             try:
@@ -1232,7 +1281,7 @@ def movimientos_stock(request):
                     producto_nombre = str(mov.producto)
                 
                 movimientos_data.append({
-                    'fecha_movimiento': mov.fecha_movimiento.strftime('%Y-%m-%d %H:%M'),
+                    'fecha_movimiento': format_rd_datetime(mov.fecha_movimiento),
                     'producto': producto_nombre,
                     'tipo_movimiento': mov.tipo_movimiento,
                     'tipo_operacion': tipo_operacion,
@@ -1251,7 +1300,7 @@ def movimientos_stock(request):
         # =============================================
         # 7. PROCESAR VENTAS
         # =============================================
-        print(f"Procesando {ventas.count()} ventas...")
+        print("Procesando ventas...")
         
         for detalle_venta in ventas:
             try:
@@ -1273,7 +1322,7 @@ def movimientos_stock(request):
                     producto_nombre = str(producto)
                 
                 movimientos_data.append({
-                    'fecha_movimiento': venta.fecha_venta.strftime('%Y-%m-%d %H:%M'),
+                    'fecha_movimiento': format_rd_datetime(venta.fecha_venta),
                     'producto': producto_nombre,
                     'tipo_movimiento': 'venta',
                     'tipo_operacion': 'salida',
@@ -1295,8 +1344,8 @@ def movimientos_stock(request):
         # Ordenar por fecha de movimiento (más reciente primero)
         movimientos_data.sort(key=lambda x: x['fecha_movimiento'], reverse=True)
         
-        # Limitar a 1000 registros en total
-        movimientos_data = movimientos_data[:1000]
+        # Limitar el tamaño total de la respuesta
+        movimientos_data = movimientos_data[:limite_total]
         
         # Eliminar campo 'origen' antes de enviar al frontend
         for mov in movimientos_data:
@@ -2035,104 +2084,6 @@ def generar_pdf_cuadre(request, cuadre_id):
 #============================================================================================
 #======================== VENTAS POR USUARIO  (OJO )===============================
 #============================================================================================
-@login_required
-def ventas_por_usuario(request):
-    """Vista para mostrar ventas agrupadas por usuario"""
-    try:
-        # Obtener filtros
-        fecha_desde = request.GET.get('fecha_desde')
-        fecha_hasta = request.GET.get('fecha_hasta')
-        usuario_id = request.GET.get('usuario')
-        
-        # Query base de ventas no anuladas
-        ventas = Venta.objects.filter(anulada=False)
-        
-        # Aplicar filtros de fecha
-        if fecha_desde:
-            ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
-        if fecha_hasta:
-            ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
-        
-        # Obtener todos los usuarios
-        usuarios = User.objects.all().order_by('username')
-        
-        # Preparar datos para la plantilla
-        ventas_por_usuario = []
-        
-        for usuario in usuarios:
-            # Si hay filtro de usuario, solo mostrar ese
-            if usuario_id and str(usuario.id) != usuario_id:
-                continue
-                
-            # Ventas de este usuario
-            ventas_usuario = ventas.filter(vendedor=usuario)
-            
-            if not ventas_usuario.exists() and not usuario_id:
-                # Si no hay ventas y no hay filtro específico, no mostrar
-                continue
-            
-            # Calcular totales
-            total_ventas = ventas_usuario.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            cantidad_ventas = ventas_usuario.count()
-            
-            # Ventas por tipo
-            ventas_contado = ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            ventas_credito = ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            
-            # Ventas por método de pago (solo para ventas de contado)
-            ventas_efectivo = ventas_usuario.filter(
-                tipo_venta='contado', 
-                metodo_pago='efectivo'
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            
-            ventas_tarjeta = ventas_usuario.filter(
-                tipo_venta='contado', 
-                metodo_pago='tarjeta'
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-            
-            # Promedio por venta
-            promedio_venta = total_ventas / cantidad_ventas if cantidad_ventas > 0 else 0
-            
-            ventas_por_usuario.append({
-                'usuario_id': usuario.id,
-                'usuario': usuario.username,
-                'cantidad_ventas': cantidad_ventas,
-                'total_ventas': float(total_ventas),
-                'total_contado': float(ventas_contado),
-                'total_credito': float(ventas_credito),
-                'total_efectivo': float(ventas_efectivo),
-                'total_tarjeta': float(ventas_tarjeta),
-                'promedio_venta': float(promedio_venta)
-            })
-        
-        # Ordenar por total de ventas (mayor a menor)
-        ventas_por_usuario.sort(key=lambda x: x['total_ventas'], reverse=True)
-        
-        # Preparar el contexto
-        context = {
-            'ventas_por_usuario': ventas_por_usuario,
-            'usuarios': usuarios,
-            'fecha_desde': fecha_desde,
-            'fecha_hasta': fecha_hasta,
-            'usuario_seleccionado': usuario_id,
-        }
-        
-        # Si es una petición AJAX, devolver JSON
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'ventas': ventas_por_usuario})
-        
-        # Si no, renderizar la plantilla (aunque en tu caso siempre será AJAX)
-        return render(request, 'facturacion/ventas_por_usuario.html', context)
-        
-    except Exception as e:
-        print(f"Error en ventas_por_usuario: {e}")
-        import traceback
-        traceback.print_exc()
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'error': str(e)}, status=500)
-        return render(request, 'facturacion/error.html', {'error': str(e)})
-    
-
 
 @login_required
 def ventas_por_usuario(request):
@@ -2145,100 +2096,112 @@ def ventas_por_usuario(request):
     - Total cobros registrados (pagos a cuentas por cobrar)
     """
     try:
-        # Obtener filtros desde la petición
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         usuario_id = request.GET.get('usuario')
 
-        # Query base de ventas no anuladas
         ventas = Venta.objects.filter(anulada=False)
-
-        # Aplicar filtros de fecha a las ventas
         if fecha_desde:
             ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
         if fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
 
-        # Obtener todos los usuarios (o filtrar por uno específico después)
-        usuarios = User.objects.all()
+        if usuario_id:
+            ventas = ventas.filter(vendedor_id=usuario_id)
+
+        dinero_field = DecimalField(max_digits=18, decimal_places=2)
+
+        ventas_agrupadas = list(
+            ventas.values('vendedor_id', 'vendedor__username').annotate(
+                cantidad_ventas=Count('id'),
+                total_contado=Coalesce(
+                    Sum('total', filter=Q(tipo_venta='contado')),
+                    Value(Decimal('0.00')),
+                    output_field=dinero_field
+                ),
+                total_credito=Coalesce(
+                    Sum('total', filter=Q(tipo_venta='credito')),
+                    Value(Decimal('0.00')),
+                    output_field=dinero_field
+                ),
+                total_efectivo=Coalesce(
+                    Sum('total', filter=Q(tipo_venta='contado', metodo_pago='efectivo')),
+                    Value(Decimal('0.00')),
+                    output_field=dinero_field
+                ),
+                total_tarjeta=Coalesce(
+                    Sum('total', filter=Q(tipo_venta='contado', metodo_pago='tarjeta')),
+                    Value(Decimal('0.00')),
+                    output_field=dinero_field
+                ),
+                total_transferencia=Coalesce(
+                    Sum('total', filter=Q(tipo_venta='contado', metodo_pago='transferencia')),
+                    Value(Decimal('0.00')),
+                    output_field=dinero_field
+                ),
+            )
+        )
+
+        pagos = PagoCuentaPorCobrar.objects.filter(anulado=False)
+        if fecha_desde:
+            pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
+        if fecha_hasta:
+            pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
+        if usuario_id:
+            pagos = pagos.filter(usuario_id=usuario_id)
+
+        cobros_por_usuario = {
+            item['usuario_id']: item['total_cobros']
+            for item in pagos.values('usuario_id').annotate(
+                total_cobros=Coalesce(
+                    Sum('monto'),
+                    Value(Decimal('0.00')),
+                    output_field=dinero_field
+                )
+            )
+        }
 
         ventas_por_usuario = []
+        for item in ventas_agrupadas:
+            total_contado = item['total_contado'] or Decimal('0.00')
+            total_credito = item['total_credito'] or Decimal('0.00')
+            total_general = total_contado + total_credito
+            cantidad_ventas = item['cantidad_ventas'] or 0
+            total_cobros = cobros_por_usuario.get(item['vendedor_id'], Decimal('0.00'))
+            promedio_venta = (total_general / cantidad_ventas) if cantidad_ventas > 0 else Decimal('0.00')
 
-        for usuario in usuarios:
-            # Si hay filtro de usuario, solo mostrar ese
-            if usuario_id and str(usuario.id) != usuario_id:
-                continue
-
-            # Ventas de este usuario
-            ventas_usuario = ventas.filter(vendedor=usuario)
-
-            # Si no hay ventas y no hay filtro específico, no mostrar (opcional)
-            if not ventas_usuario.exists() and not usuario_id:
-                continue
-
-            # ========== CÁLCULOS DE VENTAS ==========
-            cantidad_ventas = ventas_usuario.count()
-
-            # Ventas al contado (total de facturas contado)
-            ventas_contado = ventas_usuario.filter(tipo_venta='contado').aggregate(
-                total=Sum('total')
-            )['total'] or Decimal('0.00')
-
-            # Ventas a crédito (total de facturas crédito)
-            ventas_credito = ventas_usuario.filter(tipo_venta='credito').aggregate(
-                total=Sum('total')
-            )['total'] or Decimal('0.00')
-
-            # Total general (contado + crédito)
-            total_general = ventas_contado + ventas_credito
-
-            # Ventas por método de pago (solo contado)
-            ventas_efectivo = ventas_usuario.filter(
-                tipo_venta='contado', metodo_pago='efectivo'
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-
-            ventas_tarjeta = ventas_usuario.filter(
-                tipo_venta='contado', metodo_pago='tarjeta'
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-
-            ventas_transferencia = ventas_usuario.filter(
-                tipo_venta='contado', metodo_pago='transferencia'
-            ).aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-
-            # Promedio por venta
-            promedio_venta = total_general / cantidad_ventas if cantidad_ventas > 0 else 0
-
-            # ========== CÁLCULO DE COBROS REGISTRADOS ==========
-            # Pagos (cobros) registrados por este usuario en el mismo período
-            pagos = PagoCuentaPorCobrar.objects.filter(
-                usuario=usuario,
-                anulado=False
-            )
-            if fecha_desde:
-                pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
-            if fecha_hasta:
-                pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
-
-            total_cobros = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
-
-            # ========== AGREGAR AL LISTADO ==========
             ventas_por_usuario.append({
-                'usuario_id': usuario.id,
-                'usuario': usuario.username,
+                'usuario_id': item['vendedor_id'],
+                'usuario': item['vendedor__username'],
                 'cantidad_ventas': cantidad_ventas,
                 'total_ventas': float(total_general),
-                'total_contado': float(ventas_contado),
-                'total_credito': float(ventas_credito),
-                'total_efectivo': float(ventas_efectivo),
-                'total_tarjeta': float(ventas_tarjeta),
-                'total_transferencia': float(ventas_transferencia),
-                'total_cobros': float(total_cobros),   # <-- NUEVO CAMPO
+                'total_contado': float(total_contado),
+                'total_credito': float(total_credito),
+                'total_efectivo': float(item['total_efectivo'] or Decimal('0.00')),
+                'total_tarjeta': float(item['total_tarjeta'] or Decimal('0.00')),
+                'total_transferencia': float(item['total_transferencia'] or Decimal('0.00')),
+                'total_cobros': float(total_cobros),
                 'promedio_venta': float(promedio_venta)
             })
 
-        # Ordenar por total de ventas (de mayor a menor)
-        ventas_por_usuario.sort(key=lambda x: x['total_ventas'], reverse=True)
+        if usuario_id and not ventas_por_usuario:
+            usuario = User.objects.filter(id=usuario_id).values('id', 'username').first()
+            if usuario:
+                ventas_por_usuario.append({
+                    'usuario_id': usuario['id'],
+                    'usuario': usuario['username'],
+                    'cantidad_ventas': 0,
+                    'total_ventas': 0.0,
+                    'total_contado': 0.0,
+                    'total_credito': 0.0,
+                    'total_efectivo': 0.0,
+                    'total_tarjeta': 0.0,
+                    'total_transferencia': 0.0,
+                    'total_cobros': float(cobros_por_usuario.get(usuario['id'], Decimal('0.00'))),
+                    'promedio_venta': 0.0
+                })
 
+        ventas_por_usuario.sort(key=lambda x: x['total_ventas'], reverse=True)
         return JsonResponse({'ventas': ventas_por_usuario})
 
     except Exception as e:
@@ -3385,7 +3348,7 @@ def inventario_eliminar(request, id):
 #================================================================================================
 #============================ Vista para renderizar la página de ventas ============================
 #================================================================================================
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 @check_module_access('ventas')
 def ventas(request):
@@ -4159,7 +4122,7 @@ def detalle_venta(request, venta_id):
         'detalles': venta.detalles.all()
     })
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def listadecliente(request):
     return render(request, "facturacion/listadecliente.html")
@@ -4273,7 +4236,7 @@ def editar_cliente(request, cliente_id):
         })
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def registrodecliente(request):
     return render(request, "facturacion/registrodecliente.html")
@@ -4526,7 +4489,7 @@ def agregar_nuevo_producto(request):
 
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_almacen, login_url='/')
 @csrf_exempt
 def entrada(request):
     """Vista principal para registro de entradas de productos (inventario)"""
@@ -5001,7 +4964,10 @@ def lista_comprobantes(request):
     
     return render(request, 'facturacion/lista_comprobantes.html', context)
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+ventas
+
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
+
 @login_required
 def cuentaporcobrar(request):
     search = request.GET.get('search', '')
@@ -6282,7 +6248,7 @@ def generar_reporte_vencidas_pdf(request):
 #==================================================================================================
 #==============================Gestión de Suplidores (Proveedores)=================================
 #==================================================================================================
-@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_almacen, login_url='/')
 @login_required
 def gestiondesuplidores(request):
     proveedores = Proveedor.objects.all().order_by('nombre_empresa')
@@ -6426,7 +6392,7 @@ def get_proveedor_data(request, id):
     return JsonResponse(data)
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_almacen, login_url='/')
 @login_required
 def registrosuplidores(request):
     if request.method == 'POST':
@@ -7071,7 +7037,7 @@ def cuadre(request):
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 @login_required
 def reavastecer(request):
     # Obtener todos los productos activos
@@ -7257,7 +7223,7 @@ def registrar_movimiento_cuenta(cuenta, monto, tipo_movimiento, usuario, observa
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 @csrf_exempt
 @require_http_methods(["POST"])
 @transaction.atomic
@@ -7381,7 +7347,7 @@ def procesar_devolucion(request):
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 def roles(request):
     # Definir los módulos del sistema
     MODULOS_SISTEMA = [
@@ -7843,7 +7809,7 @@ def crear_grupos_especiales(sender, **kwargs):
 
 
 
-@user_passes_test(is_superuser, login_url='/admin/login/')
+@user_passes_test(is_superuser, login_url='/')
 @login_required
 def anular(request):
     return render(request, "facturacion/anular.html")
@@ -7982,7 +7948,7 @@ def anular_factura(request):
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def reimprimir_factura(request):
     # Esta vista renderiza la página de reimpresión
@@ -8273,7 +8239,7 @@ def ultimo_comprobante(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def cotizacion(request):
     return render(request, "facturacion/cotizacion.html")
@@ -8491,7 +8457,7 @@ def ver_factura(request):
     return render(request, 'facturacion/ver_factura.html', factura_data)
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_almacen, login_url='/')
 @login_required
 def compras(request):
     proveedores = Proveedor.objects.filter(activo=True)
@@ -8593,7 +8559,7 @@ def guardar_cuenta_por_pagar(request):
 
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/admin/login/')
+@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
 @login_required
 def cuentaporpagar(request):
     return render(request, "facturacion/cuentaporpagar.html") 
@@ -9692,3 +9658,5 @@ def exportar_reporte_pdf(request):
     response.write(pdf)
     
     return response
+
+
