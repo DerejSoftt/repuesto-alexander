@@ -1328,7 +1328,7 @@
                     <input type="hidden" id="paymentAccountId">
                     <div class="payment-form-group">
                         <label for="paymentAmountInput">Monto a Pagar *</label>
-                        <input type="number" id="paymentAmountInput" class="filter-input" step="0.01" min="0" required>
+                        <input type="text" id="paymentAmountInput" class="filter-input" inputmode="decimal" autocomplete="off" required>
                         <div class="error-message" id="paymentAmountError"></div>
                     </div>
                     <div class="payment-form-group">
@@ -1469,6 +1469,25 @@
         // Función para redondear a 2 decimales (centavos)
         function roundToTwoDecimals(value) {
             return Math.round(parseFloat(value) * 100) / 100;
+        }
+
+        // Formato RD: miles con coma y centavos con punto (ej: 12,345.67)
+        function formatRDMoney(value) {
+            const amount = Number(value);
+            if (Number.isNaN(amount)) return '0.00';
+            return amount.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function parseRDMoney(value) {
+            if (value === null || value === undefined) return NaN;
+            const normalized = String(value)
+                .replace(/[^0-9.,-]/g, '')
+                .replace(/,/g, '');
+            const parsed = parseFloat(normalized);
+            return Number.isNaN(parsed) ? NaN : parsed;
         }
 
         // ===== FUNCIONES PARA AGRUPAR POR CLIENTE =====
@@ -1988,12 +2007,10 @@
                 return;
             }
 
-            document.getElementById('paymentModalPendingAmount').textContent = `RD$ ${currentPendingBalance.toFixed(2)}`;
+            document.getElementById('paymentModalPendingAmount').textContent = `RD$ ${formatRDMoney(currentPendingBalance)}`;
             document.getElementById('paymentAccountId').value = id;
-            document.getElementById('paymentAmountInput').value = currentPendingBalance.toFixed(2);
-            document.getElementById('paymentAmountInput').placeholder = `Ej: ${currentPendingBalance.toFixed(2)}`;
-            document.getElementById('paymentAmountInput').max = currentPendingBalance;
-            document.getElementById('paymentAmountInput').step = "0.01";
+            document.getElementById('paymentAmountInput').value = formatRDMoney(currentPendingBalance);
+            document.getElementById('paymentAmountInput').placeholder = `Ej: ${formatRDMoney(currentPendingBalance)}`;
 
             document.getElementById('paymentAmountError').style.display = 'none';
 
@@ -2010,9 +2027,9 @@
             <h5 style="margin: 0 0 10px 0; color: #333;">Información de la Cuenta</h5>
             <p style="margin: 5px 0;"><strong>Cliente:</strong> ${account.clientName}</p>
             <p style="margin: 5px 0;"><strong>Factura:</strong> ${account.invoiceNumber}</p>
-            <p style="margin: 5px 0;"><strong>Monto Total Original:</strong> RD$ ${account.totalAmount.toFixed(2)}</p>
-            <p style="margin: 5px 0;"><strong>Monto Ya Pagado:</strong> RD$ ${account.paidAmount.toFixed(2)}</p>
-            <p style="margin: 0;"><strong>Saldo Pendiente:</strong> RD$ ${currentPendingBalance.toFixed(2)}</p>
+            <p style="margin: 5px 0;"><strong>Monto Total Original:</strong> RD$ ${formatRDMoney(account.totalAmount)}</p>
+            <p style="margin: 5px 0;"><strong>Monto Ya Pagado:</strong> RD$ ${formatRDMoney(account.paidAmount)}</p>
+            <p style="margin: 0;"><strong>Saldo Pendiente:</strong> RD$ ${formatRDMoney(currentPendingBalance)}</p>
         `;
 
             const paymentInfo = modalBody.querySelector('.payment-info');
@@ -2036,7 +2053,7 @@
 
         function submitPayment() {
             const accountId = document.getElementById('paymentAccountId').value;
-            const amount = parseFloat(document.getElementById('paymentAmountInput').value);
+            const amount = parseRDMoney(document.getElementById('paymentAmountInput').value);
             const method = document.getElementById('paymentMethod').value;
             const reference = document.getElementById('paymentReference').value;
             const observations = document.getElementById('paymentObservations').value;
@@ -2072,7 +2089,7 @@
 
             if (amount > currentPendingBalance + 0.01) {
                 document.getElementById('paymentAmountError').textContent =
-                    `El monto (${amount.toFixed(2)}) excede el saldo pendiente de RD$ ${currentPendingBalance.toFixed(2)}`;
+                    `El monto (RD$ ${formatRDMoney(amount)}) excede el saldo pendiente de RD$ ${formatRDMoney(currentPendingBalance)}`;
                 document.getElementById('paymentAmountError').style.display = 'block';
                 return;
             }
@@ -2086,9 +2103,9 @@
                 <div style="text-align: left; margin: 10px 0;">
                     <p><strong>Cliente:</strong> ${currentAccount.clientName}</p>
                     <p><strong>Factura:</strong> ${currentAccount.invoiceNumber}</p>
-                    <p><strong>Monto a Pagar:</strong> RD$ ${amount.toFixed(2)}</p>
-                    <p><strong>Saldo pendiente exacto:</strong> RD$ ${currentPendingBalance.toFixed(2)}</p>
-                    <p><strong>Diferencia después del pago:</strong> RD$ ${exactDifference.toFixed(2)}</p>
+                    <p><strong>Monto a Pagar:</strong> RD$ ${formatRDMoney(amount)}</p>
+                    <p><strong>Saldo pendiente exacto:</strong> RD$ ${formatRDMoney(currentPendingBalance)}</p>
+                    <p><strong>Diferencia después del pago:</strong> RD$ ${formatRDMoney(exactDifference)}</p>
                     <p><strong>Método de Pago:</strong> ${method}</p>
                     ${reference ? `<p><strong>Referencia:</strong> ${reference}</p>` : ''}
                 </div>
@@ -2135,7 +2152,7 @@
                                 const comprobanteMensaje = data.comprobante_numero ?
                                     `\nComprobante generado: ${data.comprobante_numero}` : '';
                                 const saldoMensaje = data.nuevo_saldo_pendiente !== undefined ?
-                                    `\nNuevo saldo pendiente: RD$ ${data.nuevo_saldo_pendiente.toFixed(2)}` : '';
+                                    `\nNuevo saldo pendiente: RD$ ${formatRDMoney(data.nuevo_saldo_pendiente)}` : '';
 
                                 if (data.comprobante_id) {
                                     Swal.fire({
@@ -2144,8 +2161,8 @@
                                     <div style="text-align: left; margin: 15px 0;">
                                         <p>${data.message}</p>
                                         ${data.comprobante_numero ? `<p><strong>Comprobante:</strong> ${data.comprobante_numero}</p>` : ''}
-                                        ${data.nuevo_saldo_pendiente !== undefined ? `<p><strong>Nuevo saldo pendiente:</strong> RD$ ${data.nuevo_saldo_pendiente.toFixed(2)}</p>` : ''}
-                                        <p><strong>Pago realizado: RD$ ${amount.toFixed(2)}</strong></p>
+                                        ${data.nuevo_saldo_pendiente !== undefined ? `<p><strong>Nuevo saldo pendiente:</strong> RD$ ${formatRDMoney(data.nuevo_saldo_pendiente)}</p>` : ''}
+                                        <p><strong>Pago realizado: RD$ ${formatRDMoney(amount)}</strong></p>
                                     </div>
                                     <p>¿Desea ver el comprobante?</p>
                                 `,
@@ -2171,7 +2188,7 @@
                                         <p>${data.message}</p>
                                         ${comprobanteMensaje ? `<p>${comprobanteMensaje}</p>` : ''}
                                         ${saldoMensaje ? `<p>${saldoMensaje}</p>` : ''}
-                                        <p><strong>Pago realizado: RD$ ${amount.toFixed(2)}</strong></p>
+                                        <p><strong>Pago realizado: RD$ ${formatRDMoney(amount)}</strong></p>
                                     </div>
                                 `,
                                         icon: 'success',
@@ -2520,7 +2537,7 @@
             const paymentAmountInput = document.getElementById('paymentAmountInput');
             if (paymentAmountInput) {
                 paymentAmountInput.addEventListener('input', function () {
-                    const amount = parseFloat(this.value);
+                    const amount = parseRDMoney(this.value);
                     const accountId = document.getElementById('paymentAccountId').value;
                     const account = accounts.find(acc => acc.id == accountId);
                     if (account) {
@@ -2532,15 +2549,29 @@
                         } else if (amount > maxAmount + 0.01) {
                             const diferencia = amount - maxAmount;
                             errorElement.innerHTML = `
-                            El monto (${amount.toFixed(2)}) excede el saldo pendiente de RD$ ${maxAmount.toFixed(2)}<br>
+                            El monto (RD$ ${formatRDMoney(amount)}) excede el saldo pendiente de RD$ ${formatRDMoney(maxAmount)}<br>
                             <small style="color: #ff6b6b;">
-                                Diferencia: RD$ ${diferencia.toFixed(2)}
+                                Diferencia: RD$ ${formatRDMoney(diferencia)}
                             </small>
                         `;
                             errorElement.style.display = 'block';
                         } else {
                             errorElement.style.display = 'none';
                         }
+                    }
+                });
+
+                paymentAmountInput.addEventListener('focus', function () {
+                    const amount = parseRDMoney(this.value);
+                    if (!Number.isNaN(amount)) {
+                        this.value = amount.toFixed(2);
+                    }
+                });
+
+                paymentAmountInput.addEventListener('blur', function () {
+                    const amount = parseRDMoney(this.value);
+                    if (!Number.isNaN(amount) && amount > 0) {
+                        this.value = formatRDMoney(amount);
                     }
                 });
 
@@ -2556,7 +2587,7 @@
                         const account = accounts.find(acc => acc.id == accountId);
                         if (account) {
                             const pendingBalance = parseFloat(account.pendingBalance);
-                            paymentAmountInput.value = pendingBalance.toFixed(2);
+                            paymentAmountInput.value = formatRDMoney(pendingBalance);
                             document.getElementById('paymentAmountError').style.display = 'none';
                         }
                     };
