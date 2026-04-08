@@ -540,6 +540,8 @@ class Cliente(models.Model):
         return f"{self.full_name} - {self.identification_number}"
     
 
+
+
 class Venta(models.Model):
     METODOS_PAGO = (
         ('contado', 'Contado'),
@@ -551,6 +553,12 @@ class Venta(models.Model):
         ('tarjeta', 'Tarjeta'),
         ('transferencia', 'Transferencia'),
     )
+    
+    ESTADO_DEVOLUCION_CHOICES = [
+        ('sin_devolucion', 'Sin devolución'),
+        ('parcial', 'Devolución parcial'),
+        ('total', 'Devolución total'),
+    ]
     
     # Información de la venta
     numero_factura = models.CharField(max_length=20, unique=True)
@@ -566,8 +574,8 @@ class Venta(models.Model):
     tipo_venta = models.CharField(max_length=10, choices=METODOS_PAGO)
     metodo_pago = models.CharField(max_length=15, choices=FORMAS_PAGO)
     subtotal = models.DecimalField(max_digits=12, decimal_places=2)
-    itbis_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, default=18.00)  # Nuevo campo
-    itbis_monto = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # Nuevo campo
+    itbis_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, default=18.00)
+    itbis_monto = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     descuento_porcentaje = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     descuento_monto = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2)
@@ -577,6 +585,13 @@ class Venta(models.Model):
     # Para pagos en efectivo
     efectivo_recibido = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cambio = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Estado de devolución (nuevo campo)
+    estado_devolucion = models.CharField(
+        max_length=20,
+        choices=ESTADO_DEVOLUCION_CHOICES,
+        default='sin_devolucion'
+    )
     
     # Estado
     completada = models.BooleanField(default=False)
@@ -611,11 +626,26 @@ class Venta(models.Model):
     def __str__(self):
         return f"{self.numero_factura} - {self.cliente_nombre} - RD${self.total}"
     
+    # En la clase Venta, después del campo estado_devolucion:
+
+def get_total_devuelto(self):
+    """Suma todos los montos de devoluciones registradas para esta venta."""
+    from django.db.models import Sum
+    return self.devolucion_set.aggregate(
+        total=Sum('monto')
+    )['total'] or Decimal('0.00')
+
+def get_total_neto(self):
+    """Total original menos lo devuelto. Nunca toca el campo total."""
+    return self.total - self.get_total_devuelto()
+    
     class Meta:
         db_table = 'ventas'
         verbose_name = "Venta"
         verbose_name_plural = "Ventas"
         ordering = ['-fecha_venta']
+
+
 
 class DetalleVenta(models.Model):
     venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name='detalles')
@@ -819,7 +849,6 @@ class CierreCaja(models.Model):
 
 
 
-
 class Devolucion(models.Model):
     venta = models.ForeignKey(Venta, on_delete=models.PROTECT)
     producto = models.ForeignKey(EntradaProducto, on_delete=models.PROTECT)
@@ -828,11 +857,10 @@ class Devolucion(models.Model):
     observaciones = models.TextField(blank=True, null=True)
     fecha_devolucion = models.DateTimeField(default=timezone.now)
     usuario = models.ForeignKey(User, on_delete=models.PROTECT)
-    
+    monto = models.DecimalField(max_digits=10, decimal_places=2, default=0)   # nuevo
+
     def __str__(self):
         return f"Devolución #{self.id} - {self.venta.numero_factura}"
-
-
 
 
 

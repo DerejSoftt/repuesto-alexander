@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404 
-from .models import EntradaProducto, Proveedor,  Cliente, Caja, Venta, DetalleVenta, MovimientoStock, CuentaPorCobrar, PagoCuentaPorCobrar, CierreCaja, ComprobantePago, Rol, CuentaPorPagar, DetalleCuentaPorPagar
+from .models import EntradaProducto, Proveedor,  Cliente, Caja, Venta, DetalleVenta, MovimientoStock, CuentaPorCobrar, PagoCuentaPorCobrar, CierreCaja, ComprobantePago, Rol, CuentaPorPagar, DetalleCuentaPorPagar, Devolucion
 from django.contrib import messages
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -35,7 +35,7 @@ import os
 from django.conf import settings
 import random
 import string
-
+from django.core.mail import send_mail
 #hola
 from django.urls import reverse
 # import time
@@ -2085,6 +2085,7 @@ def generar_pdf_cuadre(request, cuadre_id):
 #======================== VENTAS POR USUARIO  (OJO )===============================
 #============================================================================================
 
+
 @login_required
 def ventas_por_usuario(request):
     """
@@ -2094,17 +2095,24 @@ def ventas_por_usuario(request):
     - Total contado
     - Total crédito (monto total de facturas a crédito)
     - Total cobros registrados (pagos a cuentas por cobrar)
+    Vista para obtener ventas y cobros agrupadas por usuario (AJAX).
+    Incluye usuarios que tengan ventas o cobros en el período.
+    (arreglo de anlacion, dashbor y descuebto en cuenta por cobrar)
     """
     try:
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
         usuario_id = request.GET.get('usuario')
 
+
+
+        # Ventas no anuladas
         ventas = Venta.objects.filter(anulada=False)
         if fecha_desde:
             ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
         if fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
+
 
         if usuario_id:
             ventas = ventas.filter(vendedor_id=usuario_id)
@@ -2142,11 +2150,14 @@ def ventas_por_usuario(request):
             )
         )
 
+
+        # Pagos (cobros) no anulados
         pagos = PagoCuentaPorCobrar.objects.filter(anulado=False)
         if fecha_desde:
             pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
         if fecha_hasta:
             pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
+
         if usuario_id:
             pagos = pagos.filter(usuario_id=usuario_id)
 
@@ -2170,16 +2181,54 @@ def ventas_por_usuario(request):
             total_cobros = cobros_por_usuario.get(item['vendedor_id'], Decimal('0.00'))
             promedio_venta = (total_general / cantidad_ventas) if cantidad_ventas > 0 else Decimal('0.00')
 
+
+        # Usuarios con actividad (ventas o cobros)
+        usuarios_con_ventas = set(ventas.values_list('vendedor_id', flat=True).distinct())
+        usuarios_con_cobros = set(pagos.values_list('usuario_id', flat=True).distinct())
+        usuarios_con_actividad = usuarios_con_ventas | usuarios_con_cobros
+
+        if not usuarios_con_actividad:
+            return JsonResponse({'ventas': []})
+
+        usuarios = User.objects.filter(id__in=usuarios_con_actividad).order_by('username')
+        if usuario_id:
+            usuarios = usuarios.filter(id=usuario_id)
+
+        ventas_por_usuario = []
+
+        for usuario in usuarios:
+            ventas_usuario = ventas.filter(vendedor=usuario)
+            pagos_usuario = pagos.filter(usuario=usuario)
+
+            cantidad_ventas = ventas_usuario.count()
+            ventas_contado = ventas_usuario.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            ventas_credito = ventas_usuario.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            total_general = ventas_contado + ventas_credito
+
+            ventas_efectivo = ventas_usuario.filter(tipo_venta='contado', metodo_pago='efectivo').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            ventas_tarjeta = ventas_usuario.filter(tipo_venta='contado', metodo_pago='tarjeta').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+            ventas_transferencia = ventas_usuario.filter(tipo_venta='contado', metodo_pago='transferencia').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+
+            promedio_venta = total_general / cantidad_ventas if cantidad_ventas > 0 else 0
+            total_cobros = pagos_usuario.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+
             ventas_por_usuario.append({
                 'usuario_id': item['vendedor_id'],
                 'usuario': item['vendedor__username'],
                 'cantidad_ventas': cantidad_ventas,
                 'total_ventas': float(total_general),
+
                 'total_contado': float(total_contado),
                 'total_credito': float(total_credito),
                 'total_efectivo': float(item['total_efectivo'] or Decimal('0.00')),
                 'total_tarjeta': float(item['total_tarjeta'] or Decimal('0.00')),
                 'total_transferencia': float(item['total_transferencia'] or Decimal('0.00')),
+
+                'total_contado': float(ventas_contado),
+                'total_credito': float(ventas_credito),
+                'total_efectivo': float(ventas_efectivo),
+                'total_tarjeta': float(ventas_tarjeta),
+                'total_transferencia': float(ventas_transferencia),
                 'total_cobros': float(total_cobros),
                 'promedio_venta': float(promedio_venta)
             })
@@ -2206,6 +2255,7 @@ def ventas_por_usuario(request):
 
     except Exception as e:
         print(f"Error en ventas_por_usuario: {e}")
+        import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
     
@@ -2216,8 +2266,13 @@ def ventas_por_usuario(request):
 @login_required
 def ventas_por_usuario_pdf(request):
     """
-    Genera PDF con detalle de ventas y cobros por usuario (solo usuarios con ventas en el período).
-    Muestra una tabla con: fecha, factura, usuario, cliente, tipo, método, valor.
+    Genera PDF con detalle de ventas y cobros por usuario.
+    Incluye:
+    - Ventas normales (contado/crédito)
+    - Cobros registrados
+    - Ventas anuladas (subrayado rojo)
+    - Ventas con devolución (subrayado amarillo, muestra monto devuelto y usuario)
+    - Cobros de usuarios que no tuvieron ventas en el período
     """
     try:
         import io
@@ -2228,8 +2283,10 @@ def ventas_por_usuario_pdf(request):
         from reportlab.lib.units import inch
         from django.utils import timezone
         from django.contrib.auth.models import User
-        from .models import Venta, PagoCuentaPorCobrar, Cliente
-        
+        from django.db.models import Sum, Q
+        from decimal import Decimal
+        from .models import Venta, PagoCuentaPorCobrar, Cliente, Devolucion
+
         # ========== FILTROS ==========
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
@@ -2239,8 +2296,8 @@ def ventas_por_usuario_pdf(request):
         ahora_local = timezone.now().astimezone(tz_rd)
         fecha_reporte = ahora_local.strftime('%d/%m/%Y %I:%M %p')
 
-        ventas = Venta.objects.filter(anulada=False)
-
+        # --- Ventas base (incluye anuladas para mostrarlas en el reporte) ---
+        ventas = Venta.objects.all()
         if fecha_desde and fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__range=[fecha_desde, fecha_hasta])
         elif fecha_desde:
@@ -2250,35 +2307,78 @@ def ventas_por_usuario_pdf(request):
 
         usuarios_excluidos = ['derej', 'soft']
         usuarios_activos = User.objects.filter(is_active=True).exclude(username__in=usuarios_excluidos)
-        usuarios_con_ventas_ids = ventas.filter(vendedor__in=usuarios_activos).values_list('vendedor_id', flat=True).distinct()
 
+        # --- Obtener usuarios con ventas en el período ---
+        usuarios_con_ventas = ventas.filter(vendedor__in=usuarios_activos).values_list('vendedor_id', flat=True).distinct()
+
+        # --- Obtener usuarios con cobros (pagos) en el período ---
+        pagos_raw = PagoCuentaPorCobrar.objects.filter(anulado=False)
+        if fecha_desde and fecha_hasta:
+            pagos_raw = pagos_raw.filter(fecha_pago__date__range=[fecha_desde, fecha_hasta])
+        elif fecha_desde:
+            pagos_raw = pagos_raw.filter(fecha_pago__date__gte=fecha_desde)
+        elif fecha_hasta:
+            pagos_raw = pagos_raw.filter(fecha_pago__date__lte=fecha_hasta)
+
+        usuarios_con_cobros = pagos_raw.filter(usuario__is_active=True).exclude(usuario__username__in=usuarios_excluidos).values_list('usuario_id', flat=True).distinct()
+
+        # Unión de ambos conjuntos
+        usuarios_con_actividad_ids = set(usuarios_con_ventas) | set(usuarios_con_cobros)
+
+        # Si se filtró por un usuario específico, limitar a ese
         if usuario_id:
             usuario_obj = User.objects.filter(id=usuario_id, is_active=True).exclude(username__in=usuarios_excluidos).first()
-            if usuario_obj and usuario_obj.id in usuarios_con_ventas_ids:
-                usuarios_con_ventas_ids = [usuario_obj.id]
+            if usuario_obj and usuario_obj.id in usuarios_con_actividad_ids:
+                usuarios_con_actividad_ids = {usuario_obj.id}
             else:
-                usuarios_con_ventas_ids = []
+                usuarios_con_actividad_ids = set()
 
-        ventas = ventas.filter(vendedor_id__in=usuarios_con_ventas_ids)
-
-        pagos = PagoCuentaPorCobrar.objects.filter(usuario_id__in=usuarios_con_ventas_ids, anulado=False)
-        if fecha_desde and fecha_hasta:
-            pagos = pagos.filter(fecha_pago__date__range=[fecha_desde, fecha_hasta])
-        elif fecha_desde:
-            pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
-        elif fecha_hasta:
-            pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
+        # Filtrar ventas y pagos por esos usuarios
+        ventas = ventas.filter(vendedor_id__in=usuarios_con_actividad_ids)
+        pagos = pagos_raw.filter(usuario_id__in=usuarios_con_actividad_ids)
 
         # ========== CONSTRUIR FILAS ==========
-        rows = []
+        rows = []          # Para la tabla principal
+        total_ventas_general = Decimal('0.00')   # Suma de ventas NO anuladas
+        total_efectivo = Decimal('0.00')
+        total_transferencias = Decimal('0.00')
+        total_credito = Decimal('0.00')
+        total_cobros_efectivo = Decimal('0.00')
+        total_cobros_transf = Decimal('0.00')
 
+        # Procesar ventas
         for venta in ventas.select_related('vendedor', 'cliente').iterator():
+            es_anulada = venta.anulada
+
+            # Verificar devoluciones asociadas
+            devoluciones = Devolucion.objects.filter(venta=venta)
+            tiene_devolucion = devoluciones.exists()
+            monto_devuelto = devoluciones.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
+            usuarios_dev = devoluciones.values_list('usuario__username', flat=True).distinct()
+            quien_devuelve = ", ".join(usuarios_dev) if usuarios_dev else ""
+
+            if not es_anulada:
+                total_ventas_general += venta.total
+                if venta.tipo_venta == 'contado':
+                    if venta.metodo_pago == 'efectivo':
+                        total_efectivo += venta.total
+                    elif venta.metodo_pago == 'transferencia':
+                        total_transferencias += venta.total
+                elif venta.tipo_venta == 'credito':
+                    total_credito += venta.total
+
             if venta.tipo_venta == 'contado':
                 tipo = 'contado'
                 metodo = venta.metodo_pago if venta.metodo_pago else 'efectivo'
             else:
                 tipo = 'credito'
                 metodo = 'credito'
+
+            estado_texto = ""
+            if es_anulada:
+                estado_texto = "Anulada"
+            elif tiene_devolucion:
+                estado_texto = f"Devuelto: RD${float(monto_devuelto):,.2f} ({quien_devuelve})"
 
             rows.append({
                 'fecha': venta.fecha_venta.date(),
@@ -2288,8 +2388,12 @@ def ventas_por_usuario_pdf(request):
                 'tipo': tipo,
                 'metodo': metodo,
                 'valor': venta.total,
+                'estado': estado_texto,
+                'es_anulada': es_anulada,
+                'tiene_devolucion': tiene_devolucion,
             })
 
+        # Procesar pagos (cobros)
         for pago in pagos.select_related('usuario', 'cuenta', 'cuenta__venta').iterator():
             cliente_nombre = 'N/A'
             if pago.cuenta and pago.cuenta.venta:
@@ -2300,8 +2404,10 @@ def ventas_por_usuario_pdf(request):
 
             if pago.metodo_pago == 'efectivo':
                 metodo = 'cobro/efectivo'
+                total_cobros_efectivo += pago.monto
             elif pago.metodo_pago == 'transferencia':
                 metodo = 'cobro/transferencia'
+                total_cobros_transf += pago.monto
             else:
                 metodo = pago.metodo_pago
 
@@ -2313,32 +2419,27 @@ def ventas_por_usuario_pdf(request):
                 'tipo': 'Cobros',
                 'metodo': metodo,
                 'valor': pago.monto,
+                'estado': '',
+                'es_anulada': False,
+                'tiene_devolucion': False,
             })
 
+        # Ordenar por fecha descendente
         rows.sort(key=lambda x: (x['fecha'], x['factura']), reverse=True)
 
-        # ========== TOTALES ==========
-        total_registros          = len(rows)
-        total_efectivo           = sum(r['valor'] for r in rows if r['metodo'] == 'efectivo')
-        total_transferencias     = sum(r['valor'] for r in rows if r['metodo'] == 'transferencia')
-        total_credito            = sum(r['valor'] for r in rows if r['metodo'] == 'credito')
-        total_cobros_efectivo    = sum(r['valor'] for r in rows if r['metodo'] == 'cobro/efectivo')
-        total_cobros_transf      = sum(r['valor'] for r in rows if r['metodo'] == 'cobro/transferencia')
-        total_cobros             = total_cobros_efectivo + total_cobros_transf
-        total_ventas_general     = sum(r['valor'] for r in rows if r['tipo'] != 'credito')
-        total_contado            = total_efectivo + total_cobros_efectivo
-
+        # Totales finales
+        total_cobros = total_cobros_efectivo + total_cobros_transf
+        total_contado = total_efectivo + total_cobros_efectivo
+        total_registros = len(rows)
 
         # ========== COLORES ==========
-        # Gris oscuro para headers (como en la imagen)
-        HEADER_BG = (0.25, 0.25, 0.25)      # Gris oscuro cabecera tabla
-        HEADER_TEXT = (1, 1, 1)              # Blanco
-        ROW_ALT = (0.93, 0.93, 0.93)        # Gris muy claro filas alternas
-        ROW_WHITE = (1, 1, 1)               # Blanco filas normales
-        CARD_BG = (0.20, 0.20, 0.20)        # Gris oscuro cards
-        CARD_TEXT = (1, 1, 1)               # Blanco texto cards
-        CARD_VALUE = (1, 1, 1)              # Blanco valor cards
-        BORDER = (0.60, 0.60, 0.60)         # Gris borde
+        HEADER_BG = (0.25, 0.25, 0.25)
+        HEADER_TEXT = (1, 1, 1)
+        ROW_ALT = (0.93, 0.93, 0.93)
+        ROW_WHITE = (1, 1, 1)
+        CARD_BG = (0.20, 0.20, 0.20)
+        CARD_TEXT = (1, 1, 1)
+        BORDER = (0.60, 0.60, 0.60)
 
         # ========== GENERAR PDF ==========
         buffer = io.BytesIO()
@@ -2346,18 +2447,12 @@ def ventas_por_usuario_pdf(request):
         width, height = landscape(letter)
 
         def draw_page_header(p, height, fecha_reporte, periodo):
-            """Dibuja el encabezado del reporte."""
-            # Título principal
             p.setFillColorRGB(0.15, 0.15, 0.15)
             p.setFont("Helvetica-Bold", 15)
             p.drawString(1 * inch, height - 0.75 * inch, "Reporte Detallado de Ventas y Cobros por Usuario")
-
-            # Subtítulo fecha y período
             p.setFont("Helvetica", 9)
             p.setFillColorRGB(0.35, 0.35, 0.35)
             p.drawString(1 * inch, height - 1.05 * inch, f"Generado: {fecha_reporte}    |    Período: {periodo}")
-
-            # Línea separadora bajo el título
             p.setStrokeColorRGB(*BORDER)
             p.setLineWidth(0.8)
             p.line(1 * inch, height - 1.20 * inch, width - 1 * inch, height - 1.20 * inch)
@@ -2374,13 +2469,13 @@ def ventas_por_usuario_pdf(request):
 
         # ========== CARDS DE RESUMEN ==========
         cards_data = [
-            ("Total Vendido",    f"RD${total_ventas_general:,.2f}", None),
-            ("Transacciones",    str(total_registros),              None),
-            ("Efectivo",         f"RD${total_efectivo:,.2f}",       f"({sum(1 for r in rows if r['metodo'] in ('efectivo', 'cobro/efectivo'))} ventas)"),
-            ("Transferencias",   f"RD${total_transferencias:,.2f}", f"({sum(1 for r in rows if r['metodo'] in ('transferencia', 'cobro/transferencia'))} trans.)"),
-            ("Cobros",           f"RD${total_cobros:,.2f}",         f"({sum(1 for r in rows if r['metodo'] in ('cobro/efectivo', 'cobro/transferencia'))} cobros)"),
-            ("Contado",          f"RD${total_contado:,.2f}",        f"({sum(1 for r in rows if r['tipo'] == 'contado')} ventas)"),
-            ("Crédito",          f"RD${total_credito:,.2f}",        f"({sum(1 for r in rows if r['metodo'] == 'credito')} ventas)"),
+            ("Total Vendido",    f"RD${float(total_ventas_general):,.2f}", None),
+            ("Transacciones",    str(total_registros), None),
+            ("Efectivo",         f"RD${float(total_efectivo):,.2f}", f"({sum(1 for r in rows if r['metodo'] in ('efectivo', 'cobro/efectivo') and not r['es_anulada'])} ventas)"),
+            ("Transferencias",   f"RD${float(total_transferencias):,.2f}", f"({sum(1 for r in rows if r['metodo'] in ('transferencia', 'cobro/transferencia') and not r['es_anulada'])} trans.)"),
+            ("Cobros",           f"RD${float(total_cobros):,.2f}", f"({sum(1 for r in rows if r['metodo'] in ('cobro/efectivo', 'cobro/transferencia'))} cobros)"),
+            ("Contado",          f"RD${float(total_contado):,.2f}", f"({sum(1 for r in rows if r['tipo'] == 'contado' and not r['es_anulada'])} ventas)"),
+            ("Crédito",          f"RD${float(total_credito):,.2f}", f"({sum(1 for r in rows if r['metodo'] == 'credito' and not r['es_anulada'])} ventas)"),
         ]
 
         n_cards = len(cards_data)
@@ -2388,44 +2483,32 @@ def ventas_por_usuario_pdf(request):
         card_spacing = 0.12 * inch
         card_width = (total_card_area - (n_cards - 1) * card_spacing) / n_cards
         card_height = 0.70 * inch
-        card_y_top = height - 1.45 * inch  # Top of card area
+        card_y_top = height - 1.45 * inch
         card_y_bottom = card_y_top - card_height
 
         x = 1 * inch
         for label, value, sub in cards_data:
-            # Fondo oscuro tipo imagen
             p.setFillColorRGB(*CARD_BG)
             p.setStrokeColorRGB(*BORDER)
             p.setLineWidth(0.5)
             p.roundRect(x, card_y_bottom, card_width, card_height, 4, fill=1, stroke=1)
-
-            # Label (etiqueta arriba, pequeña, gris claro)
             p.setFillColorRGB(0.75, 0.75, 0.75)
             p.setFont("Helvetica", 7)
             p.drawCentredString(x + card_width / 2, card_y_bottom + card_height - 0.20 * inch, label.upper())
-
-            # Value (grande, blanco, negrita)
-            p.setFillColorRGB(*CARD_VALUE)
-            # Ajustar tamaño de fuente si el valor es muy largo
+            p.setFillColorRGB(*CARD_TEXT)
             font_size = 10 if len(value) > 14 else 11
             p.setFont("Helvetica-Bold", font_size)
             p.drawCentredString(x + card_width / 2, card_y_bottom + card_height * 0.38, value)
-
-            # Sub (subtítulo opcional)
             if sub:
                 p.setFillColorRGB(0.65, 0.65, 0.65)
                 p.setFont("Helvetica", 6.5)
                 p.drawCentredString(x + card_width / 2, card_y_bottom + 0.10 * inch, sub)
-
             x += card_width + card_spacing
 
         # ========== TABLA ==========
-        # Posición inicio tabla
         y_position = card_y_bottom - 0.30 * inch
 
-        # Definición de columnas
-        headers = ['Fecha', 'Factura', 'Usuario', 'Cliente', 'Tipo', 'Método', 'Valor (RD$)']
-
+        headers = ['Fecha', 'Factura', 'Usuario', 'Cliente', 'Tipo', 'Método', 'Valor (RD$)', 'Estado']
         col_x = [
             1.00 * inch,   # Fecha
             2.05 * inch,   # Factura
@@ -2434,101 +2517,79 @@ def ventas_por_usuario_pdf(request):
             6.15 * inch,   # Tipo
             7.00 * inch,   # Método
             8.10 * inch,   # Valor
+            9.00 * inch,   # Estado
         ]
         col_widths = [
-            1.00 * inch,   # Fecha
-            1.20 * inch,   # Factura
-            1.10 * inch,   # Usuario
-            1.65 * inch,   # Cliente
-            0.80 * inch,   # Tipo
-            1.05 * inch,   # Método
-            1.20 * inch,   # Valor
+            1.00 * inch,
+            1.20 * inch,
+            1.10 * inch,
+            1.65 * inch,
+            0.80 * inch,
+            1.05 * inch,
+            0.85 * inch,
+            1.20 * inch,
         ]
         table_right = col_x[-1] + col_widths[-1]
         table_left = col_x[0]
         row_height = 0.22 * inch
 
         def draw_table_header(p, y, col_x, col_widths, headers, table_left, table_right, row_height):
-            """Dibuja la fila de cabecera de la tabla."""
-            # Fondo gris oscuro para la cabecera
             p.setFillColorRGB(*HEADER_BG)
             p.setStrokeColorRGB(*BORDER)
             p.setLineWidth(0.4)
             p.rect(table_left, y - row_height, table_right - table_left, row_height, fill=1, stroke=0)
-
-            # Texto blanco negrita
             p.setFillColorRGB(*HEADER_TEXT)
-            p.setFont("Helvetica-Bold", 10)
+            p.setFont("Helvetica-Bold", 9)
             for i, header in enumerate(headers):
-                if i == len(headers) - 1:
-                    # Alinear derecha el valor
-                    p.drawRightString(col_x[i] + col_widths[i] - 0.05 * inch, y - row_height + 0.07 * inch, header)
-                else:
-                    p.drawString(col_x[i] + 0.05 * inch, y - row_height + 0.07 * inch, header)
-
-            # Línea inferior del header
+                p.drawString(col_x[i] + 0.05 * inch, y - row_height + 0.07 * inch, header)
             p.setStrokeColorRGB(*BORDER)
             p.line(table_left, y - row_height, table_right, y - row_height)
             return y - row_height
 
         y_position = draw_table_header(p, y_position, col_x, col_widths, headers, table_left, table_right, row_height)
-
-        p.setFont("Helvetica", 9)
+        p.setFont("Helvetica", 8)
 
         def draw_table_border(p, top_y, bottom_y, table_left, table_right, col_x, col_widths, BORDER):
-            """Dibuja bordes verticales y horizontales externos."""
             p.setStrokeColorRGB(*BORDER)
             p.setLineWidth(0.4)
-            # Borde externo
             p.rect(table_left, bottom_y, table_right - table_left, top_y - bottom_y, fill=0, stroke=1)
-            # Líneas verticales internas
             for i in range(1, len(col_x)):
                 p.line(col_x[i], bottom_y, col_x[i], top_y)
 
-        table_top_y = y_position  # Guardar para borde final
+        table_top_y = y_position
 
         for idx, row in enumerate(rows):
-            # Salto de página
             if y_position < 1.2 * inch:
-                # Dibujar bordes de tabla antes de nueva página
                 draw_table_border(p, table_top_y, y_position, table_left, table_right, col_x, col_widths, BORDER)
                 p.showPage()
                 draw_page_header(p, height, fecha_reporte, periodo)
                 y_position = height - 1.50 * inch
                 y_position = draw_table_header(p, y_position, col_x, col_widths, headers, table_left, table_right, row_height)
                 table_top_y = y_position
-                p.setFont("Helvetica", 7.5)
+                p.setFont("Helvetica", 8)
 
-            # Fondo de fila alterno
             if idx % 2 == 0:
                 p.setFillColorRGB(*ROW_WHITE)
             else:
                 p.setFillColorRGB(*ROW_ALT)
             p.rect(table_left, y_position - row_height, table_right - table_left, row_height, fill=1, stroke=0)
 
-            # Línea horizontal entre filas
             p.setStrokeColorRGB(*BORDER)
             p.setLineWidth(0.2)
             p.line(table_left, y_position - row_height, table_right, y_position - row_height)
 
-            # Texto de cada celda
             p.setFillColorRGB(0.10, 0.10, 0.10)
             text_y = y_position - row_height + 0.065 * inch
 
             fecha_str = row['fecha'].strftime('%d/%m/%Y')
+            factura = str(row['factura'])[:16]
             usuario = str(row['usuario'])[:14]
             cliente = str(row['cliente'])[:20]
-
-            tipo = str(row['tipo'])[:9]
-            metodo = str(row['metodo'])[:13]
-
             tipo = str(row['tipo'])[:15]
             metodo = str(row['metodo'])[:25]
-
             valor_str = f"RD${float(row['valor']):,.2f}"
-            factura = str(row['factura'])[:16]
+            estado = str(row['estado'])[:30]
 
-            # Color especial para tipo "Cobros"
             cells = [
                 (col_x[0], fecha_str, False),
                 (col_x[1], factura, False),
@@ -2536,7 +2597,8 @@ def ventas_por_usuario_pdf(request):
                 (col_x[3], cliente, False),
                 (col_x[4], tipo, False),
                 (col_x[5], metodo, False),
-                (col_x[6], valor_str, True),  # True = alinear derecha
+                (col_x[6], valor_str, True),
+                (col_x[7], estado, False),
             ]
 
             for cx, text, right_align in cells:
@@ -2545,9 +2607,20 @@ def ventas_por_usuario_pdf(request):
                 else:
                     p.drawString(cx + 0.05 * inch, text_y, text)
 
+            # Subrayado según estado
+            if row['tiene_devolucion'] and not row['es_anulada']:
+                p.setStrokeColorRGB(1, 1, 0)
+                p.setLineWidth(1.2)
+                p.line(table_left, y_position - row_height + 0.02 * inch,
+                       table_right, y_position - row_height + 0.02 * inch)
+            elif row['es_anulada']:
+                p.setStrokeColorRGB(1, 0, 0)
+                p.setLineWidth(1.2)
+                p.line(table_left, y_position - row_height + 0.02 * inch,
+                       table_right, y_position - row_height + 0.02 * inch)
+
             y_position -= row_height
 
-        # Dibujar bordes finales de la tabla
         draw_table_border(p, table_top_y, y_position, table_left, table_right, col_x, col_widths, BORDER)
 
         p.showPage()
@@ -2564,87 +2637,95 @@ def ventas_por_usuario_pdf(request):
         traceback.print_exc()
         return HttpResponse(f"Error al generar el reporte: {str(e)}", status=500)
 
-
-
-
 #============================================================================================
 #======================== REPORTE DE VENTAS POR CADA  USUARIO (PDF) INDIVIDUAL===============================
 #============================================================================================
 @login_required
 def ventas_usuario_pdf(request, usuario_id):
+    """
+    Genera PDF con el detalle de ventas (incluyendo anuladas) y cobros realizados por un usuario específico.
+    Las ventas anuladas NO se suman a los totales, pero se muestran en la tabla con estado 'Anulada'.
+    """
     try:
+        from io import BytesIO
         from reportlab.lib.pagesizes import letter, landscape
         from reportlab.lib.units import inch
         from reportlab.pdfgen import canvas
-        from io import BytesIO
         from django.shortcuts import get_object_or_404
-        from django.db.models import Sum
+        from django.db.models import Sum, Q
         from decimal import Decimal
+        from django.utils import timezone
+        from .models import Venta, PagoCuentaPorCobrar, Devolucion
+
+        usuario = get_object_or_404(User, id=usuario_id)
 
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
-        usuario = get_object_or_404(User, id=usuario_id)
 
-        # Ventas realizadas por el usuario
-        ventas = Venta.objects.filter(
-            anulada=False,
-            vendedor=usuario
-        ).select_related('vendedor').prefetch_related('cuenta_por_cobrar__pagos').order_by('-fecha_venta')
-
+        # ---------- 1. VENTAS (TODAS, incluyendo anuladas) ----------
+        ventas = Venta.objects.filter(vendedor=usuario).select_related('cliente')
         if fecha_desde:
             ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
         if fecha_hasta:
             ventas = ventas.filter(fecha_venta__date__lte=fecha_hasta)
+        ventas = ventas.order_by('-fecha_venta')
 
-        # Pagos (cobros) realizados por el usuario
+        # ---------- 2. COBROS ----------
         pagos = PagoCuentaPorCobrar.objects.filter(
             usuario=usuario,
             anulado=False
         ).select_related('cuenta__venta', 'cuenta__cliente').order_by('-fecha_pago')
-
         if fecha_desde:
             pagos = pagos.filter(fecha_pago__date__gte=fecha_desde)
         if fecha_hasta:
             pagos = pagos.filter(fecha_pago__date__lte=fecha_hasta)
 
-        # ===== Cálculo de totales para el resumen =====
-        total_ventas = ventas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        total_contado = ventas.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
-        total_credito = ventas.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        # ---------- CÁLCULO DE TOTALES (excluyendo anuladas) ----------
+        ventas_no_anuladas = ventas.filter(anulada=False)
+        total_ventas = ventas_no_anuladas.aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        total_contado = ventas_no_anuladas.filter(tipo_venta='contado').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
+        total_credito = ventas_no_anuladas.filter(tipo_venta='credito').aggregate(total=Sum('total'))['total'] or Decimal('0.00')
         total_cobros = pagos.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
-        cantidad_ventas = ventas.count()
+        cantidad_ventas = ventas_no_anuladas.count()
 
-        # Crear PDF en orientación horizontal
+        entrada_dia = float(total_contado) + float(total_cobros)
+
+        # ---------- CONFIGURACIÓN DEL PDF ----------
         buffer = BytesIO()
         p = canvas.Canvas(buffer, pagesize=landscape(letter))
         width, height = landscape(letter)
 
-        # ===== ENCABEZADO =====
+        # ---------- ENCABEZADO ----------
         p.setFont("Helvetica-Bold", 18)
         p.drawString(1 * inch, height - 0.75 * inch, "Reporte de Actividad del Usuario")
         p.setFont("Helvetica-Bold", 14)
-        p.drawString(1 * inch, height - 1.25 * inch, f"{usuario.get_full_name() or usuario.username}")
+        nombre_usuario = usuario.get_full_name() or usuario.username
+        p.drawString(1 * inch, height - 1.25 * inch, nombre_usuario)
 
         p.setFont("Helvetica", 10)
         fecha_reporte = timezone.now().strftime('%d/%m/%Y %H:%M')
-        p.drawString(1 * inch, height - 1.6 * inch, f"Fecha de generación: {fecha_reporte}")
+        p.drawString(1 * inch, height - 1.6 * inch, f"Generado: {fecha_reporte}")
 
         periodo = "Todos los tiempos"
         if fecha_desde and fecha_hasta:
             periodo = f"Desde {fecha_desde} hasta {fecha_hasta}"
+        elif fecha_desde:
+            periodo = f"Desde {fecha_desde}"
+        elif fecha_hasta:
+            periodo = f"Hasta {fecha_hasta}"
         p.drawString(1 * inch, height - 1.8 * inch, f"Período: {periodo}")
 
         y_position = height - 2.3 * inch
 
-        # ===== RESUMEN GENERAL =====
+        # ---------- RESUMEN GENERAL ----------
         p.setFont("Helvetica-Bold", 12)
         p.drawString(1 * inch, y_position, "RESUMEN GENERAL")
         y_position -= 0.2 * inch
 
         p.setFont("Helvetica", 10)
-        p.drawString(1.2 * inch, y_position, f"Cantidad de ventas: {cantidad_ventas}")
+        p.drawString(1.2 * inch, y_position, f"Cantidad de ventas (no anuladas): {cantidad_ventas}")
         y_position -= 0.15 * inch
-        p.drawString(1.2 * inch, y_position, f"Total ventas: RD${float(total_ventas):,.2f}")
+        p.drawString(1.2 * inch, y_position, f"Total ventas (no anuladas): RD${float(total_ventas):,.2f}")
         y_position -= 0.15 * inch
         p.drawString(1.2 * inch, y_position, f"Total contado: RD${float(total_contado):,.2f}")
         y_position -= 0.15 * inch
@@ -2652,101 +2733,97 @@ def ventas_usuario_pdf(request, usuario_id):
         y_position -= 0.15 * inch
         p.drawString(1.2 * inch, y_position, f"Total cobros registrados: RD${float(total_cobros):,.2f}")
         y_position -= 0.15 * inch
-
-        # Nueva línea: Entrada del día (contado + cobros)
-        entrada_dia = float(total_contado) + float(total_cobros) 
         p.drawString(1.2 * inch, y_position, f"Entrada del día (contado + cobros): RD${entrada_dia:,.2f}")
         y_position -= 0.2 * inch
 
         p.line(1 * inch, y_position, 9.5 * inch, y_position)
         y_position -= 0.3 * inch
 
-        # ===== SECCIÓN 1: VENTAS REALIZADAS (DETALLE) =====
+        # ---------- SECCIÓN 1: VENTAS (DETALLE, incluyendo anuladas) ----------
         p.setFont("Helvetica-Bold", 12)
-        p.drawString(1 * inch, y_position, "VENTAS REALIZADAS")
+        p.drawString(1 * inch, y_position, "VENTAS REALIZADAS (incluye anuladas)")
         y_position -= 0.3 * inch
 
-        # Encabezados de tabla
+        # Encabezados de tabla de ventas (6 columnas)
         p.setFont("Helvetica-Bold", 9)
         p.drawString(1.0 * inch, y_position, "Fecha")
         p.drawString(2.0 * inch, y_position, "Factura")
         p.drawString(3.5 * inch, y_position, "Cliente")
         p.drawString(5.5 * inch, y_position, "Tipo")
-        p.drawString(6.5 * inch, y_position, "Total")
-        p.drawString(7.8 * inch, y_position, "Estado Crédito")
+        p.drawString(6.7 * inch, y_position, "Total (RD$)")
+        p.drawString(8.0 * inch, y_position, "Estado")
         p.line(1.0 * inch, y_position - 0.1 * inch, 9.5 * inch, y_position - 0.1 * inch)
         y_position -= 0.25 * inch
         p.setFont("Helvetica", 8)
 
-        for venta in ventas[:30]:  # límite para no saturar
+        for venta in ventas:   # todas las ventas (anuladas incluidas)
             if y_position < 1.5 * inch:
                 p.showPage()
                 y_position = height - 1 * inch
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(1 * inch, y_position, "VENTAS REALIZADAS (continuación)")
+                p.drawString(1 * inch, y_position, "VENTAS (continuación)")
                 y_position -= 0.3 * inch
                 p.setFont("Helvetica-Bold", 9)
                 p.drawString(1.0 * inch, y_position, "Fecha")
                 p.drawString(2.0 * inch, y_position, "Factura")
                 p.drawString(3.5 * inch, y_position, "Cliente")
                 p.drawString(5.5 * inch, y_position, "Tipo")
-                p.drawString(6.5 * inch, y_position, "Total")
-                p.drawString(7.8 * inch, y_position, "Estado Crédito")
+                p.drawString(6.7 * inch, y_position, "Total (RD$)")
+                p.drawString(8.0 * inch, y_position, "Estado")
                 p.line(1.0 * inch, y_position - 0.1 * inch, 9.5 * inch, y_position - 0.1 * inch)
                 y_position -= 0.25 * inch
                 p.setFont("Helvetica", 8)
 
-            # Determinar estado de crédito
-            if venta.tipo_venta == 'contado':
-                estado_credito = "N/A"
-            else:
-                try:
-                    cuenta = venta.cuenta_por_cobrar
-                    if cuenta.estado == 'pagada' or cuenta.monto_pagado >= cuenta.monto_total:
-                        estado_credito = "Pagado"
-                    elif cuenta.estado == 'parcial':
-                        estado_credito = "Parcial"
-                    elif cuenta.estado == 'vencida':
-                        estado_credito = "Vencida"
-                    else:
-                        estado_credito = "Pendiente"
-                except Venta.cuenta_por_cobrar.RelatedObjectDoesNotExist:
-                    estado_credito = "Sin cuenta"
-
+            # Datos de la venta
             fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
+            factura = venta.numero_factura[:14]
+            cliente = venta.cliente_nombre or "N/A"
+            if len(cliente) > 20:
+                cliente = cliente[:20] + "..."
+
+            tipo = venta.tipo_venta.capitalize()
+            total_str = f"RD${float(venta.total):,.2f}"
+            estado = "Anulada" if venta.anulada else "Activa"
+
+            # Color para el total si está anulada
+            p.setFillColorRGB(0, 0, 0)  # negro normal
+            if venta.anulada:
+                p.setFillColorRGB(0.8, 0, 0)  # rojo para anuladas
+
             p.drawString(1.0 * inch, y_position, fecha_str)
-            p.drawString(2.0 * inch, y_position, venta.numero_factura[:14])
-            cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
+            p.drawString(2.0 * inch, y_position, factura)
             p.drawString(3.5 * inch, y_position, cliente)
-            p.drawString(5.5 * inch, y_position, venta.tipo_venta.capitalize())
-            p.drawRightString(7.0 * inch, y_position, f"RD${float(venta.total):,.2f}")
-            p.drawString(7.8 * inch, y_position, estado_credito[:15])
+            p.drawString(5.5 * inch, y_position, tipo)
+            p.drawRightString(7.5 * inch, y_position, total_str)
+            p.drawString(8.0 * inch, y_position, estado)
+
+            # Restaurar color negro para la siguiente fila
+            p.setFillColorRGB(0, 0, 0)
 
             y_position -= 0.15 * inch
 
-        # Separador
+        # Separador después de ventas
         y_position -= 0.2 * inch
         p.line(1.0 * inch, y_position, 9.5 * inch, y_position)
         y_position -= 0.3 * inch
 
-        # ===== SECCIÓN 2: COBROS REGISTRADOS (DETALLE) =====
+        # ---------- SECCIÓN 2: COBROS REGISTRADOS ----------
         p.setFont("Helvetica-Bold", 12)
         p.drawString(1 * inch, y_position, "COBROS REGISTRADOS (Pagos a Cuentas por Cobrar)")
         y_position -= 0.3 * inch
 
-        # Encabezados de tabla
         p.setFont("Helvetica-Bold", 9)
         p.drawString(1.0 * inch, y_position, "Fecha Pago")
         p.drawString(2.2 * inch, y_position, "Factura")
         p.drawString(3.8 * inch, y_position, "Cliente")
-        p.drawString(5.5 * inch, y_position, "Monto")
+        p.drawString(5.5 * inch, y_position, "Monto (RD$)")
         p.drawString(6.8 * inch, y_position, "Método")
         p.drawString(8.0 * inch, y_position, "Saldo Pendiente")
         p.line(1.0 * inch, y_position - 0.1 * inch, 9.5 * inch, y_position - 0.1 * inch)
         y_position -= 0.25 * inch
         p.setFont("Helvetica", 8)
 
-        for pago in pagos[:30]:
+        for pago in pagos:
             if y_position < 1.5 * inch:
                 p.showPage()
                 y_position = height - 1 * inch
@@ -2757,40 +2834,37 @@ def ventas_usuario_pdf(request, usuario_id):
                 p.drawString(1.0 * inch, y_position, "Fecha Pago")
                 p.drawString(2.2 * inch, y_position, "Factura")
                 p.drawString(3.8 * inch, y_position, "Cliente")
-                p.drawString(5.5 * inch, y_position, "Monto")
+                p.drawString(5.5 * inch, y_position, "Monto (RD$)")
                 p.drawString(6.8 * inch, y_position, "Método")
                 p.drawString(8.0 * inch, y_position, "Saldo Pendiente")
                 p.line(1.0 * inch, y_position - 0.1 * inch, 9.5 * inch, y_position - 0.1 * inch)
                 y_position -= 0.25 * inch
                 p.setFont("Helvetica", 8)
 
-            
-            fecha_str = venta.fecha_venta.strftime('%d/%m/%Y')
-            p.drawString(1 * inch, y_position, fecha_str)
-            p.drawString(2.2 * inch, y_position, venta.numero_factura[:13 ])
-            
-            cliente = venta.cliente_nombre[:20] + "..." if len(venta.cliente_nombre) > 20 else venta.cliente_nombre
-
-
             fecha_pago = pago.fecha_pago.strftime('%d/%m/%Y')
-            factura = pago.cuenta.venta.numero_factura if pago.cuenta.venta else "N/A"
-            cliente = pago.cuenta.cliente.full_name[:20] + "..." if len(pago.cuenta.cliente.full_name) > 20 else pago.cuenta.cliente.full_name
-            monto = f"RD${float(pago.monto):,.2f}"
-            metodo = pago.get_metodo_pago_display()
-            saldo = pago.cuenta.saldo_pendiente
+            factura_num = pago.cuenta.venta.numero_factura if pago.cuenta and pago.cuenta.venta else "N/A"
+            cliente_nombre = "N/A"
+            if pago.cuenta:
+                if pago.cuenta.cliente:
+                    cliente_nombre = pago.cuenta.cliente.full_name
+                elif pago.cuenta.venta and pago.cuenta.venta.cliente_nombre:
+                    cliente_nombre = pago.cuenta.venta.cliente_nombre
+            cliente = (cliente_nombre[:20] + "...") if len(cliente_nombre) > 20 else cliente_nombre
+            monto_str = f"RD${float(pago.monto):,.2f}"
+            metodo = pago.get_metodo_pago_display() or pago.metodo_pago or "N/A"
+            saldo = pago.cuenta.saldo_pendiente if pago.cuenta else Decimal('0')
             saldo_str = f"RD${float(saldo):,.2f}"
 
             p.drawString(1.0 * inch, y_position, fecha_pago)
-            p.drawString(2.2 * inch, y_position, factura[:12])
-
+            p.drawString(2.2 * inch, y_position, factura_num[:12])
             p.drawString(3.8 * inch, y_position, cliente)
-            p.drawRightString(6.0 * inch, y_position, monto)
+            p.drawRightString(6.2 * inch, y_position, monto_str)
             p.drawString(6.8 * inch, y_position, metodo[:10])
             p.drawRightString(9.5 * inch, y_position, saldo_str)
 
             y_position -= 0.15 * inch
 
-        # ===== FIRMAS =====
+        # ---------- FIRMAS ----------
         y_position = 1.5 * inch
         p.line(1 * inch, y_position, 3.5 * inch, y_position)
         p.setFont("Helvetica", 9)
@@ -2803,17 +2877,14 @@ def ventas_usuario_pdf(request, usuario_id):
         buffer.seek(0)
 
         response = HttpResponse(buffer, content_type='application/pdf')
-        filename = f"actividad_{usuario.username}_{timezone.now().strftime('%Y%m%d')}.pdf"
+        filename = f"actividad_{usuario.username}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
     except Exception as e:
-        print(f"Error en ventas_usuario_pdf: {e}")
         import traceback
         traceback.print_exc()
-        return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
-
-
+        return HttpResponse(f"Error al generar el PDF: {str(e)}", status=500)
  #================================================================================================
  #========================== Obtener lista de usuarios para filtros =============================
  #================================================================================================  
@@ -3758,7 +3829,7 @@ Productos:
                 if payment_type == 'credito' and cliente and hasattr(cliente, 'email') and cliente.email:
                     recipient_list.append(cliente.email)
                 
-                recipient_list.append('superbestiard16@gmail.com')
+                recipient_list.append('josemiguelbacosta@gmail.com')
                 recipient_list = list(set(recipient_list))
                 
                 if recipient_list:
@@ -5542,12 +5613,12 @@ def detalle_cuenta(request, cuenta_id):
     
     return JsonResponse(data)
 
-
 @login_required
 @xframe_options_exempt
 def generar_reporte_deudas_pdf(request):
     """
-    Genera un reporte PDF de deudas por cliente
+    Genera un reporte PDF de deudas por cliente, usando los montos actuales de la cuenta
+    (incluyendo descuentos aplicados).
     """
     try:
         # Obtener parámetros de filtrado (si existen)
@@ -5595,13 +5666,16 @@ def generar_reporte_deudas_pdf(request):
                     'telefono': cliente.primary_phone or 'N/A',
                     'facturas_pendientes': 0,
                     'monto_total_pendiente': Decimal('0.00'),
-                    'estado_general': 'pagada',  # Empezamos asumiendo pagada
+                    'estado_general': 'pagada',
                     'detalle_facturas': []
                 }
             
-            # Calcular saldo pendiente
-            monto_total_original = Decimal(str(cuenta.venta.total_a_pagar))
-            saldo_pendiente = monto_total_original - Decimal(str(cuenta.monto_pagado))
+            # ✅ USAR cuenta.monto_total (ya incluye descuentos)
+            monto_total_actual = Decimal(str(cuenta.monto_total))
+            monto_pagado = Decimal(str(cuenta.monto_pagado))
+            saldo_pendiente = monto_total_actual - monto_pagado
+            if saldo_pendiente < 0:
+                saldo_pendiente = Decimal('0.00')
             
             # Solo considerar si tiene saldo pendiente
             if saldo_pendiente > 0:
@@ -5655,16 +5729,14 @@ def generar_reporte_deudas_pdf(request):
         # Estilos
         styles = getSampleStyleSheet()
         
-        # Título principal
         titulo_style = ParagraphStyle(
             'Titulo',
             parent=styles['Title'],
             fontSize=16,
             spaceAfter=20,
-            alignment=1  # Centrado
+            alignment=1
         )
         
-        # Subtítulo
         subtitulo_style = ParagraphStyle(
             'Subtitulo',
             parent=styles['Normal'],
@@ -5673,7 +5745,6 @@ def generar_reporte_deudas_pdf(request):
             alignment=1
         )
         
-        # Estilo para encabezados de tabla
         encabezado_style = ParagraphStyle(
             'Encabezado',
             parent=styles['Normal'],
@@ -5682,15 +5753,13 @@ def generar_reporte_deudas_pdf(request):
             alignment=1
         )
         
-        # Estilo para datos de tabla
         datos_style = ParagraphStyle(
             'Datos',
             parent=styles['Normal'],
             fontSize=8,
-            alignment=0  # Izquierda
+            alignment=0
         )
         
-        # Contenido del PDF
         contenido = []
         
         # Título
@@ -5737,7 +5806,6 @@ def generar_reporte_deudas_pdf(request):
         
         # Tabla principal de deudas
         if clientes_con_deuda:
-            # Encabezados de la tabla
             encabezados = [
                 Paragraph("Cliente", encabezado_style),
                 Paragraph("Cédula", encabezado_style),
@@ -5749,9 +5817,7 @@ def generar_reporte_deudas_pdf(request):
             
             datos_tabla = [encabezados]
             
-            # Agregar datos de cada cliente
             for cliente in clientes_con_deuda:
-                # Determinar color del estado
                 estado_texto = {
                     'vencida': 'VENCIDA',
                     'pendiente': 'PENDIENTE',
@@ -5769,20 +5835,19 @@ def generar_reporte_deudas_pdf(request):
                 ]
                 datos_tabla.append(fila)
             
-            # Crear tabla
             tabla = Table(datos_tabla, colWidths=[4.5*cm, 2.5*cm, 3*cm, 3*cm, 4*cm, 3*cm])
             
-            # Estilos de la tabla
             tabla.setStyle(TableStyle([
+
                 # Encabezado
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8a8178')),
+
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 9),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                
-                # Filas alternas
                 ('BACKGROUND', (0, 1), (-1, -1), colors.white),
                 ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
                 ('ALIGN', (0, 1), (2, -1), 'LEFT'),
@@ -5793,15 +5858,9 @@ def generar_reporte_deudas_pdf(request):
                 ('FONTSIZE', (0, 1), (-1, -1), 8),
                 ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
                 ('TOPPADDING', (0, 1), (-1, -1), 6),
-                
-                # Bordes
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
                 ('BOX', (0, 0), (-1, -1), 1, colors.black),
-                
-                # Resaltar montos
                 ('FONTNAME', (4, 1), (4, -1), 'Helvetica-Bold'),
-                
-                # Colorear estados
                 ('TEXTCOLOR', (5, 1), (5, -1), lambda r, c: 
                     colors.red if datos_tabla[r][5].text == 'VENCIDA' 
                     else colors.orange if datos_tabla[r][5].text == 'PENDIENTE'
@@ -5813,10 +5872,7 @@ def generar_reporte_deudas_pdf(request):
             contenido.append(Spacer(1, 20))
             
             # Pie de página con totales
-            pie_data = [
-                ["TOTAL GENERAL:", f"RD$ {total_deuda_general:,.2f}"]
-            ]
-            
+            pie_data = [["TOTAL GENERAL:", f"RD$ {total_deuda_general:,.2f}"]]
             pie_table = Table(pie_data, colWidths=[15*cm, 5*cm])
             pie_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f9fa')),
@@ -5829,18 +5885,15 @@ def generar_reporte_deudas_pdf(request):
                 ('TOPPADDING', (0, 0), (-1, -1), 10),
                 ('BOX', (0, 0), (-1, -1), 1, colors.black),
             ]))
-            
             contenido.append(pie_table)
-            
         else:
-            # Si no hay deudas
             contenido.append(Paragraph("No hay deudas pendientes para mostrar.", styles['Heading3']))
             contenido.append(Spacer(1, 20))
         
         # Nota al pie
         nota = Paragraph(
             "Este reporte fue generado automáticamente por el sistema de gestión Super Bestia. "
-            "Los montos están expresados en pesos dominicanos (RD$).",
+            "Los montos están expresados en pesos dominicanos (RD$) y reflejan descuentos aplicados.",
             ParagraphStyle(
                 'Nota',
                 parent=styles['Normal'],
@@ -5852,29 +5905,23 @@ def generar_reporte_deudas_pdf(request):
         contenido.append(Spacer(1, 30))
         contenido.append(nota)
         
-        # Construir el PDF
         doc.build(contenido)
-        
-        # Obtener el valor del buffer
         pdf = buffer.getvalue()
         buffer.close()
-        
         response.write(pdf)
         return response
         
     except Exception as e:
-        # En caso de error, devolver una respuesta de error
         error_message = f"Error al generar el reporte: {str(e)}"
         return HttpResponse(error_message, content_type='text/plain')
+
 
 
 @login_required
 def generar_historial_cliente_pdf(request, client_id):
     """
     Genera un PDF con el historial detallado de un cliente.
-    Incluye clamp en monto_pagado para evitar que supere monto_total.
-    Horas en zona horaria de República Dominicana (UTC-4) en formato 12h.
-    Ahora muestra las observaciones de cada pago en una columna adicional.
+    Ya usa cuenta.monto_total, por lo que refleja descuentos.
     """
     try:
         from .models import Cliente, CuentaPorCobrar, PagoCuentaPorCobrar
@@ -5958,7 +6005,7 @@ def generar_historial_cliente_pdf(request, client_id):
         contenido.append(Paragraph(f"<b>Fecha del reporte:</b> {fecha_reporte_str}", info_style))
         contenido.append(Spacer(1, 0.5*cm))
 
-        # Calcular totales con clamp
+        # Calcular totales con clamp (usando cuenta.monto_total)
         total_deuda = Decimal('0.00')
         total_pagado = Decimal('0.00')
         for cuenta in cuentas:
@@ -6000,6 +6047,7 @@ def generar_historial_cliente_pdf(request, client_id):
             fecha_venc = cuenta.fecha_vencimiento.strftime('%d/%m/%Y') if cuenta.fecha_vencimiento else 'N/A'
             estado = cuenta.get_estado_display()
 
+            # ✅ Usar cuenta.monto_total
             monto_total = Decimal(str(cuenta.monto_total))
             monto_pagado_real = min(Decimal(str(cuenta.monto_pagado)), monto_total)
             saldo = max(monto_total - monto_pagado_real, Decimal('0.00'))
@@ -6035,6 +6083,7 @@ def generar_historial_cliente_pdf(request, client_id):
             pagos = cuenta.pagos.all().order_by('-fecha_pago')
             if pagos:
                 contenido.append(Paragraph("<b>Pagos realizados:</b>", styles['Normal']))
+
                 encabezado_pagos_style = ParagraphStyle(
                     'EncabezadoPagos',
                     parent=styles['Normal'],
@@ -6068,6 +6117,9 @@ def generar_historial_cliente_pdf(request, client_id):
                     Paragraph("Observaciones", encabezado_pagos_style),
                 ]]
 
+                pago_data = [["Fecha", "Monto", "Método", "Referencia", "Comprobante", "Cobró", "Observaciones"]]
+
+
                 suma_pagos = Decimal('0.00')
                 for pago in pagos:
                     suma_pagos += Decimal(str(pago.monto))
@@ -6089,6 +6141,7 @@ def generar_historial_cliente_pdf(request, client_id):
                     observaciones = pago.observaciones.strip() if pago.observaciones else 'N/A'
 
                     pago_data.append([
+
                         Paragraph(fecha_pago_local, celda_pagos_style),
                         Paragraph(f"RD$ {monto_pago:,.2f}", monto_pagos_style),
                         Paragraph(pago.get_metodo_pago_display(), celda_pagos_style),
@@ -6109,6 +6162,21 @@ def generar_historial_cliente_pdf(request, client_id):
                         2.5*cm,   # Comprobante
                         2.0*cm,   # Cobro
                         4.2*cm    # Observaciones
+
+                        fecha_pago_local,
+                        f"RD$ {monto_pago:,.2f}",
+                        pago.get_metodo_pago_display(),
+                        pago.referencia or 'N/A',
+                        comp_num,
+                        usuario,
+                        observaciones,
+                ])
+
+                tabla_pagos = Table(
+                    pago_data,
+                    colWidths=[
+                        2.2*cm, 2.2*cm, 2.2*cm, 2.2*cm, 2.2*cm, 2.2*cm, 2.8*cm
+
                     ]
                 )
                 tabla_pagos.setStyle(TableStyle([
@@ -6122,11 +6190,15 @@ def generar_historial_cliente_pdf(request, client_id):
                     ('FONTSIZE',   (0, 1), (-1, -1), 7),
                     ('GRID',       (0, 0), (-1, -1), 0.5, colors.grey),
                     ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+
                     ('VALIGN',     (0, 0), (-1, -1), 'MIDDLE'),
                     ('LEFTPADDING', (0, 0), (-1, -1), 4),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 4),
                     ('TOPPADDING', (0, 0), (-1, -1), 4),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+
+                    ('WORDWRAP', (6, 1), (6, -1), True),
+
                 ]))
                 contenido.append(tabla_pagos)
             else:
@@ -6151,15 +6223,12 @@ def generar_historial_cliente_pdf(request, client_id):
 
     except Exception as e:
         return HttpResponse(f"Error al generar el historial: {str(e)}", content_type='text/plain')
-    
-    
-    
-
 
 @login_required
 def generar_reporte_vencidas_pdf(request):
     """
     Genera un PDF con todas las facturas vencidas, mostrando días de atraso.
+    Usa los montos actuales de la cuenta (incluyendo descuentos).
     """
     try:
         from datetime import date
@@ -6192,6 +6261,7 @@ def generar_reporte_vencidas_pdf(request):
         data = []
         total_vencido = Decimal('0.00')
         for cuenta in cuentas:
+            # ✅ Usar cuenta.monto_total (ya incluye descuentos)
             monto_pendiente = Decimal(str(cuenta.monto_total)) - Decimal(str(cuenta.monto_pagado))
             if monto_pendiente < 0:
                 monto_pendiente = Decimal('0.00')
@@ -6296,7 +6366,6 @@ def generar_reporte_vencidas_pdf(request):
             ]
             datos_tabla.append(fila)
 
-        # Calcular ancho de columnas
         col_widths = [4.5*cm, 2.8*cm, 2.5*cm, 2.8*cm, 2.2*cm, 3*cm]
         tabla = Table(datos_tabla, colWidths=col_widths)
 
@@ -6318,7 +6387,8 @@ def generar_reporte_vencidas_pdf(request):
 
         # Nota
         nota = Paragraph(
-            "Este reporte incluye todas las facturas que actualmente están vencidas.",
+            "Este reporte incluye todas las facturas que actualmente están vencidas, "
+            "considerando los descuentos aplicados a cada cuenta.",
             ParagraphStyle('Nota', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
         )
         contenido.append(Spacer(1, 1*cm))
@@ -6332,6 +6402,79 @@ def generar_reporte_vencidas_pdf(request):
 
     except Exception as e:
         return HttpResponse(f"Error al generar reporte: {str(e)}", content_type='text/plain')
+    
+    
+    
+    
+@login_required
+@require_POST
+def aplicar_descuento_cliente(request, client_id):
+    """
+    Aplica un descuento porcentual a todas las cuentas pendientes (no pagadas, no anuladas) de un cliente.
+    """
+    try:
+        data = json.loads(request.body)
+        porcentaje = Decimal(str(data.get('porcentaje', 0)))
+        
+        if porcentaje <= 0 or porcentaje > 100:
+            return JsonResponse({'success': False, 'message': 'El porcentaje debe estar entre 1 y 100'})
+        
+        # Obtener todas las cuentas activas del cliente que aún tengan saldo pendiente
+        cuentas = CuentaPorCobrar.objects.filter(
+            cliente_id=client_id,
+            anulada=False,
+            eliminada=False
+        ).exclude(estado='pagada')
+        
+        if not cuentas.exists():
+            return JsonResponse({'success': False, 'message': 'Este cliente no tiene deudas pendientes'})
+        
+        factor = (Decimal('100') - porcentaje) / Decimal('100')
+        usuario = request.user
+        fecha_hora = timezone.now().strftime('%d/%m/%Y %H:%M')
+        
+        cuentas_afectadas = 0
+        for cuenta in cuentas:
+            saldo_actual = cuenta.saldo_pendiente
+            if saldo_actual <= 0:
+                continue
+            
+            nuevo_monto_total = (Decimal(str(cuenta.monto_total)) * factor).quantize(Decimal('0.01'))
+            # Si el nuevo total es menor que lo ya pagado, ajustamos el pagado al nuevo total
+            if nuevo_monto_total < Decimal(str(cuenta.monto_pagado)):
+                cuenta.monto_pagado = nuevo_monto_total
+            cuenta.monto_total = nuevo_monto_total
+            
+            # Recalcular estado
+            if cuenta.monto_pagado >= cuenta.monto_total:
+                cuenta.estado = 'pagada'
+                cuenta.monto_pagado = cuenta.monto_total
+            elif cuenta.monto_pagado > 0:
+                cuenta.estado = 'parcial'
+            else:
+                # Verificar si está vencida
+                hoy = timezone.now().date()
+                if cuenta.fecha_vencimiento and hoy > cuenta.fecha_vencimiento:
+                    cuenta.estado = 'vencida'
+                else:
+                    cuenta.estado = 'pendiente'
+            
+            # Registrar en observaciones
+            obs_original = cuenta.observaciones or ''
+            obs_nueva = f"\n[DESCUENTO] {porcentaje}% aplicado por {usuario.get_full_name() or usuario.username} el {fecha_hora}. Monto original reducido."
+            if len(obs_original) + len(obs_nueva) > 500:
+                obs_original = obs_original[:400]  # evitar exceder tamaño
+            cuenta.observaciones = obs_original + obs_nueva
+            cuenta.save()
+            cuentas_afectadas += 1
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Se aplicó un descuento del {porcentaje}% a {cuentas_afectadas} factura(s) del cliente.'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {str(e)}'})
 
 #==================================================================================================
 #==============================Gestión de Suplidores (Proveedores)=================================
@@ -7222,9 +7365,14 @@ def devoluciones(request):
 
 
 
+@user_passes_test(is_superuser, login_url='/admin/login/')
 @csrf_exempt
 @require_http_methods(["POST"])
 def buscar_factura_devolucion(request):
+    """
+    Busca una factura por su número y devuelve la información necesaria
+    para procesar una devolución.
+    """
     try:
         data = json.loads(request.body)
         numero_factura = data.get('numero_factura', '').strip()
@@ -7232,39 +7380,48 @@ def buscar_factura_devolucion(request):
         if not numero_factura:
             return JsonResponse({'error': 'Por favor, ingrese un número de factura.'}, status=400)
         
-        # Buscar la factura
+        # Buscar la factura (no anulada)
         try:
             venta = Venta.objects.get(numero_factura=numero_factura, anulada=False)
         except Venta.DoesNotExist:
             return JsonResponse({'error': 'No se encontró ninguna factura con ese número.'}, status=404)
         
-        # Obtener detalles de la venta
+        # Verificar si la factura tiene al menos un detalle
         detalles = DetalleVenta.objects.filter(venta=venta)
+        if not detalles.exists():
+            return JsonResponse({'error': 'La factura no tiene productos para devolver.'}, status=400)
         
         # Preparar información de productos
         productos = []
         for detalle in detalles:
             producto = detalle.producto
             
-            # Obtener imagen si existe
+            # Obtener URL de imagen si existe
             imagen_url = '/static/images/default-product.png'
-            if producto.imagen and hasattr(producto.imagen, 'url'):
+            if hasattr(producto, 'imagen') and producto.imagen:
                 try:
                     imagen_url = producto.imagen.url
                 except:
                     pass
             
+            # Obtener valores de campos que pueden ser choices
+            marca_display = producto.get_marca_display() if hasattr(producto, 'marca') and producto.marca else 'N/A'
+            color_display = producto.get_color_display() if hasattr(producto, 'color') and producto.color else 'N/A'
+            
+            # Nombre del producto (usar descripcion si existe, sino nombre_producto)
+            nombre_producto = getattr(producto, 'descripcion', None) or getattr(producto, 'nombre_producto', 'Producto sin nombre')
+            
             producto_info = {
                 'id': detalle.id,
-                'codigo': producto.codigo_producto,
-                'producto': producto.descripcion,  # Usar descripcion en lugar de nombre_producto
-                'marca': producto.get_marca_display() if producto.marca else 'N/A',
-                'capacidad': 'N/A',  # Tu modelo no tiene campo capacidad
-                'color': producto.get_color_display() if producto.color else 'N/A',
-                'estado': 'Activo' if producto.activo else 'Inactivo',  # Tu modelo no tiene campo estado, usa activo
+                'codigo': producto.codigo_producto if hasattr(producto, 'codigo_producto') else 'N/A',
+                'producto': nombre_producto,
+                'marca': marca_display,
+                'capacidad': getattr(producto, 'capacidad', 'N/A'),
+                'color': color_display,
+                'estado': 'Activo' if getattr(producto, 'activo', True) else 'Inactivo',
                 'cantidad': detalle.cantidad,
                 'precio': str(detalle.precio_unitario),
-                'chasis': 'N/A',  # Tu modelo no tiene imei_serial
+                'chasis': getattr(producto, 'imei_serial', 'N/A'),  # si no existe, poner N/A
                 'imagen': imagen_url
             }
             productos.append(producto_info)
@@ -7277,17 +7434,18 @@ def buscar_factura_devolucion(request):
             'total': str(venta.total),
             'estado': 'Pagada' if venta.completada else 'Pendiente',
             'vendedor': venta.vendedor.get_full_name() or venta.vendedor.username,
+            'estado_devolucion': venta.get_estado_devolucion_display() if hasattr(venta, 'estado_devolucion') else 'Sin devolución',
             'productos': productos
         }
         
         return JsonResponse({'factura': factura_info})
     
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Datos inválidos.'}, status=400)
     except Exception as e:
         import traceback
-        traceback.print_exc()  # Esto imprimirá el error completo en la consola
+        traceback.print_exc()
         return JsonResponse({'error': f'Error interno al buscar la factura: {str(e)}'}, status=500)
-
-
 
 def registrar_movimiento_cuenta(cuenta, monto, tipo_movimiento, usuario, observaciones, referencia=None):
     """
@@ -7311,129 +7469,374 @@ def registrar_movimiento_cuenta(cuenta, monto, tipo_movimiento, usuario, observa
 
 
 
+
 @user_passes_test(is_superuser, login_url='/')
+=======
+@user_passes_test(lambda u: u.is_superuser, login_url='/admin/login/')
 @csrf_exempt
 @require_http_methods(["POST"])
 @transaction.atomic
 def procesar_devolucion(request):
+    """
+    Procesa la devolución de un producto de una factura.
+    Restaura stock, actualiza la factura, actualiza cuenta por cobrar (si existe)
+    y registra la devolución en la tabla Devolucion.
+    """
     try:
         data = json.loads(request.body)
-        
-        # Validar datos requeridos
+
+        # Validar campos requeridos
         required_fields = ['factura_id', 'producto_id', 'motivo', 'cantidad']
         for field in required_fields:
             if field not in data or not data[field]:
                 return JsonResponse({'error': f'El campo {field} es requerido.'}, status=400)
-        
+
         # Obtener la venta y el detalle
         venta = get_object_or_404(Venta, numero_factura=data['factura_id'], anulada=False)
         detalle = get_object_or_404(DetalleVenta, id=data['producto_id'], venta=venta)
-        
-        # Validar cantidad
+
         cantidad_devolver = int(data['cantidad'])
-        if cantidad_devolver <= 0:
-            return JsonResponse({'error': 'La cantidad a devolver debe ser mayor a 0.'}, status=400)
-        
-        if cantidad_devolver > detalle.cantidad:
-            return JsonResponse({'error': 'No puede devolver más unidades de las vendidas.'}, status=400)
-        
-        # Realizar la devolución
+        if cantidad_devolver <= 0 or cantidad_devolver > detalle.cantidad:
+            return JsonResponse({'error': 'Cantidad a devolver inválida.'}, status=400)
+
+        # --- 1. RESTAURAR STOCK ---
         producto = detalle.producto
-        producto.sumar_stock(
-            cantidad=cantidad_devolver,
-            usuario=request.user,
-            motivo=f"Devolución - {data['motivo']}",
-            referencia=f"Factura: {venta.numero_factura}"
+        # Asegúrate de que el modelo EntradaProducto tenga un campo 'cantidad'
+        EntradaProducto.objects.filter(pk=producto.pk).update(
+            cantidad=F('cantidad') + cantidad_devolver
         )
-        
-        # Calcular monto a descontar de la cuenta por cobrar
+        producto.refresh_from_db()
+
+        # --- 2. CALCULAR MONTO DE DEVOLUCIÓN (usando precio unitario del detalle) ---
         monto_devolucion = cantidad_devolver * detalle.precio_unitario
-        
-        # Actualizar detalle de venta
+
+        # --- 3. ACTUALIZAR DETALLE Y VENTA ---
         detalle.cantidad -= cantidad_devolver
         if detalle.cantidad == 0:
             detalle.delete()
         else:
             detalle.subtotal = detalle.cantidad * detalle.precio_unitario
             detalle.save()
-        
+
         # Recalcular totales de la venta
         detalles_restantes = DetalleVenta.objects.filter(venta=venta)
-        venta.subtotal = sum(detalle.subtotal for detalle in detalles_restantes)
-        
-        # Recalcular ITBIS basado en el nuevo subtotal
-        venta.itbis_monto = venta.subtotal * (venta.itbis_porcentaje / 100)
-        
-        # Recalcular total con ITBIS
-        venta.total = venta.subtotal + venta.itbis_monto - venta.descuento_monto
-        
-        # Recalcular total_a_pagar (sin ITBIS) - IMPORTANTE: Mantener sin ITBIS
-        venta.total_a_pagar = venta.subtotal - venta.descuento_monto
-        
+        nuevo_subtotal = sum(d.subtotal for d in detalles_restantes)
+
+        venta.subtotal = nuevo_subtotal
+        venta.itbis_monto = nuevo_subtotal * (venta.itbis_porcentaje / Decimal('100'))
+        subtotal_con_itbis = venta.subtotal + venta.itbis_monto
+
+        # ✅ RECALCULAR EL DESCUENTO APLICANDO EL MISMO PORCENTAJE ORIGINAL
+        # Si la factura tenía un porcentaje de descuento > 0, lo aplicamos al nuevo subtotal_con_itbis
+        if venta.descuento_porcentaje > 0:
+            nuevo_descuento_monto = subtotal_con_itbis * (venta.descuento_porcentaje / Decimal('100'))
+            venta.descuento_monto = nuevo_descuento_monto
+            venta.total = subtotal_con_itbis - nuevo_descuento_monto
+        else:
+            # Si no había porcentaje, mantenemos el descuento absoluto original (caso raro)
+            venta.total = subtotal_con_itbis - venta.descuento_monto
+
+        venta.total_a_pagar = venta.total
         venta.save()
-        
-        # ACTUALIZAR CUENTA POR COBRAR - CORRECCIÓN CRÍTICA
+
+        # --- 4. ACTUALIZAR CUENTA POR COBRAR (si existe) ---
+        monto_pagado_actual = Decimal('0.00')
+        cuenta = None
         try:
             cuenta = CuentaPorCobrar.objects.get(venta=venta, anulada=False, eliminada=False)
-            
-            # IMPORTANTE: Actualizar BOTH campos para mantener consistencia
-            cuenta.monto_total = venta.total_a_pagar  # SIN ITBIS
-            
-            # Recalcular el estado basado en el nuevo saldo
-            saldo_pendiente = cuenta.monto_total - cuenta.monto_pagado
-            
-            if saldo_pendiente <= 0:
+            monto_pagado_actual = cuenta.monto_pagado
+            cuenta.monto_total = venta.total
+            saldo_pendiente = cuenta.monto_total - monto_pagado_actual
+
+            if saldo_pendiente <= Decimal('0.00'):
                 cuenta.estado = 'pagada'
-                cuenta.monto_pagado = cuenta.monto_total  # Ajustar si pagado > total
-            elif cuenta.monto_pagado > 0:
+            elif monto_pagado_actual > 0:
                 cuenta.estado = 'parcial'
             else:
                 cuenta.estado = 'pendiente'
-            
-            # Verificar vencimiento
-            if cuenta.esta_vencida:
+
+            if cuenta.estado != 'pagada' and cuenta.esta_vencida:
                 cuenta.estado = 'vencida'
-            
+
             cuenta.save()
-            
-            # Registrar movimiento de devolución
-            registrar_movimiento_cuenta(
-                cuenta, 
-                monto_devolucion, 
-                'devolucion', 
-                request.user, 
-                f"Devolución de {cantidad_devolver} unidades del producto {producto.descripcion}"
-            )
-            
-            # Devolver datos actualizados para actualización en tiempo real
-            return JsonResponse({
-                'success': True,
-                'mensaje': f'Devolución procesada correctamente. Se han devuelto {cantidad_devolver} unidades.',
-                'numero_devolucion': f'DEV-{timezone.now().strftime("%Y%m%d")}-{venta.id}',
-                'monto_devolucion': str(monto_devolucion),
-                'datos_actualizados': {
-                    'cuenta_id': cuenta.id,
-                    'nuevo_monto_total': float(cuenta.monto_total),
-                    'nuevo_saldo_pendiente': float(max(0, saldo_pendiente)),
-                    'nuevo_estado': cuenta.estado,
-                    'nuevo_total_venta': float(venta.total_a_pagar),
-                    'factura_numero': venta.numero_factura
-                }
-            })
-            
         except CuentaPorCobrar.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': 'No se encontró la cuenta por cobrar asociada a esta factura.'
-            })
-    
+            pass
+
+        # --- 5. REGISTRAR DEVOLUCIÓN EN LA TABLA ---
+        devolucion = Devolucion.objects.create(
+            venta=venta,
+            producto=producto,
+            cantidad=cantidad_devolver,
+            motivo=data['motivo'],
+            observaciones=data.get('observaciones', ''),
+            usuario=request.user,
+            monto=monto_devolucion
+        )
+
+        # --- 6. ACTUALIZAR ESTADO DE DEVOLUCIÓN EN LA FACTURA ---
+        if not detalles_restantes.exists():
+            venta.estado_devolucion = 'total'
+        else:
+            venta.estado_devolucion = 'parcial'
+        venta.save(update_fields=['estado_devolucion'])
+
+        # --- 7. ENVIAR CORREO DE NOTIFICACIÓN (opcional, después del commit) ---
+        transaction.on_commit(lambda: enviar_notificacion_devolucion(
+            devolucion=devolucion,
+            venta=venta,
+            detalle=detalle,
+            cantidad_devuelta=cantidad_devolver,
+            monto=monto_devolucion,
+            usuario=request.user,
+            monto_pagado=monto_pagado_actual
+        ))
+
+        # --- 8. RESPUESTA CON devolucion_id ---
+        return JsonResponse({
+            'success': True,
+            'mensaje': f'Devolución procesada correctamente. Se han devuelto {cantidad_devolver} unidades.',
+            'numero_devolucion': f'DEV-{timezone.now().strftime("%Y%m%d")}-{venta.id}',
+            'monto_devolucion': str(monto_devolucion),
+            'devolucion_id': devolucion.id,
+            'datos_actualizados': {
+                'cuenta_id': cuenta.id if cuenta else None,
+                'nuevo_monto_total': float(cuenta.monto_total) if cuenta else None,
+                'monto_pagado': float(monto_pagado_actual),
+                'nuevo_saldo_pendiente': float(cuenta.monto_total - monto_pagado_actual) if cuenta else None,
+                'nuevo_estado': cuenta.estado if cuenta else 'contado',
+                'nuevo_total_venta': float(venta.total),
+                'factura_numero': venta.numero_factura,
+                'estado_devolucion': venta.estado_devolucion
+            }
+        })
+
     except Exception as e:
-        import traceback
         traceback.print_exc()
         return JsonResponse({'error': f'Error al procesar la devolución: {str(e)}'}, status=500)
 
 
+def enviar_notificacion_devolucion(devolucion, venta, detalle, cantidad_devuelta, monto, usuario, monto_pagado):
+    """
+    Envía un correo electrónico con los detalles de la devolución.
+    """
+    try:
+        # Datos del cliente
+        cliente_nombre = venta.cliente_nombre
+        cliente_documento = venta.cliente_documento
 
+        # Producto
+        producto_nombre = devolucion.producto.descripcion  # o producto.nombre_producto según tu modelo
+        producto_codigo = devolucion.producto.codigo_producto
+
+        # Motivo y observaciones
+        motivo_texto = devolucion.motivo  # Si quieres un display más amigable, puedes definir choices
+        observaciones = devolucion.observaciones or 'Sin observaciones'
+
+        # Construir el cuerpo del mensaje (HTML)
+        asunto = f"Devolución procesada - Factura {venta.numero_factura}"
+        mensaje_html = f"""
+        <html>
+        <body>
+            <h2>Detalles de la devolución</h2>
+            <p><strong>Número de devolución:</strong> DEV-{devolucion.fecha_devolucion.strftime('%Y%m%d')}-{venta.id}</p>
+            <p><strong>Fecha:</strong> {devolucion.fecha_devolucion.strftime('%d/%m/%Y %H:%M')}</p>
+            <p><strong>Usuario que procesó:</strong> {usuario.get_full_name() or usuario.username}</p>
+            <hr>
+            <h3>Factura original</h3>
+            <p><strong>Número:</strong> {venta.numero_factura}</p>
+            <p><strong>Fecha de factura:</strong> {venta.fecha_venta.strftime('%d/%m/%Y')}</p>
+            <p><strong>Cliente:</strong> {cliente_nombre} ({cliente_documento})</p>
+            <hr>
+            <h3>Producto devuelto</h3>
+            <p><strong>Código:</strong> {producto_codigo}</p>
+            <p><strong>Descripción:</strong> {producto_nombre}</p>
+            <p><strong>Cantidad devuelta:</strong> {cantidad_devuelta}</p>
+            <p><strong>Precio unitario:</strong> RD$ {detalle.precio_unitario}</p>
+            <p><strong>Monto total devuelto:</strong> RD$ {monto}</p>
+            <hr>
+            <h3>Motivo y observaciones</h3>
+            <p><strong>Motivo:</strong> {motivo_texto}</p>
+            <p><strong>Observaciones:</strong> {observaciones}</p>
+            <hr>
+            <h3>Estado actual de la factura</h3>
+            <p><strong>Total actual de la factura:</strong> RD$ {venta.total}</p>
+            <p><strong>Estado de devolución:</strong> {venta.get_estado_devolucion_display()}</p>
+            <p><strong>Monto pagado hasta ahora:</strong> RD$ {monto_pagado}</p>
+        </body>
+        </html>
+        """
+
+        # Enviar correo
+        send_mail(
+            subject=asunto,
+            message="",  # Versión texto plano (opcional)
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[settings.EMAIL_HOST_USER],
+            html_message=mensaje_html,
+            fail_silently=False,
+        )
+    except Exception as e:
+        logger.error(f"Error al enviar correo de devolución: {str(e)}")
+
+
+
+def generar_pdf_devolucion(request, devolucion_id):
+    """
+    Genera un PDF con el comprobante de devolución.
+    """
+    devolucion = get_object_or_404(Devolucion, id=devolucion_id)
+    venta = devolucion.venta
+    producto = devolucion.producto
+    
+    # Obtener el detalle original de la venta para este producto (si existe)
+    # Puede que el detalle ya no exista si se devolvió toda la cantidad, por eso usamos first()
+    detalle = DetalleVenta.objects.filter(venta=venta, producto=producto).first()
+    
+    # Precio unitario: desde el detalle si existe, si no calcular a partir del monto devuelto
+    if detalle:
+        precio_unitario = detalle.precio_unitario
+    else:
+        # Si el detalle fue eliminado (devolución total del producto), usamos el monto / cantidad
+        precio_unitario = devolucion.monto / devolucion.cantidad if devolucion.cantidad > 0 else Decimal('0')
+    
+    # Formatear valores
+    total_actual = f"RD$ {venta.total:,.2f}"
+    monto_devuelto = f"RD$ {devolucion.monto:,.2f}"
+    precio_unitario_str = f"RD$ {precio_unitario:,.2f}"
+    
+    # Obtener el nombre completo del usuario que procesó
+    usuario_nombre = devolucion.usuario.get_full_name() or devolucion.usuario.username
+    
+    # Obtener el motivo en texto legible (si usas choices en el modelo, puedes traducir)
+    motivo_display = devolucion.motivo
+    # Si tienes un diccionario de motivos, puedes mapearlo aquí
+    
+    # HTML del PDF
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Devolución {devolucion.id}</title>
+        <style>
+            body {{
+                font-family: 'Helvetica', sans-serif;
+                margin: 2cm;
+                color: #333;
+            }}
+            h1 {{
+                color: #e74c3c;
+                text-align: center;
+                margin-bottom: 5px;
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 2px solid #e74c3c;
+                padding-bottom: 10px;
+            }}
+            .header p {{
+                margin: 5px 0;
+                font-size: 14px;
+            }}
+            .section {{
+                margin-bottom: 25px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 15px;
+                background: #fefefe;
+            }}
+            .section h2 {{
+                margin-top: 0;
+                background: #f2f2f2;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 18px;
+                color: #2c3e50;
+            }}
+            .info-row {{
+                margin-bottom: 8px;
+            }}
+            .info-label {{
+                font-weight: bold;
+                display: inline-block;
+                width: 180px;
+            }}
+            .info-value {{
+                display: inline-block;
+            }}
+            .total {{
+                text-align: right;
+                font-size: 12px;
+                color: #7f8c8d;
+                margin-top: 30px;
+                border-top: 1px solid #ddd;
+                padding-top: 10px;
+            }}
+            .footer {{
+                text-align: center;
+                font-size: 10px;
+                color: #95a5a6;
+                margin-top: 40px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Comprobante de Devolución</h1>
+            <p>Repuesto Super Bestia - Sistema de Gestión</p>
+        </div>
+
+        <div class="section">
+            <h2>Información de la Factura Original</h2>
+            <div class="info-row"><span class="info-label">Número de factura:</span><span class="info-value">{venta.numero_factura}</span></div>
+            <div class="info-row"><span class="info-label">Fecha de emisión:</span><span class="info-value">{venta.fecha_venta.strftime('%d/%m/%Y')}</span></div>
+            <div class="info-row"><span class="info-label">Cliente:</span><span class="info-value">{venta.cliente_nombre} ({venta.cliente_documento})</span></div>
+            <div class="info-row"><span class="info-label">Total actual de la factura:</span><span class="info-value">{total_actual}</span></div>
+        </div>
+
+        <div class="section">
+            <h2>Producto Devuelto</h2>
+            <div class="info-row"><span class="info-label">Código:</span><span class="info-value">{producto.codigo_producto}</span></div>
+            <div class="info-row"><span class="info-label">Descripción:</span><span class="info-value">{producto.descripcion}</span></div>
+            <div class="info-row"><span class="info-label">Marca:</span><span class="info-value">{producto.get_marca_display()}</span></div>
+            <div class="info-row"><span class="info-label">Cantidad devuelta:</span><span class="info-value">{devolucion.cantidad}</span></div>
+            <div class="info-row"><span class="info-label">Precio unitario:</span><span class="info-value">{precio_unitario_str}</span></div>
+            <div class="info-row"><span class="info-label">Monto total devuelto:</span><span class="info-value">{monto_devuelto}</span></div>
+        </div>
+
+        <div class="section">
+            <h2>Detalles de la Devolución</h2>
+            <div class="info-row"><span class="info-label">Número de devolución:</span><span class="info-value">DEV-{devolucion.fecha_devolucion.strftime('%Y%m%d')}-{venta.id}</span></div>
+            <div class="info-row"><span class="info-label">Fecha de devolución:</span><span class="info-value">{devolucion.fecha_devolucion.strftime('%d/%m/%Y %H:%M')}</span></div>
+            <div class="info-row"><span class="info-label">Motivo:</span><span class="info-value">{motivo_display}</span></div>
+            <div class="info-row"><span class="info-label">Observaciones:</span><span class="info-value">{devolucion.observaciones or 'Ninguna'}</span></div>
+            <div class="info-row"><span class="info-label">Usuario que procesó:</span><span class="info-value">{usuario_nombre}</span></div>
+        </div>
+
+        <div class="total">
+            Documento generado automáticamente. Este comprobante es válido como evidencia de devolución.
+        </div>
+        <div class="footer">
+            Super Bestia - Todos los derechos reservados.
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Crear respuesta PDF
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="devolucion_{devolucion.id}.pdf"'
+    
+    # Generar PDF
+    result = BytesIO()
+    pdf = pisa.CreatePDF(BytesIO(html_content.encode('UTF-8')), dest=result)
+    
+    if pdf.err:
+        return HttpResponse('Error al generar el PDF', status=500)
+    
+    response.write(result.getvalue())
+    return response
 
 @user_passes_test(is_superuser, login_url='/')
 def roles(request):
@@ -7912,7 +8315,6 @@ def anular(request):
     return render(request, "facturacion/anular.html")
 
 
-
 def buscar_factura(request):
     """Busca una factura por su número para mostrar detalles antes de anular"""
     if request.method == 'POST':
@@ -7922,16 +8324,13 @@ def buscar_factura(request):
             if not numero_factura:
                 return JsonResponse({'error': 'Número de factura requerido'}, status=400)
 
-            # Buscar la factura
             try:
                 venta = Venta.objects.get(numero_factura=numero_factura)
             except Venta.DoesNotExist:
                 return JsonResponse({'error': 'Factura no encontrada'}, status=404)
 
-            # Obtener detalles de la venta
             detalles = DetalleVenta.objects.filter(venta=venta)
 
-            # Información básica del cliente
             cliente_info = {
                 'nombre': venta.cliente_nombre,
                 'cedula': venta.cliente_documento,
@@ -7939,10 +8338,8 @@ def buscar_factura(request):
                 'direccion': 'N/A',
             }
 
-            # Determinar tipo de venta
             tipo_venta = 'Contado' if venta.tipo_venta == 'contado' else 'Crédito'
 
-            # Formatear datos para la respuesta
             factura_data = {
                 'id': venta.id,
                 'numero_factura': venta.numero_factura,
@@ -7961,7 +8358,6 @@ def buscar_factura(request):
                 'fecha_anulacion': venta.fecha_anulacion.isoformat() if venta.anulada and venta.fecha_anulacion else None,
             }
 
-            # Agregar items
             for detalle in detalles:
                 factura_data['items'].append({
                     'producto': detalle.producto.descripcion,
@@ -7981,6 +8377,107 @@ def buscar_factura(request):
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
+
+def anular_factura(request):
+    """Anula una factura usando el número de factura (no el ID)"""
+    if request.method == 'POST':
+        try:
+            numero_factura = request.POST.get('numero_factura', '').strip()
+            motivo = request.POST.get('motivo', '').strip()
+
+            if not numero_factura:
+                return JsonResponse({'error': 'Número de factura requerido'}, status=400)
+
+            if not motivo:
+                return JsonResponse({'error': 'Motivo de anulación requerido'}, status=400)
+
+            with transaction.atomic():
+                # Bloquear la fila con select_for_update para evitar condición de carrera
+                try:
+                    venta = Venta.objects.select_for_update().get(
+                        numero_factura=numero_factura,
+                        anulada=False
+                    )
+                except Venta.DoesNotExist:
+                    return JsonResponse({
+                        'error': 'Factura no encontrada o ya está anulada'
+                    }, status=404)
+
+                # FIX #1: Verificar si la cuenta por cobrar tiene pagos registrados.
+                # Si tiene pagos, no se puede anular sin antes revertir los pagos manualmente.
+                if venta.tipo_venta == 'credito':
+                    try:
+                        cuenta_check = CuentaPorCobrar.objects.get(
+                            venta=venta,
+                            anulada=False,
+                            eliminada=False
+                        )
+                        if cuenta_check.monto_pagado > Decimal('0.00'):
+                            return JsonResponse({
+                                'error': (
+                                    f'No se puede anular. La factura tiene pagos registrados '
+                                    f'por RD${cuenta_check.monto_pagado:.2f}. '
+                                    f'Debe revertir los pagos antes de anular.'
+                                )
+                            }, status=400)
+                    except CuentaPorCobrar.DoesNotExist:
+                        pass  # No hay cuenta, puede anularse libremente
+
+                # Anular la venta
+                venta.anulada = True
+                venta.motivo_anulacion = motivo
+                venta.fecha_anulacion = timezone.now()
+                venta.usuario_anulacion = request.user
+                venta.save()
+
+                # FIX #2: Restaurar inventario usando update() con F() para no
+                # disparar la lógica completa del save() de EntradaProducto
+                # (recálculo de porcentajes, ITBIS, movimientos de stock, etc.)
+                detalles = DetalleVenta.objects.filter(venta=venta).select_related('producto')
+                productos_restaurados = []
+
+                from django.db.models import F
+                for detalle in detalles:
+                    if detalle.producto:
+                        EntradaProducto.objects.filter(pk=detalle.producto.pk).update(
+                            cantidad=F('cantidad') + detalle.cantidad
+                        )
+                        productos_restaurados.append({
+                            'producto': detalle.producto.descripcion,
+                            'cantidad': detalle.cantidad
+                        })
+
+                # FIX #3: Anular también la CuentaPorCobrar asociada.
+                # Sin esto la cuenta queda activa apuntando a una venta anulada,
+                # y el cliente sigue apareciendo con deuda en el módulo de cobros.
+                if venta.tipo_venta == 'credito':
+                    try:
+                        cuenta = CuentaPorCobrar.objects.get(
+                            venta=venta,
+                            anulada=False,
+                            eliminada=False
+                        )
+                        cuenta.anulada = True
+                        cuenta.estado = 'anulada'
+                        cuenta.fecha_anulacion = timezone.now()
+                        cuenta.save()
+                    except CuentaPorCobrar.DoesNotExist:
+                        pass  # Ya estaba anulada o era venta al contado
+
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Factura #{numero_factura} anulada correctamente',
+                    'productos_restaurados': productos_restaurados
+                })
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en anular_factura: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({'error': 'Método no permitido'}, status=405)
 
 def anular_factura(request):
     """Anula una factura usando el número de factura (no el ID)"""

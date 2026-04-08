@@ -2,11 +2,12 @@
 {% load custom_filters %}
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>devoluciones</title>
-    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}"type="image/x-icon">
+    <link rel="shortcut icon" href="{% static 'image/logom5.jpeg' %}" type="image/x-icon">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -21,7 +22,8 @@
             box-sizing: border-box;
         }
 
-        html, body {
+        html,
+        body {
             height: 100%;
             overflow-x: hidden;
         }
@@ -339,7 +341,7 @@
             left: -100%;
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
             transition: left 0.5s;
         }
 
@@ -489,13 +491,13 @@
                 opacity: 0;
                 transform: translateY(-20px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
 
-        /* Scrollbar personalizado para la sidebar */
         .sidebar::-webkit-scrollbar {
             width: 6px;
         }
@@ -513,7 +515,6 @@
             background: rgba(255, 255, 255, 0.5);
         }
 
-        /* Desktop specific styles */
         @media (min-width: 769px) {
             .sidebar {
                 position: fixed;
@@ -535,7 +536,6 @@
             }
         }
 
-        /* Mobile Responsive */
         @media (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -607,6 +607,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Menu Toggle Button -->
     <button class="menu-toggle" onclick="toggleSidebar()">
@@ -616,8 +617,7 @@
     <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" onclick="closeSidebar()"></div>
 
-
-<!-- Sidebar Navigation -->
+    <!-- Sidebar Navigation -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h2>
@@ -627,136 +627,137 @@
             <p>Usuario: {{ user.username }}</p>
             <p>{{ user.email }}</p>
         </div>
-     <div class="sidebar-menu">
-    <!-- Menú para todos los usuarios -->
-    <a href="#" class="menu-item">
-        <i class='bx bx-home-alt'></i>
-        <span>Inicio</span>
-    </a>
+        <div class="sidebar-menu">
+            <!-- Menú para todos los usuarios -->
+            <a href="#" class="menu-item">
+                <i class='bx bx-home-alt'></i>
+                <span>Inicio</span>
+            </a>
 
-    <!-- Menú para Usuario Normal (excluye superusuarios de este bloque) -->
-    {% if user|has_group:"Usuario Normal" and not user.is_superuser %}
-    <a href="{% url 'ventas' %}" class="menu-item">
-        <i class='bx bx-receipt'></i>
-        <span>Facturación</span>
-    </a>
-    <a href="{% url 'cotizacion' %}" class="menu-item">
-        <i class='bx bx-calculator'></i>
-        <span>Cotización</span>
-    </a>
-    <a href="{% url 'registrodecliente' %}" class="menu-item">
-        <i class='bx bx-user-plus'></i>
-        <span>Registrar Cliente</span>
-    </a>
-    <a href="{% url 'listadecliente' %}" class="menu-item">
-        <i class='bx bx-group'></i>
-        <span>Clientes</span>
-    </a>
-    <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
-        <i class='bx bx-money'></i>
-        <span>Cuenta por Cobrar</span>
-    </a>
-    <a href="{% url 'inventario' %}" class="menu-item active">
-        <i class='bx bx-archive'></i>
-        <span>Inventario</span>
-    </a>
-    <a href="{% url 'reimprimirfactura' %}" class="menu-item">
-        <i class='bx bx-printer'></i>
-        <span>Reimprimir</span>
-    </a>
-    {% endif %}
+            <!-- Menú para Usuario Normal (excluye superusuarios de este bloque) -->
+            {% if user|has_group:"Usuario Normal" and not user.is_superuser %}
+            <a href="{% url 'ventas' %}" class="menu-item">
+                <i class='bx bx-receipt'></i>
+                <span>Facturación</span>
+            </a>
+            <a href="{% url 'cotizacion' %}" class="menu-item">
+                <i class='bx bx-calculator'></i>
+                <span>Cotización</span>
+            </a>
+            <a href="{% url 'registrodecliente' %}" class="menu-item">
+                <i class='bx bx-user-plus'></i>
+                <span>Registrar Cliente</span>
+            </a>
+            <a href="{% url 'listadecliente' %}" class="menu-item">
+                <i class='bx bx-group'></i>
+                <span>Clientes</span>
+            </a>
+            <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+                <i class='bx bx-money'></i>
+                <span>Cuenta por Cobrar</span>
+            </a>
+            <a href="{% url 'inventario' %}" class="menu-item active">
+                <i class='bx bx-archive'></i>
+                <span>Inventario</span>
+            </a>
+            <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+                <i class='bx bx-printer'></i>
+                <span>Reimprimir</span>
+            </a>
+            {% endif %}
 
-    <!-- Menú para Almacén (excluye superusuarios de este bloque) -->
-    {% if user|has_group:"Almacén" and not user.is_superuser %}
-    <a href="{% url 'entrada' %}" class="menu-item">
-        <i class='bx bx-package'></i>
-        <span>Entrada Mercancía</span>
-    </a>
-    <a href="{% url 'compras' %}" class="menu-item">
-        <i class='bx bx-cart-download'></i>
-        <span>Compras</span>
-    </a>
-    <a href="{% url 'inventario' %}" class="menu-item">
-        <i class='bx bx-archive'></i>
-        <span>Inventario</span>
-    </a>
-    <a href="{% url 'registrosuplidores' %}" class="menu-item">
-        <i class='bx bx-building'></i>
-        <span>Registrar Suplidores</span>
-    </a>
-    <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
-        <i class='bx bx-buildings'></i>
-        <span>Suplidores</span>
-    </a>
-    {% endif %}
+            <!-- Menú para Almacén (excluye superusuarios de este bloque) -->
+            {% if user|has_group:"Almacén" and not user.is_superuser %}
+            <a href="{% url 'entrada' %}" class="menu-item">
+                <i class='bx bx-package'></i>
+                <span>Entrada Mercancía</span>
+            </a>
+            <a href="{% url 'compras' %}" class="menu-item">
+                <i class='bx bx-cart-download'></i>
+                <span>Compras</span>
+            </a>
+            <a href="{% url 'inventario' %}" class="menu-item">
+                <i class='bx bx-archive'></i>
+                <span>Inventario</span>
+            </a>
+            <a href="{% url 'registrosuplidores' %}" class="menu-item">
+                <i class='bx bx-building'></i>
+                <span>Registrar Suplidores</span>
+            </a>
+            <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
+                <i class='bx bx-buildings'></i>
+                <span>Suplidores</span>
+            </a>
+            {% endif %}
 
-    <!-- Menú EXCLUSIVO para superusuarios -->
-    {% if user.is_superuser %}
-    <a href="{% url 'ventas' %}" class="menu-item">
-        <i class='bx bx-receipt'></i>
-        <span>Facturación</span>
-    </a>
-    <a href="{% url 'cotizacion' %}" class="menu-item">
-        <i class='bx bx-calculator'></i>
-        <span>Cotización</span>
-    </a>
-    <a href="{% url 'registrodecliente' %}" class="menu-item">
-        <i class='bx bx-user-plus'></i>
-        <span>Registrar Cliente</span>
-    </a>
-    <a href="{% url 'listadecliente' %}" class="menu-item">
-        <i class='bx bx-group'></i>
-        <span>Clientes</span>
-    </a>
-    <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
-        <i class='bx bx-money'></i>
-        <span>Cuenta por Cobrar</span>
-    </a>
-    <a href="{% url 'inventario' %}" class="menu-item ">
-        <i class='bx bx-archive'></i>
-        <span>Inventario</span>
-    </a>
-    <a href="{% url 'reimprimirfactura' %}" class="menu-item">
-        <i class='bx bx-printer'></i>
-        <span>Reimprimir</span>
-    </a>
-    <a href="{% url 'entrada' %}" class="menu-item">
-        <i class='bx bx-package'></i>
-        <span>Entrada Mercancía</span>
-    </a>
-    <a href="{% url 'compras' %}" class="menu-item">
-        <i class='bx bx-cart-download'></i>
-        <span>Compras</span>
-    </a>
-    <a href="{% url 'registrosuplidores' %}" class="menu-item">
-        <i class='bx bx-building'></i>
-        <span>Registrar Suplidores</span>
-    </a>
-    <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
-        <i class='bx bx-buildings'></i>
-        <span>Suplidores</span>
-    </a>
-    <a href="{% url 'devoluciones' %}" class="menu-item active">
-        <i class='bx bx-undo'></i>
-        <span>Devoluciones</span>
-    </a>
-    <a href="{% url 'roles' %}" class="menu-item">
-        <i class='bx bx-user-check'></i>
-        <span>Roles</span>
-    </a>
-    <a href="{% url 'cuentaporpagar' %}" class="menu-item">
-        <i class='bx bx-credit-card'></i>
-        <span>Cuenta Por Pagar</span>
-    </a>
-    <a href="{% url 'anular' %}" class="menu-item">
-        <i class='bx bx-x-circle'></i>
-        <span>Anular Factura</span>
-    </a>
-    <a href="{% url 'dashboard' %}" class="menu-item">
-        <i class='bx bx-grid-alt'></i>
-        <span>Dashboard</span>
-    </a>
-    {% endif %}
+            <!-- Menú EXCLUSIVO para superusuarios -->
+            {% if user.is_superuser %}
+            <a href="{% url 'ventas' %}" class="menu-item">
+                <i class='bx bx-receipt'></i>
+                <span>Facturación</span>
+            </a>
+            <a href="{% url 'cotizacion' %}" class="menu-item">
+                <i class='bx bx-calculator'></i>
+                <span>Cotización</span>
+            </a>
+            <a href="{% url 'registrodecliente' %}" class="menu-item">
+                <i class='bx bx-user-plus'></i>
+                <span>Registrar Cliente</span>
+            </a>
+            <a href="{% url 'listadecliente' %}" class="menu-item">
+                <i class='bx bx-group'></i>
+                <span>Clientes</span>
+            </a>
+            <a href="{% url 'cuentaporcobrar' %}" class="menu-item">
+                <i class='bx bx-money'></i>
+                <span>Cuenta por Cobrar</span>
+            </a>
+            <a href="{% url 'inventario' %}" class="menu-item ">
+                <i class='bx bx-archive'></i>
+                <span>Inventario</span>
+            </a>
+            <a href="{% url 'reimprimirfactura' %}" class="menu-item">
+                <i class='bx bx-printer'></i>
+                <span>Reimprimir</span>
+            </a>
+            <a href="{% url 'entrada' %}" class="menu-item">
+                <i class='bx bx-package'></i>
+                <span>Entrada Mercancía</span>
+            </a>
+            <a href="{% url 'compras' %}" class="menu-item">
+                <i class='bx bx-cart-download'></i>
+                <span>Compras</span>
+            </a>
+            <a href="{% url 'registrosuplidores' %}" class="menu-item">
+                <i class='bx bx-building'></i>
+                <span>Registrar Suplidores</span>
+            </a>
+            <a href="{% url 'gestiondesuplidores' %}" class="menu-item">
+                <i class='bx bx-buildings'></i>
+                <span>Suplidores</span>
+            </a>
+            <a href="{% url 'devoluciones' %}" class="menu-item active">
+                <i class='bx bx-undo'></i>
+                <span>Devoluciones</span>
+            </a>
+            <a href="{% url 'roles' %}" class="menu-item">
+                <i class='bx bx-user-check'></i>
+                <span>Roles</span>
+            </a>
+            <a href="{% url 'cuentaporpagar' %}" class="menu-item">
+                <i class='bx bx-credit-card'></i>
+                <span>Cuenta Por Pagar</span>
+            </a>
+            <a href="{% url 'anular' %}" class="menu-item">
+                <i class='bx bx-x-circle'></i>
+                <span>Anular Factura</span>
+            </a>
+            <a href="{% url 'dashboard' %}" class="menu-item">
+                <i class='bx bx-grid-alt'></i>
+                <span>Dashboard</span>
+            </a>
+            {% endif %}
+
 
     <!-- Cerrar sesión para todos -->
     <a href="{% url 'logout' %}" class="menu-item">
@@ -764,11 +765,18 @@
         <span>Cerrar Sesión</span>
     </a>
 </div>
+
+            <!-- Cerrar sesión para todos -->
+            <a href="{% url 'logout' %}" class="menu-item">
+                <i class='bx bx-log-out'></i>
+                <span>Cerrar Sesión</span>
+            </a>
+        </div>
+
         <div class="sidebar-footer">
             <p>Derejsoft v 1.2.2</p>
         </div>
     </nav>
-
 
     <!-- Main Content -->
     <div class="main-content">
@@ -783,26 +791,25 @@
 
             <div class="form-container">
                 {% if messages %}
-                    {% for message in messages %}
-                        <div class="success-message" style="display: block;">
-                            <i class='bx bx-check-circle'></i>
-                            {{ message }}
-                        </div>
-                    {% endfor %}
+                {% for message in messages %}
+                <div class="success-message" style="display: block;">
+                    <i class='bx bx-check-circle'></i>
+                    {{ message }}
+                </div>
+                {% endfor %}
                 {% endif %}
 
                 {% if error %}
-                    <div class="error-message" style="display: block;">
-                        <i class='bx bx-error'></i>
-                        {{ error }}
-                    </div>
+                <div class="error-message" style="display: block;">
+                    <i class='bx bx-error'></i>
+                    {{ error }}
+                </div>
                 {% endif %}
 
                 <div class="search-section">
                     <div class="form-group">
                         <label class="form-label" for="facturaInput">Número de Factura *</label>
-                        <input type="text" id="facturaInput" class="form-input" required 
-                               placeholder="Ej: FAC-001234">
+                        <input type="text" id="facturaInput" class="form-input" required placeholder="Ej: FAC-001234">
                         <div class="error-message" id="facturaError"></div>
                     </div>
                     <button id="searchButton" class="btn btn-primary">
@@ -813,7 +820,6 @@
 
                 <div id="facturaInfo" class="hidden">
                     <h2>Información de la Factura</h2>
-                    
                     <div class="product-info">
                         <div class="info-box">
                             <h3>Número de Factura</h3>
@@ -839,8 +845,12 @@
                             <h3>Vendedor</h3>
                             <p id="infoVendedor">-</p>
                         </div>
+                        <div class="info-box">
+                            <h3>Estado Devolución</h3>
+                            <p id="infoEstadoDevolucion">-</p>
+                        </div>
                     </div>
-                    
+
                     <h2 style="margin-top: 30px;">Productos en la Factura</h2>
                     <div class="form-group">
                         <label class="form-label" for="productoSelect">Seleccione un Producto *</label>
@@ -853,11 +863,9 @@
 
                 <div id="productInfo" class="hidden">
                     <h2>Información del Producto</h2>
-                    
                     <div class="product-image">
                         <img id="productImage" src="" alt="Imagen del producto">
                     </div>
-                    
                     <div class="product-info">
                         <div class="info-box">
                             <h3>Código</h3>
@@ -896,10 +904,9 @@
                             <p id="infoCantidad">-</p>
                         </div>
                     </div>
-                    
+
                     <div class="devolucion-section">
                         <h2><i class='bx bx-undo'></i> Proceso de Devolución</h2>
-                        
                         <form id="devolucionForm" class="devolucion-form">
                             {% csrf_token %}
                             <div class="form-group">
@@ -915,21 +922,21 @@
                                 </select>
                                 <div class="error-message" id="motivoDevolucionError"></div>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label" for="cantidadDevolver">Cantidad a Devolver *</label>
-                                <input type="number" id="cantidadDevolver" class="form-input" min="1" value="1" required>
+                                <input type="number" id="cantidadDevolver" class="form-input" min="1" value="1"
+                                    required>
                                 <div class="error-message" id="cantidadDevolverError"></div>
                             </div>
-                            
-                            
-                            
+
                             <div class="form-group full-width">
                                 <label class="form-label" for="observaciones">Observaciones</label>
-                                <textarea id="observaciones" class="form-input form-textarea" placeholder="Detalles adicionales sobre la devolución..."></textarea>
+                                <textarea id="observaciones" class="form-input form-textarea"
+                                    placeholder="Detalles adicionales sobre la devolución..."></textarea>
                                 <div class="error-message" id="observacionesError"></div>
                             </div>
-                            
+
                             <button type="submit" class="submit-button">
                                 <i class='bx bx-paper-plane'></i> Procesar Devolución
                             </button>
@@ -939,6 +946,7 @@
             </div>
         </div>
     </div>
+
     <!-- jQuery (requerido para Toastr) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Toastr JS -->
@@ -946,7 +954,7 @@
     <!-- SweetAlert2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-     // Configuración global de Toastr
+        // Configuración global de Toastr
         toastr.options = {
             "closeButton": true,
             "debug": false,
@@ -968,17 +976,17 @@
         // Función para mostrar mensajes de Django con Toastr
         function showDjangoMessages() {
             {% if messages %}
-                {% for message in messages %}
-                    {% if message.tags == 'error' %}
-                        toastr.error("{{ message }}");
-                    {% elif message.tags == 'success' %}
-                        toastr.success("{{ message }}");
-                    {% elif message.tags == 'warning' %}
-                        toastr.warning("{{ message }}");
-                    {% else %}
-                        toastr.info("{{ message }}");
-                    {% endif %}
-                {% endfor %}
+            {% for message in messages %}
+            {% if message.tags == 'error' %}
+            toastr.error("{{ message }}");
+            {% elif message.tags == 'success' %}
+            toastr.success("{{ message }}");
+            {% elif message.tags == 'warning' %}
+            toastr.warning("{{ message }}");
+            {% else %}
+            toastr.info("{{ message }}");
+            {% endif %}
+            {% endfor %}
             {% endif %}
         }
 
@@ -1014,30 +1022,22 @@
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const sidebarOverlay = document.querySelector('.sidebar-overlay');
-
             sidebar.classList.toggle('active');
             sidebarOverlay.classList.toggle('active');
-
             if (window.innerWidth <= 768) {
                 document.body.classList.toggle('sidebar-open');
             }
         }
-
         function closeSidebar() {
             const sidebar = document.getElementById('sidebar');
             const sidebarOverlay = document.querySelector('.sidebar-overlay');
-
             sidebar.classList.remove('active');
             sidebarOverlay.classList.remove('active');
             document.body.classList.remove('sidebar-open');
         }
-
-        // Cerrar sidebar al hacer clic en un enlace (móvil)
         document.querySelectorAll('.menu-item').forEach(item => {
             item.addEventListener('click', () => {
-                if (window.innerWidth <= 768) {
-                    closeSidebar();
-                }
+                if (window.innerWidth <= 768) closeSidebar();
             });
         });
 
@@ -1049,23 +1049,19 @@
         const productoSelect = document.getElementById('productoSelect');
         const devolucionForm = document.getElementById('devolucionForm');
 
-        // Asignar eventos
         searchButton.addEventListener('click', buscarFactura);
         productoSelect.addEventListener('change', mostrarProducto);
         devolucionForm.addEventListener('submit', procesarDevolucion);
 
-        // Variable global para almacenar la factura actual
         let facturaActual = null;
 
         // Función para buscar factura
         function buscarFactura() {
             const facturaId = facturaInput.value.trim();
-
             if (!facturaId) {
                 mostrarErrorToastr('Por favor, ingrese un número de factura.');
                 return;
             }
-
             fetch('/buscar-factura-devolucion/', {
                 method: 'POST',
                 headers: {
@@ -1074,24 +1070,24 @@
                 },
                 body: JSON.stringify({ numero_factura: facturaId })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    mostrarErrorToastr(data.error);
-                    facturaInfo.classList.add('hidden');
-                    productInfo.classList.add('hidden');
-                } else {
-                    facturaActual = data.factura;
-                    mostrarInfoFactura(facturaActual);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                mostrarErrorToastr('Error al buscar la factura. Intente nuevamente.');
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        mostrarErrorToastr(data.error);
+                        facturaInfo.classList.add('hidden');
+                        productInfo.classList.add('hidden');
+                    } else {
+                        facturaActual = data.factura;
+                        mostrarInfoFactura(facturaActual);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    mostrarErrorToastr('Error al buscar la factura. Intente nuevamente.');
+                });
         }
 
-        // Función para mostrar información de la factura
+        // Mostrar información de la factura
         function mostrarInfoFactura(factura) {
             document.getElementById('infoFactura').textContent = factura.id;
             document.getElementById('infoFecha').textContent = factura.fecha;
@@ -1099,10 +1095,10 @@
             document.getElementById('infoTotal').textContent = `RD$ ${factura.total}`;
             document.getElementById('infoEstadoFactura').textContent = factura.estado;
             document.getElementById('infoVendedor').textContent = factura.vendedor;
+            document.getElementById('infoEstadoDevolucion').textContent = factura.estado_devolucion || 'Sin devolución';
 
-            // Llenar el selector de productos
             productoSelect.innerHTML = '<option value="">Seleccione un producto</option>';
-            factura.productos.forEach((producto, index) => {
+            factura.productos.forEach((producto) => {
                 const option = document.createElement('option');
                 option.value = producto.id;
                 option.textContent = `${producto.producto} - ${producto.marca} (${producto.codigo})`;
@@ -1112,23 +1108,18 @@
 
             facturaInfo.classList.remove('hidden');
             productInfo.classList.add('hidden');
-
-            // Hacer scroll suave hacia la información de la factura
             facturaInfo.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Función para mostrar información del producto seleccionado
+        // Mostrar información del producto seleccionado
         function mostrarProducto() {
             const productoId = productoSelect.value;
             const productoData = productoSelect.options[productoSelect.selectedIndex]?.dataset.producto;
-
             if (!productoId || !productoData) {
                 productInfo.classList.add('hidden');
                 return;
             }
-
             const producto = JSON.parse(productoData);
-
             document.getElementById('infoCodigo').textContent = producto.codigo;
             document.getElementById('infoProducto').textContent = producto.producto;
             document.getElementById('infoMarca').textContent = producto.marca;
@@ -1141,14 +1132,11 @@
             document.getElementById('productImage').src = producto.imagen;
             document.getElementById('cantidadDevolver').setAttribute('max', producto.cantidad);
             document.getElementById('cantidadDevolver').value = 1;
-
             productInfo.classList.remove('hidden');
-
-            // Hacer scroll suave hacia la información del producto
             productInfo.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Función para procesar devolución
+        // Procesar devolución con apertura automática del PDF
         function procesarDevolucion(e) {
             e.preventDefault();
 
@@ -1157,34 +1145,20 @@
             const cantidad = document.getElementById('cantidadDevolver').value;
             const observaciones = document.getElementById('observaciones').value;
 
-            // Validaciones básicas
-            if (!productoId) {
-                mostrarErrorToastr('Debe seleccionar un producto.');
-                return;
-            }
+            if (!productoId) { mostrarErrorToastr('Debe seleccionar un producto.'); return; }
+            if (!motivo) { mostrarErrorToastr('Debe seleccionar un motivo de devolución.'); return; }
+            if (!cantidad || cantidad <= 0) { mostrarErrorToastr('La cantidad a devolver debe ser mayor a 0.'); return; }
 
-            if (!motivo) {
-                mostrarErrorToastr('Debe seleccionar un motivo de devolución.');
-                return;
-            }
-
-            if (!cantidad || cantidad <= 0) {
-                mostrarErrorToastr('La cantidad a devolver debe ser mayor a 0.');
-                return;
-            }
-
-            // Obtener la cantidad máxima permitida
             const cantidadMaxima = parseInt(document.getElementById('cantidadDevolver').getAttribute('max'));
             if (parseInt(cantidad) > cantidadMaxima) {
                 mostrarErrorToastr('No puede devolver más unidades de las vendidas.');
                 return;
             }
 
-            // Confirmar acción con SweetAlert2
             confirmarAccion(
                 'Confirmar Devolución',
                 '¿Está seguro de procesar esta devolución?',
-                function() {
+                function () {
                     fetch('/procesar-devolucion/', {
                         method: 'POST',
                         headers: {
@@ -1199,43 +1173,42 @@
                             observaciones: observaciones
                         })
                     })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.error) {
-                            mostrarErrorToastr(data.error);
-                        } else {
-                            mostrarExitoToastr(`${data.mensaje} Número de devolución: ${data.numero_devolucion}`);
-
-                            // Resetear formulario
-                            devolucionForm.reset();
-                            facturaInput.value = '';
-                            facturaInfo.classList.add('hidden');
-                            productInfo.classList.add('hidden');
-                            facturaActual = null;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        mostrarErrorToastr('Error al procesar la devolución. Intente nuevamente.');
-                    });
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                mostrarErrorToastr(data.error);
+                            } else {
+                                mostrarExitoToastr(`${data.mensaje} Número de devolución: ${data.numero_devolucion}`);
+                                // Abrir el PDF automáticamente si se devolvió el ID
+                                if (data.devolucion_id) {
+                                    const pdfUrl = `/generar-pdf-devolucion/${data.devolucion_id}/`;
+                                    window.open(pdfUrl, '_blank');
+                                }
+                                // Resetear formulario
+                                devolucionForm.reset();
+                                facturaInput.value = '';
+                                facturaInfo.classList.add('hidden');
+                                productInfo.classList.add('hidden');
+                                facturaActual = null;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            mostrarErrorToastr('Error al procesar la devolución. Intente nuevamente.');
+                        });
                 }
             );
         }
 
-        // Función para obtener el token CSRF
         function getCSRFToken() {
             const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
             return csrfInput ? csrfInput.value : '';
         }
 
-        // Cerrar sidebar al redimensionar ventana
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 768) {
-                closeSidebar();
-            }
+        window.addEventListener('resize', function () {
+            if (window.innerWidth > 768) closeSidebar();
         });
 
-        // Validación en tiempo real
         const inputs = document.querySelectorAll('.form-input');
         inputs.forEach(input => {
             input.addEventListener('blur', validateField);
@@ -1248,70 +1221,54 @@
             const value = field.value.trim();
             let isValid = true;
             let errorMessage = '';
-
             switch (fieldName) {
                 case 'facturaInput':
-                    if (!value) {
-                        errorMessage = 'El número de factura es requerido';
-                        isValid = false;
-                    }
+                    if (!value) { errorMessage = 'El número de factura es requerido'; isValid = false; }
                     break;
                 case 'motivoDevolucion':
-                    if (!value) {
-                        errorMessage = 'Debe seleccionar un motivo de devolución';
-                        isValid = false;
-                    }
+                    if (!value) { errorMessage = 'Debe seleccionar un motivo de devolución'; isValid = false; }
                     break;
                 case 'cantidadDevolver':
-                    if (!value) {
-                        errorMessage = 'La cantidad a devolver es requerida';
-                        isValid = false;
-                    } else if (parseInt(value) < 1) {
-                        errorMessage = 'La cantidad debe ser al menos 1';
-                        isValid = false;
-                    }
+                    if (!value) { errorMessage = 'La cantidad a devolver es requerida'; isValid = false; }
+                    else if (parseInt(value) < 1) { errorMessage = 'La cantidad debe ser al menos 1'; isValid = false; }
                     break;
             }
-
             if (!isValid) {
                 mostrarErrorToastr(errorMessage);
                 field.style.borderColor = '#dc3545';
             } else {
                 field.style.borderColor = '#28a745';
             }
-
             return isValid;
         }
-
         function clearError(e) {
             const field = e.target;
             field.style.borderColor = '#e1e8ed';
         }
 
-        // Mostrar mensajes de Django al cargar la página
-        $(document).ready(function() {
+        $(document).ready(function () {
             showDjangoMessages();
         });
-          // Manejar el cierre de sesión con SweetAlert2
-    document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function(e) {
-        e.preventDefault();
 
-        Swal.fire({
-            title: '¿Cerrar Sesión?',
-            text: '¿Está seguro de que desea cerrar la sesión?',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: '#667eea',
-            cancelButtonColor: '#dc3545',
-            confirmButtonText: 'Sí, Cerrar Sesión',
-            cancelButtonText: 'Cancelar',
-            backdrop: true
-        }).then((result) => {
-            if (result.isConfirmed) {
-                window.location.href = "{% url 'index' %}";
-            }
+        document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function (e) {
+            e.preventDefault();
+            Swal.fire({
+                title: '¿Cerrar Sesión?',
+                text: '¿Está seguro de que desea cerrar la sesión?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#667eea',
+                cancelButtonColor: '#dc3545',
+                confirmButtonText: 'Sí, Cerrar Sesión',
+                cancelButtonText: 'Cancelar',
+                backdrop: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = "{% url 'index' %}";
+                }
+            });
         });
-    });
-</script>
+    </script>
 </body>
+
 </html>

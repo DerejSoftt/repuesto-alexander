@@ -529,6 +529,20 @@
             box-shadow: none;
         }
 
+        /* Nuevo estilo para botón de descuento */
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+            color: white;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            box-shadow: 0 5px 15px rgba(255, 193, 7, 0.3);
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 193, 7, 0.4);
+        }
+
         /* Modal Styles */
         .modal {
             display: none;
@@ -1529,7 +1543,7 @@
                     isExpanded: isInvoiceExpanded,
                     anulada: account.status === 'anulada',
                     puede_eliminar: account.puede_eliminar || false,
-                    diasVencido: account.dias_vencido   // <--- NUEVO
+                    diasVencido: account.dias_vencido
                 });
 
                 clientsMap[clientKey].totalPending += pendingBalance;
@@ -1655,6 +1669,11 @@
                                 <i class='bx bx-history'></i>
                                 Historial
                             </button>
+                            <!-- NUEVO BOTÓN DE DESCUENTO -->
+                            <button class="btn btn-warning" onclick="aplicarDescuentoCliente('${client.clientName}-${client.clientPhone}', ${client.clientId})" title="Aplicar descuento porcentual a la deuda total">
+                                <i class='bx bx-percent'></i>
+                                Descuento %
+                            </button>
                         </div>
                     </td>
                 </tr>
@@ -1664,7 +1683,6 @@
                     client.invoices.forEach(invoice => {
                         const isInvoiceExpanded = invoice.isExpanded;
                         const hasMultipleProducts = invoice.products && invoice.products.length > 1;
-                        // Mostrar días vencidos si corresponde
                         const overdueSpan = invoice.diasVencido ? `<span style="color: #dc3545; margin-left: 10px; font-size: 0.85rem;">
                             ⚠️ Vencida hace ${invoice.diasVencido} días
                         </span>` : '';
@@ -1729,6 +1747,72 @@
 
             tableBody.innerHTML = tableRowsHTML;
             console.log('Tabla renderizada:', groupedClients.length, 'clientes');
+        }
+
+        // ===== FUNCIÓN APLICAR DESCUENTO POR CLIENTE =====
+        function aplicarDescuentoCliente(clientKey, clientId) {
+            Swal.fire({
+                title: 'Descuento sobre deuda',
+                html: `
+                    <div style="text-align: left;">
+                        <label for="discountPercent">Porcentaje de descuento (%)</label>
+                        <input type="number" id="discountPercent" class="swal2-input" min="0" max="100" step="0.01" placeholder="Ej: 10">
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Aplicar descuento',
+                cancelButtonText: 'Cancelar',
+                preConfirm: () => {
+                    const percent = document.getElementById('discountPercent').value;
+                    if (!percent || percent < 0 || percent > 100) {
+                        Swal.showValidationMessage('Ingrese un porcentaje válido entre 0 y 100');
+                        return false;
+                    }
+                    return { percent: parseFloat(percent) };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const percent = result.value.percent;
+                    Swal.fire({
+                        title: 'Aplicando descuento...',
+                        text: `Se reducirá la deuda en un ${percent}% para todas las facturas pendientes de este cliente.`,
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonText: 'Confirmar',
+                        cancelButtonText: 'Cancelar'
+                    }).then((confirm) => {
+                        if (confirm.isConfirmed) {
+                            // Enviar petición al servidor
+                            fetch(`/aplicar-descuento-cliente/${clientId}/`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': getCSRFToken()
+                                },
+                                body: JSON.stringify({ porcentaje: percent })
+                            })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        Swal.fire({
+                                            title: 'Descuento aplicado',
+                                            text: data.message,
+                                            icon: 'success'
+                                        }).then(() => {
+                                            window.location.reload();
+                                        });
+                                    } else {
+                                        Swal.fire('Error', data.message, 'error');
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error(error);
+                                    Swal.fire('Error de conexión', 'No se pudo aplicar el descuento', 'error');
+                                });
+                        }
+                    });
+                }
+            });
         }
 
         function toggleClientInvoices(clientKey) {
@@ -1930,7 +2014,6 @@
             document.getElementById('detailPaidAmount').textContent = `RD$ ${account.paidAmount.toLocaleString('es-DO')}`;
             document.getElementById('detailPendingAmount').textContent = `RD$ ${account.pendingBalance.toLocaleString('es-DO')}`;
 
-            // Mostrar días vencidos si aplica
             const daysOverdueDiv = document.getElementById('detailDaysOverdue');
             const daysOverdueValue = document.getElementById('detailDaysOverdueValue');
             if (account.dias_vencido && account.dias_vencido > 0) {
