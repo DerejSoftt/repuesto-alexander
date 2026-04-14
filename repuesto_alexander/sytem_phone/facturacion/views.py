@@ -2189,7 +2189,10 @@ def ventas_por_usuario(request):
 def ventas_por_usuario_pdf(request):
     """
     Genera PDF con detalle de ventas y cobros por usuario.
-    El descuento se muestra siempre como monto en RD$ (nunca como porcentaje).
+    - Descuentos V: aplicados directamente en la venta.
+    - Descuentos CxC: acumulados de pagos con metodo_pago='descuento' o (monto=0 y descuento_monto>0).
+    - Se muestran en columnas separadas dentro de la fila de la factura.
+    - No se muestran filas para los pagos de descuento.
     """
     import io
     import pytz
@@ -2213,6 +2216,7 @@ def ventas_por_usuario_pdf(request):
         ahora_local = timezone.now().astimezone(tz_rd)
         fecha_reporte = ahora_local.strftime('%d/%m/%Y %I:%M %p')
 
+        # ========== VENTAS ==========
         ventas = Venta.objects.all()
         if fecha_desde:
             ventas = ventas.filter(fecha_venta__date__gte=fecha_desde)
@@ -2221,9 +2225,9 @@ def ventas_por_usuario_pdf(request):
 
         usuarios_excluidos = ['derej', 'soft']
         usuarios_activos = User.objects.filter(is_active=True).exclude(username__in=usuarios_excluidos)
-
         usuarios_con_ventas = ventas.filter(vendedor__in=usuarios_activos).values_list('vendedor_id', flat=True).distinct()
 
+        # ========== PAGOS (incluyendo descuentos CxC) ==========
         pagos_raw = PagoCuentaPorCobrar.objects.filter(anulado=False)
         if fecha_desde:
             pagos_raw = pagos_raw.filter(fecha_pago__date__gte=fecha_desde)
@@ -2244,18 +2248,27 @@ def ventas_por_usuario_pdf(request):
         ventas = ventas.filter(vendedor_id__in=usuarios_con_actividad_ids)
         pagos = pagos_raw.filter(usuario_id__in=usuarios_con_actividad_ids)
 
-        # ========== Asociar descuento de pagos con monto 0 al pago principal ==========
-        # ✅ CORREGIDO: usar descuento_monto en lugar de descuento_porcentaje
-        descuentos_por_factura = defaultdict(lambda: {'monto': Decimal('0.00')})
-        for pago in pagos.filter(monto=0):
-            if pago.cuenta and pago.cuenta.venta:
-                factura_num = pago.cuenta.venta.numero_factura
-                key = (factura_num, pago.fecha_pago.date())
-                if pago.descuento_monto:
-                    descuentos_por_factura[key]['monto'] = pago.descuento_monto
+        # ========== SEPARAR DESCUENTOS CxC Y COBROS NORMALES ==========
+        descuentos_cxc_por_factura = defaultdict(lambda: Decimal('0.00'))
+        cobros_normales = []
 
-        pagos_principales = pagos.filter(monto__gt=0)
+        for pago in pagos.select_related('cuenta__venta').iterator():
+            # Determinar si es un descuento CxC
+            es_descuento = (pago.metodo_pago == 'descuento') or (pago.monto == 0 and pago.descuento_monto > 0)
+            
+            if es_descuento:
+                # Obtener el monto del descuento
+                monto_desc = pago.monto if pago.monto > 0 else pago.descuento_monto
+                if monto_desc > 0 and pago.cuenta and pago.cuenta.venta:
+                    factura_num = pago.cuenta.venta.numero_factura
+                    descuentos_cxc_por_factura[factura_num] += monto_desc
+                # No se agrega a cobros_normales
+            else:
+                # Cobro normal (monto > 0 y no es descuento)
+                if pago.monto > 0:
+                    cobros_normales.append(pago)
 
+        # ========== CONSTRUIR FILAS ==========
         rows = []
         total_ventas_general = Decimal('0.00')
         total_efectivo = Decimal('0.00')
@@ -2263,10 +2276,10 @@ def ventas_por_usuario_pdf(request):
         total_credito = Decimal('0.00')
         total_cobros_efectivo = Decimal('0.00')
         total_cobros_transf = Decimal('0.00')
-        total_descuentos_ventas = Decimal('0.00')
-        total_descuentos_cobros = Decimal('0.00')
+        total_descuentos_venta = Decimal('0.00')
+        total_descuentos_cxc = Decimal('0.00')
 
-        # ---------- VENTAS ----------
+        # ----- VENTAS (con sus descuentos V y CxC) -----
         for venta in ventas.select_related('vendedor', 'cliente').iterator():
             es_anulada = venta.anulada
             devoluciones = Devolucion.objects.filter(venta=venta)
@@ -2277,7 +2290,6 @@ def ventas_por_usuario_pdf(request):
 
             if not es_anulada:
                 total_ventas_general += venta.total
-                total_descuentos_ventas += venta.descuento_monto
                 if venta.tipo_venta == 'contado':
                     if venta.metodo_pago == 'efectivo':
                         total_efectivo += venta.total
@@ -2299,9 +2311,13 @@ def ventas_por_usuario_pdf(request):
             elif tiene_devolucion:
                 estado_texto = f"Devuelto: RD${float(monto_devuelto):,.2f} ({quien_devuelve})"
 
-            descuento_texto = ""
-            if venta.descuento_monto and venta.descuento_monto > 0:
-                descuento_texto = f"V: RD${float(venta.descuento_monto):,.2f}"
+            # Descuento V (directo de la venta)
+            descuento_v = venta.descuento_monto if venta.descuento_monto else Decimal('0.00')
+            total_descuentos_venta += descuento_v
+
+            # Descuento CxC (acumulado)
+            descuento_cxc = descuentos_cxc_por_factura.get(venta.numero_factura, Decimal('0.00'))
+            total_descuentos_cxc += descuento_cxc
 
             rows.append({
                 'fecha': venta.fecha_venta.date(),
@@ -2311,14 +2327,15 @@ def ventas_por_usuario_pdf(request):
                 'tipo': tipo,
                 'metodo': metodo,
                 'valor': venta.total,
-                'descuento': descuento_texto,
+                'descuento_v': float(descuento_v),
+                'descuento_cxc': float(descuento_cxc),
                 'estado': estado_texto,
                 'es_anulada': es_anulada,
                 'tiene_devolucion': tiene_devolucion,
             })
 
-        # ---------- COBROS ----------
-        for pago in pagos_principales.select_related('usuario', 'cuenta', 'cuenta__venta').iterator():
+        # ----- COBROS NORMALES (pagos con monto > 0 que no son descuento) -----
+        for pago in cobros_normales:
             cliente_nombre = 'N/A'
             if pago.cuenta and pago.cuenta.venta:
                 if pago.cuenta.venta.cliente:
@@ -2335,25 +2352,16 @@ def ventas_por_usuario_pdf(request):
             else:
                 metodo = pago.metodo_pago
 
-            descuento_texto = ""
-            factura_num = pago.cuenta.venta.numero_factura if pago.cuenta and pago.cuenta.venta else None
-            if factura_num:
-                key = (factura_num, pago.fecha_pago.date())
-                if key in descuentos_por_factura:
-                    desc_info = descuentos_por_factura[key]
-                    if desc_info['monto'] and desc_info['monto'] > 0:
-                        descuento_texto = f"C: RD${float(desc_info['monto']):,.2f}"
-                        total_descuentos_cobros += desc_info['monto']
-
             rows.append({
                 'fecha': pago.fecha_pago.date(),
-                'factura': factura_num or 'N/A',
+                'factura': pago.cuenta.venta.numero_factura if pago.cuenta and pago.cuenta.venta else 'N/A',
                 'usuario': pago.usuario.username if pago.usuario else 'Sistema',
                 'cliente': cliente_nombre,
                 'tipo': 'Cobros',
                 'metodo': metodo,
                 'valor': pago.monto,
-                'descuento': descuento_texto,
+                'descuento_v': 0.0,
+                'descuento_cxc': 0.0,
                 'estado': '',
                 'es_anulada': False,
                 'tiene_devolucion': False,
@@ -2364,9 +2372,8 @@ def ventas_por_usuario_pdf(request):
         total_cobros = total_cobros_efectivo + total_cobros_transf
         total_contado = total_efectivo + total_cobros_efectivo
         total_registros = len(rows)
-        total_descuentos = total_descuentos_ventas + total_descuentos_cobros
 
-        # ========== GENERACIÓN DEL PDF (REPORTLAB) ==========
+        # ========== GENERACIÓN DEL PDF ==========
         HEADER_BG = (0.25, 0.25, 0.25)
         HEADER_TEXT = (1, 1, 1)
         ROW_ALT = (0.93, 0.93, 0.93)
@@ -2406,7 +2413,8 @@ def ventas_por_usuario_pdf(request):
             ("Transacciones",    str(total_registros), None),
             ("Efectivo",         f"RD${float(total_efectivo):,.2f}", f"({sum(1 for r in rows if r['metodo'] in ('efectivo', 'cobro/efectivo') and not r['es_anulada'])} ventas)"),
             ("Transferencias",   f"RD${float(total_transferencias):,.2f}", f"({sum(1 for r in rows if r['metodo'] in ('transferencia', 'cobro/transferencia') and not r['es_anulada'])} trans.)"),
-            ("Total Descuentos", f"RD${float(total_descuentos):,.2f}", None),
+            ("Desc. Venta",      f"RD${float(total_descuentos_venta):,.2f}", None),
+            ("Desc. CxC",        f"RD${float(total_descuentos_cxc):,.2f}", None),
             ("Cobros",           f"RD${float(total_cobros):,.2f}", f"({sum(1 for r in rows if r['tipo'] == 'Cobros')} cobros)"),
             ("Contado",          f"RD${float(total_contado):,.2f}", f"({sum(1 for r in rows if r['tipo'] == 'contado' and not r['es_anulada'])} ventas)"),
             ("Crédito",          f"RD${float(total_credito):,.2f}", f"({sum(1 for r in rows if r['metodo'] == 'credito' and not r['es_anulada'])} ventas)"),
@@ -2417,8 +2425,7 @@ def ventas_por_usuario_pdf(request):
         card_spacing = 0.12 * inch
         card_width = (total_card_area - (n_cards - 1) * card_spacing) / n_cards
         card_height = 0.70 * inch
-        card_y_top = height - 1.45 * inch
-        card_y_bottom = card_y_top - card_height
+        card_y_bottom = height - 1.45 * inch - card_height
 
         x = 1 * inch
         for label, value, sub in cards_data:
@@ -2439,10 +2446,10 @@ def ventas_por_usuario_pdf(request):
                 p.drawCentredString(x + card_width / 2, card_y_bottom + 0.10 * inch, sub)
             x += card_width + card_spacing
 
-        # Tabla
+        # Tabla con 10 columnas
         y_position = card_y_bottom - 0.30 * inch
 
-        headers = ['Fecha', 'Factura', 'Usuario', 'Cliente', 'Tipo', 'Método', 'Valor (RD$)', 'Descuento', 'Estado']
+        headers = ['Fecha', 'Factura', 'Usuario', 'Cliente', 'Tipo', 'Método', 'Valor (RD$)', 'Desc. V (RD$)', 'Desc. CxC (RD$)', 'Estado']
         col_x = [
             1.00 * inch,   # Fecha
             2.00 * inch,   # Factura
@@ -2451,8 +2458,9 @@ def ventas_por_usuario_pdf(request):
             5.80 * inch,   # Tipo
             6.60 * inch,   # Método
             7.50 * inch,   # Valor
-            8.50 * inch,   # Descuento
-            9.20 * inch,   # Estado
+            8.30 * inch,   # Desc. V
+            9.00 * inch,   # Desc. CxC
+            9.70 * inch,   # Estado
         ]
         col_widths = [
             0.95 * inch,
@@ -2461,9 +2469,10 @@ def ventas_por_usuario_pdf(request):
             1.45 * inch,
             0.75 * inch,
             0.85 * inch,
-            0.95 * inch,
+            0.75 * inch,
             0.65 * inch,
-            0.80 * inch,
+            0.65 * inch,
+            0.50 * inch,
         ]
         table_right = col_x[-1] + col_widths[-1]
         table_left = col_x[0]
@@ -2475,7 +2484,7 @@ def ventas_por_usuario_pdf(request):
             p.setLineWidth(0.4)
             p.rect(table_left, y - row_height, table_right - table_left, row_height, fill=1, stroke=0)
             p.setFillColorRGB(*HEADER_TEXT)
-            p.setFont("Helvetica-Bold", 9)
+            p.setFont("Helvetica-Bold", 8)
             for i, header in enumerate(headers):
                 p.drawString(col_x[i] + 0.05 * inch, y - row_height + 0.07 * inch, header)
             p.setStrokeColorRGB(*BORDER)
@@ -2483,7 +2492,7 @@ def ventas_por_usuario_pdf(request):
             return y - row_height
 
         y_position = draw_table_header(p, y_position, col_x, col_widths, headers, table_left, table_right, row_height)
-        p.setFont("Helvetica", 8)
+        p.setFont("Helvetica", 7)
 
         def draw_table_border(p, top_y, bottom_y, table_left, table_right, col_x, col_widths, BORDER):
             p.setStrokeColorRGB(*BORDER)
@@ -2502,7 +2511,7 @@ def ventas_por_usuario_pdf(request):
                 y_position = height - 1.50 * inch
                 y_position = draw_table_header(p, y_position, col_x, col_widths, headers, table_left, table_right, row_height)
                 table_top_y = y_position
-                p.setFont("Helvetica", 8)
+                p.setFont("Helvetica", 7)
 
             if idx % 2 == 0:
                 p.setFillColorRGB(*ROW_WHITE)
@@ -2518,14 +2527,15 @@ def ventas_por_usuario_pdf(request):
             text_y = y_position - row_height + 0.065 * inch
 
             fecha_str = row['fecha'].strftime('%d/%m/%Y')
-            factura = str(row['factura'])[:16]
-            usuario = str(row['usuario'])[:14]
-            cliente = str(row['cliente'])[:20]
-            tipo = str(row['tipo'])[:15]
-            metodo = str(row['metodo'])[:25]
+            factura = str(row['factura'])[:14]
+            usuario = str(row['usuario'])[:12]
+            cliente = str(row['cliente'])[:18]
+            tipo = str(row['tipo'])[:12]
+            metodo = str(row['metodo'])[:18]
             valor_str = f"RD${float(row['valor']):,.2f}"
-            descuento_str = row['descuento'][:15]
-            estado = str(row['estado'])[:30]
+            desc_v_str = f"RD${row['descuento_v']:,.2f}" if row['descuento_v'] > 0 else ""
+            desc_cxc_str = f"RD${row['descuento_cxc']:,.2f}" if row['descuento_cxc'] > 0 else ""
+            estado = str(row['estado'])[:25]
 
             cells = [
                 (col_x[0], fecha_str, False),
@@ -2535,17 +2545,17 @@ def ventas_por_usuario_pdf(request):
                 (col_x[4], tipo, False),
                 (col_x[5], metodo, False),
                 (col_x[6], valor_str, True),
-                (col_x[7], descuento_str, False),
-                (col_x[8], estado, False),
+                (col_x[7], desc_v_str, True),
+                (col_x[8], desc_cxc_str, True),
+                (col_x[9], estado, False),
             ]
 
-            for cx, text, right_align in cells:
+            for i, (cx, text, right_align) in enumerate(cells):
                 if right_align:
-                    p.drawRightString(cx + col_widths[6] - 0.05 * inch, text_y, text)
+                    p.drawRightString(cx + col_widths[i] - 0.05 * inch, text_y, text)
                 else:
                     p.drawString(cx + 0.05 * inch, text_y, text)
 
-            # Subrayado para devoluciones y anuladas
             if row.get('tiene_devolucion') and not row.get('es_anulada'):
                 p.setStrokeColorRGB(1, 1, 0)
                 p.setLineWidth(1.2)
