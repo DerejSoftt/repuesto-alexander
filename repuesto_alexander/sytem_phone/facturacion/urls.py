@@ -7,6 +7,7 @@ urlpatterns = [
     # path('logout/', views.logout_view, name='logout'),  
     path('', views.index, name='login'),  # Página de login
     path("" , views.index, name="index"),
+    path('logout/', views.logout_view, name='logout'),
     path("dashboard" , views.dashboard, name="dashboard"),
     path('dashboard/data/', views.dashboard_data, name='dashboard_data'),
     path("inventario", views.inventario, name="inventario"),
@@ -23,6 +24,7 @@ urlpatterns = [
     path('obtener-datos-plantilla/<int:plantilla_id>/', views.obtener_datos_plantilla, name='obtener_datos_plantilla'),
     path('buscar-productos-similares/', views.buscar_productos_similares, name='buscar_productos_similares'),
     path("cuentaporcobrar", views.cuentaporcobrar, name="cuentaporcobrar"),
+    path('aplicar-descuento-factura/<int:cuenta_id>/', views.aplicar_descuento_factura, name='aplicar_descuento_factura'),
     path("gestiondesuplidores", views.gestiondesuplidores, name="gestiondesuplidores"),
     path("registrosuplidores", views.registrosuplidores, name="registrosuplidores"),
     path('proveedores/agregar/', views.agregar_proveedor, name='agregar_proveedor'),
@@ -105,6 +107,8 @@ urlpatterns = [
     path('reporte-ventas-usuario-pdf/', views.reporte_ventas_usuario_actual_pdf, name='reporte_ventas_usuario_actual_pdf'),
      path('reporte-ventas-usuario-actual-pdf/', views.reporte_ventas_usuario_actual_pdf, name='reporte_ventas_usuario_actual_pdf'),
     path('reporte-ventas-usuario-actual/', views.reporte_ventas_usuario_actual, name='reporte_ventas_usuario_actual'),
+     path('generar-historial-cliente-pdf/<int:client_id>/', views.generar_historial_cliente_pdf, name='generar_historial_cliente_pdf'),
+     path('generar-reporte-vencidas-pdf/', views.generar_reporte_vencidas_pdf, name='generar_reporte_vencidas_pdf'),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
     
