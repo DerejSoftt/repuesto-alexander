@@ -2548,13 +2548,15 @@ def ventas_por_usuario_pdf(request):
             devolucion = Decimal('0.00')
             descuento = Decimal('0.00')
 
+            # Guardar el monto original de la venta
+            if es_credito_venta:
+                venta_credito = venta.total
+            else:
+                venta_contado = venta.total
+
+            # Ahora agregar los montos específicos de operaciones (sumados a la venta original)
             if es_anulada:
                 anulacion = venta.total
-            else:
-                if es_credito_venta:
-                    venta_credito = venta.total
-                else:
-                    venta_contado = venta.total
 
             if tiene_devolucion and monto_devuelto > 0:
                 devolucion = monto_devuelto
@@ -2662,6 +2664,14 @@ def ventas_por_usuario_pdf(request):
         c_cobros = Decimal('0.00')
         c_descuentos = Decimal('0.00')
 
+        # Contadores para tarjetas
+        count_ventas_contado = 0
+        count_ventas_credito = 0
+        count_devoluciones = 0
+        count_anulaciones = 0
+        count_descuentos = 0
+        count_cobros = 0
+
         for row in rows:
             v_contado += row['venta_contado']
             v_credito += row['venta_credito']
@@ -2671,6 +2681,20 @@ def ventas_por_usuario_pdf(request):
             c_cobros += row['cobro']
             if row['tipo'] == 'descuento_pago':
                 c_descuentos += row['descuento']
+
+            # Contar por tipo
+            if row['tipo'] == 'venta' and row['venta_contado'] > 0:
+                count_ventas_contado += 1
+            if row['tipo'] == 'venta' and row['venta_credito'] > 0:
+                count_ventas_credito += 1
+            if row['devolucion'] > 0:
+                count_devoluciones += 1
+            if row['es_anulada']:
+                count_anulaciones += 1
+            if row['descuento'] > 0 and row['tipo'] == 'descuento_pago':
+                count_descuentos += 1
+            if row['cobro'] > 0:
+                count_cobros += 1
 
         # Descuentos totales (venta + CxC)
         total_descuentos = v_descuentos + c_descuentos
@@ -2682,7 +2706,7 @@ def ventas_por_usuario_pdf(request):
         total_cobros_recibidos = c_cobros
 
         # Cantidad de anuladas
-        cantidad_anuladas = sum(1 for r in rows if r['es_anulada'])
+        cantidad_anuladas = count_anulaciones
 
         # Total de facturas anuladas (monto total)
         total_facturas_anuladas = v_anulaciones
@@ -2730,17 +2754,17 @@ def ventas_por_usuario_pdf(request):
              f"{float(total_vendido):,.2f}",           None),
             ("Transacciones",    str(total_registros),                        None),
             ("Venta Contado",    f"{float(v_contado):,.2f}",
-             f"({sum(1 for r in rows if r['tipo'] == 'venta' and r['venta_contado'] > 0)} ventas)"),
+             f"({count_ventas_contado} ventas)"),
             ("Venta Crédito",    f"{float(v_credito):,.2f}",
-             f"({sum(1 for r in rows if r['tipo'] == 'venta' and r['venta_credito'] > 0)} ventas)"),
+             f"({count_ventas_credito} ventas)"),
             ("Devoluciones",     f"{float(v_devoluciones):,.2f}",
-             f"({sum(1 for r in rows if r['devolucion'] > 0)} devol.)"),
+             f"({count_devoluciones} devol.)"),
             ("Anulaciones",      f"{float(v_anulaciones):,.2f}",
              f"({cantidad_anuladas} facturas)" if cantidad_anuladas > 0 else None),
             ("Total Desctos.",
              f"{float(total_descuentos):,.2f}",        None),
             ("Cobros Recib.",    f"{float(total_cobros_recibidos):,.2f}",
-             f"({sum(1 for r in rows if r['cobro'] > 0)} cobros)"),
+             f"({count_cobros} cobros)"),
         ]
 
         n_cards = len(cards_data)
@@ -2855,21 +2879,30 @@ def ventas_por_usuario_pdf(request):
             p.setFillColorRGB(0.10, 0.10, 0.10)
             text_y = y_pos - row_height + 0.07 * inch
 
-            # Formatear montos SOLO para la columna correspondiente al tipo
+            # Formatear montos: mostrar monto original DE LA VENTA + monto específico de la operación
             # Inicializar todas a vacío
             venta_str = devolucion_str = anulacion_str = descuento_str = cobro_str = ""
 
-            # Mostrar monto SOLO en columna del tipo de movimiento
+            venta_total = row['venta_contado'] + row['venta_credito']
+
+            # Mostrar montos según tipo de movimiento
             if row['tipo_movimiento'] in ['VENTA', 'VENTA C']:
-                venta_total = row['venta_contado'] + row['venta_credito']
+                # Solo venta
                 venta_str = f"{float(venta_total):,.2f}" if venta_total > 0 else ""
             elif row['tipo_movimiento'] == 'DEVOL':
+                # Mostrar venta original + devolución
+                venta_str = f"{float(venta_total):,.2f}" if venta_total > 0 else ""
                 devolucion_str = f"{float(row['devolucion']):,.2f}" if row['devolucion'] > 0 else ""
             elif row['tipo_movimiento'] == 'ANUL':
+                # Mostrar venta original + anulación
+                venta_str = f"{float(venta_total):,.2f}" if venta_total > 0 else ""
                 anulacion_str = f"{float(row['anulacion']):,.2f}" if row['anulacion'] > 0 else ""
             elif row['tipo_movimiento'] == 'DESCU':
+                # Mostrar venta original + descuento
+                venta_str = f"{float(venta_total):,.2f}" if venta_total > 0 else ""
                 descuento_str = f"{float(row['descuento']):,.2f}" if row['descuento'] > 0 else ""
             elif row['tipo_movimiento'] == 'COBRO':
+                # Solo cobro
                 cobro_str = f"{float(row['cobro']):,.2f}" if row['cobro'] > 0 else ""
 
             cells = [
