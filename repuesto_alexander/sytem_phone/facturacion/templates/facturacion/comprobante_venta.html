@@ -240,10 +240,6 @@
                 {% if venta.cliente and venta.cliente.direccion %}
                 <div><strong>Dirección:</strong> {{ venta.cliente.direccion }}</div>
                 {% endif %}
-<<<<<<< HEAD
-                <!-- Aquí va la condición corregida -->
-=======
->>>>>>> cansado
                 {% if venta.tipo_venta == 'credito' and fecha_vencimiento %}
                 <div><strong>Válido Hasta:</strong> {{ fecha_vencimiento|date:"d/m/Y" }}</div>
                 {% endif %}
@@ -304,11 +300,8 @@
             </div>
 
             <div class="note">
-<<<<<<< HEAD
-                <p><strong>Nota:</strong>
-=======
+
                 <p><strong>Nota:</strong></p>
->>>>>>> cansado
                 <p><strong>Tipo Pago:</strong> {{ venta.get_metodo_pago_display }}.</p>
                 {% if venta.tipo_venta == 'credito' %}
                 <!-- <p><strong>Venta a Crédito:</strong> Cliente: {{ venta.cliente_nombre }} - Documento: {{ venta.cliente_documento }}</p> -->
@@ -353,11 +346,8 @@
             // Añadir event listeners para cálculo automático
             const inputs = newRow.querySelectorAll('input');
             inputs[1].addEventListener('input', calculateRowTotal);
-<<<<<<< HEAD
-            inputs[3].addEventListener('input', calculateRowTotal);
-=======
             inputs[4].addEventListener('input', calculateRowTotal);
->>>>>>> cansado
+
 
             // Recalcular totales
             calculateTotals();
@@ -386,11 +376,8 @@
                 const cantidad = cells[1].querySelector('input') ?
                     parseInt(cells[1].querySelector('input').value || 0) :
                     parseInt(cells[1].textContent);
-<<<<<<< HEAD
-                const importe = parseFloat(cells[4].textContent.replace('$', '').replace(/,/g, '') || 0);
-=======
                 const importe = parseFloat(cells[5].textContent.replace('$', '').replace(/,/g, '') || 0);
->>>>>>> cansado
+
 
                 totalArticulos += cantidad;
                 subtotal += importe;
