@@ -758,21 +758,14 @@
             </a>
             {% endif %}
 
-<<<<<<< HEAD
+
     <!-- Cerrar sesión para todos -->
     <a href="{% url 'logout' %}" class="menu-item">
         <i class='bx bx-log-out'></i>
         <span>Cerrar Sesión</span>
     </a>
 </div>
-=======
-            <!-- Cerrar sesión para todos -->
-            <a href="{% url 'logout' %}" class="menu-item">
-                <i class='bx bx-log-out'></i>
-                <span>Cerrar Sesión</span>
-            </a>
-        </div>
->>>>>>> cansado
+
         <div class="sidebar-footer">
             <p>Derejsoft v 1.2.2</p>
         </div>
@@ -1250,7 +1243,7 @@
             showDjangoMessages();
         });
 
-        document.querySelector("a[href='{% url 'index' %}']").addEventListener("click", function (e) {
+        document.querySelector("a[href='{% url 'logout' %}']").addEventListener("click", function (e) {
             e.preventDefault();
             Swal.fire({
                 title: '¿Cerrar Sesión?',
@@ -1264,7 +1257,7 @@
                 backdrop: true
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = "{% url 'index' %}";
+                    window.location.href = "{% url 'logout' %}";
                 }
             });
         });

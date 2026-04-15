@@ -2332,13 +2332,9 @@ def ventas_por_usuario(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-<< << << < HEAD
-
-
 # ================================================================================================
 # ======================== APARTADO DE REPORTE DE VENTAS CUADRE ===================================
 # ================================================================================================
-== == == =
 
 
 # ================================================================================================
@@ -2353,7 +2349,6 @@ def ventas_por_usuario(request):
 # ============================================================================================
 # ======================== REPORTE DE VENTAS Y COBROS POR USUARIO (PDF GENERAL) ===============
 # ============================================================================================
->>>>>> > cansado
 
 
 @login_required
@@ -2396,7 +2391,8 @@ def ventas_por_usuario_pdf(request):
 
         usuarios_excluidos = ['derej', 'soft']
 
-        usuarios_activos = User.objects.filter(is_active=True).exclude(username__in=usuarios_excluidos)
+        usuarios_activos = User.objects.filter(
+            is_active=True).exclude(username__in=usuarios_excluidos)
         usuarios_con_ventas = ventas.filter(vendedor__in=usuarios_activos).values_list(
             'vendedor_id', flat=True).distinct()
 
@@ -2437,10 +2433,12 @@ def ventas_por_usuario_pdf(request):
 
         # ========== CALCULAR DESCUENTOS CxC POR FACTURA ==========
         descuentos_cxc_por_factura = defaultdict(lambda: Decimal('0.00'))
-        cobros_normales = []  # pagos que no son descuentos (efectivo/transferencia)
+        # pagos que no son descuentos (efectivo/transferencia)
+        cobros_normales = []
 
         for pago in pagos.select_related('cuenta__venta', 'usuario').iterator():
-            es_descuento = (pago.metodo_pago == 'descuento') or (pago.monto == 0 and pago.descuento_monto > 0)
+            es_descuento = (pago.metodo_pago == 'descuento') or (
+                pago.monto == 0 and pago.descuento_monto > 0)
             if es_descuento:
                 monto_desc = pago.monto if pago.monto > 0 else pago.descuento_monto
                 if monto_desc > 0 and pago.cuenta and pago.cuenta.venta:
@@ -2467,8 +2465,10 @@ def ventas_por_usuario_pdf(request):
             devoluciones = Devolucion.objects.filter(venta=venta)
             tiene_devolucion = devoluciones.exists()
 
-            monto_devuelto = devoluciones.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
-            usuarios_dev = devoluciones.values_list('usuario__username', flat=True).distinct()
+            monto_devuelto = devoluciones.aggregate(total=Sum('monto'))[
+                                                    'total'] or Decimal('0.00')
+            usuarios_dev = devoluciones.values_list(
+                'usuario__username', flat=True).distinct()
             quien_devuelve = ", ".join(usuarios_dev) if usuarios_dev else ""
 
             # Solo sumar a totales si NO está anulada
@@ -2483,7 +2483,8 @@ def ventas_por_usuario_pdf(request):
                     total_credito += venta.total
 
             tipo = 'venta'
-            metodo = (venta.metodo_pago if venta.metodo_pago else 'efectivo') if venta.tipo_venta == 'contado' else 'credito'
+            metodo = (
+                venta.metodo_pago if venta.metodo_pago else 'efectivo') if venta.tipo_venta == 'contado' else 'credito'
 
             estado_texto = ""
             if es_anulada:
@@ -2491,8 +2492,10 @@ def ventas_por_usuario_pdf(request):
             elif tiene_devolucion:
                 estado_texto = f"Dev: RD${float(monto_devuelto):,.2f} ({quien_devuelve})"
 
-            descuento_v = venta.descuento_monto if venta.descuento_monto else Decimal('0.00')
-            descuento_cxc = descuentos_cxc_por_factura.get(venta.numero_factura, Decimal('0.00'))
+            descuento_v = venta.descuento_monto if venta.descuento_monto else Decimal(
+                '0.00')
+            descuento_cxc = descuentos_cxc_por_factura.get(
+                venta.numero_factura, Decimal('0.00'))
             total_descuentos_venta += descuento_v
             total_descuentos_cxc += descuento_cxc
 
@@ -2607,7 +2610,8 @@ def ventas_por_usuario_pdf(request):
              f"({sum(1 for r in rows if r['metodo'] == 'efectivo' and r['tipo'] != 'cobro' and not r['es_anulada'])} ventas)"),
             ("Transferencias", f"RD${float(total_transferencias):,.2f}",
              f"({sum(1 for r in rows if r['metodo'] == 'transferencia' and r['tipo'] != 'cobro' and not r['es_anulada'])} trans.)"),
-            ("Total Desc.",    f"RD${float(total_descuentos_venta + total_descuentos_cxc):,.2f}", None),
+            ("Total Desc.",
+             f"RD${float(total_descuentos_venta + total_descuentos_cxc):,.2f}", None),
             ("Cobros",         f"RD${float(total_cobros):,.2f}",
              f"({sum(1 for r in rows if r['tipo'] == 'cobro')} cobros)"),
             ("Contado",        f"RD${float(total_contado):,.2f}",
@@ -2651,7 +2655,8 @@ def ventas_por_usuario_pdf(request):
             x += card_width + card_spacing
 
         # Definición de columnas (9 columnas)
-        headers = ['Fecha', 'Factura', 'Usuario', 'Cliente', 'Tipo', 'Método', 'Valor (RD$)', 'Descuento', 'Estado']
+        headers = ['Fecha', 'Factura', 'Usuario', 'Cliente',
+            'Tipo', 'Método', 'Valor (RD$)', 'Descuento', 'Estado']
 
         col_x = [
             0.50 * inch,   # Fecha
@@ -2767,7 +2772,8 @@ def ventas_por_usuario_pdf(request):
             for i, (cx, text, right_align) in enumerate(cells):
                 if right_align:
 
-                    p.drawRightString(cx + col_widths[i] - 0.05 * inch, text_y, text)
+                    p.drawRightString(
+                        cx + col_widths[i] - 0.05 * inch, text_y, text)
 
                 else:
                     p.drawString(cx + 0.05 * inch, text_y, text)
@@ -3792,7 +3798,8 @@ def procesar_venta(request):
             discount_percentage = Decimal('0.00')
             discount_amount = Decimal('0.00')
 
-            received_discount = safe_decimal(data.get('discount_percentage', 0))
+            received_discount = safe_decimal(
+                data.get('discount_percentage', 0))
 
             if received_discount > 0:
                 return JsonResponse({
@@ -3801,7 +3808,8 @@ def procesar_venta(request):
                 })
         else:
 
-            discount_percentage = safe_decimal(data.get('discount_percentage', 0))
+            discount_percentage = safe_decimal(
+                data.get('discount_percentage', 0))
             discount_amount = safe_decimal(data.get('discount_amount', 0))
 
         print(
@@ -3833,7 +3841,8 @@ def procesar_venta(request):
         # ============================================
         subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
 
-        itbis_calculado = subtotal_sin_itbis * (itbis_porcentaje / Decimal('100.00'))
+        itbis_calculado = subtotal_sin_itbis * \
+            (itbis_porcentaje / Decimal('100.00'))
 
         if abs(itbis_monto - itbis_calculado) > Decimal('0.01'):
             print(
@@ -3934,7 +3943,8 @@ def procesar_venta(request):
                 cantidad_solicitada = safe_int(item.get('quantity', 0))
                 precio_unitario = safe_decimal(item.get('price', 0))
 
-                tipo_precio = item.get('tipo_precio', 'unitaria')  # ← NUEVO: extraer tipo de precio
+                # ← NUEVO: extraer tipo de precio
+                tipo_precio = item.get('tipo_precio', 'unitaria')
 
                 if not producto_id:
                     return JsonResponse({'success': False, 'message': f'Producto sin ID: {producto_nombre}'})
@@ -4017,8 +4027,10 @@ def procesar_venta(request):
             producto.cantidad -= cantidad
             producto.save(update_fields=['cantidad'])
 
-            nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
-            print(f"Stock actualizado: {nombre_producto} -{cantidad} (Nuevo stock: {producto.cantidad})")
+            nombre_producto = getattr(producto, 'descripcion', getattr(
+                producto, 'nombre', 'Producto Desconocido'))
+            print(
+                f"Stock actualizado: {nombre_producto} -{cantidad} (Nuevo stock: {producto.cantidad})")
 
             detalle = DetalleVenta(
                 venta=venta,
@@ -4043,7 +4055,8 @@ def procesar_venta(request):
 
                 fecha_vencimiento_str = data.get('fecha_vencimiento')
                 if fecha_vencimiento_str:
-                    fecha_vencimiento = datetime.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+                    fecha_vencimiento = datetime.strptime(
+                        fecha_vencimiento_str, '%Y-%m-%d').date()
                 else:
 
                     fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
@@ -4080,10 +4093,8 @@ Productos:
             from django.core.mail import EmailMessage
             from django.conf import settings
 
-
-<
-
-            email_configured = hasattr(settings, 'EMAIL_HOST') and settings.EMAIL_HOST
+            email_configured = hasattr(
+                settings, 'EMAIL_HOST') and settings.EMAIL_HOST
 
             if email_configured:
                 recipient_list = []
@@ -4138,7 +4149,8 @@ Sistema de Ventas - Super Bestia
                         print(f"✓ Correo enviado a {recipient_list}")
 
                     except ImportError as e:
-                        print(f"✗ Error: generar_pdf_venta no encontrada: {str(e)}")
+                        print(
+                            f"✗ Error: generar_pdf_venta no encontrada: {str(e)}")
 
                     except Exception as e:
                         print(f"✗ Error al enviar correo: {str(e)}")
@@ -8387,60 +8399,39 @@ def buscar_factura_devolucion(request):
 
         if not numero_factura:
             return JsonResponse({'error': 'Por favor, ingrese un número de factura.'}, status=400)
-<<<<<<< HEAD
+ #Buscar la factura
 
-        # Buscar la factura
-=======
         
         # Buscar la factura (no anulada)
->>>>>>> cansado
+
         try:
             venta = Venta.objects.get(
                 numero_factura=numero_factura, anulada=False)
         except Venta.DoesNotExist:
             return JsonResponse({'error': 'No se encontró ninguna factura con ese número.'}, status=404)
-<<<<<<< HEAD
 
-        # Obtener detalles de la venta
-        detalles = DetalleVenta.objects.filter(venta=venta)
-
-=======
         
         # Verificar si la factura tiene al menos un detalle
         detalles = DetalleVenta.objects.filter(venta=venta)
         if not detalles.exists():
             return JsonResponse({'error': 'La factura no tiene productos para devolver.'}, status=400)
         
->>>>>>> cansado
+
         # Preparar información de productos
         productos = []
         for detalle in detalles:
             producto = detalle.producto
-<<<<<<< HEAD
 
-            # Obtener imagen si existe
-=======
             
             # Obtener URL de imagen si existe
->>>>>>> cansado
+
             imagen_url = '/static/images/default-product.png'
             if hasattr(producto, 'imagen') and producto.imagen:
                 try:
                     imagen_url = producto.imagen.url
                 except:
                     pass
-<<<<<<< HEAD
 
-            producto_info = {
-                'id': detalle.id,
-                'codigo': producto.codigo_producto,
-                'producto': producto.descripcion,  # Usar descripcion en lugar de nombre_producto
-                'marca': producto.get_marca_display() if producto.marca else 'N/A',
-                'capacidad': 'N/A',  # Tu modelo no tiene campo capacidad
-                'color': producto.get_color_display() if producto.color else 'N/A',
-                # Tu modelo no tiene campo estado, usa activo
-                'estado': 'Activo' if producto.activo else 'Inactivo',
-=======
             
             # Obtener valores de campos que pueden ser choices
             marca_display = producto.get_marca_display() if hasattr(producto, 'marca') and producto.marca else 'N/A'
@@ -8457,7 +8448,6 @@ def buscar_factura_devolucion(request):
                 'capacidad': getattr(producto, 'capacidad', 'N/A'),
                 'color': color_display,
                 'estado': 'Activo' if getattr(producto, 'activo', True) else 'Inactivo',
->>>>>>> cansado
                 'cantidad': detalle.cantidad,
                 'precio': str(detalle.precio_unitario),
                 'chasis': getattr(producto, 'imei_serial', 'N/A'),  # si no existe, poner N/A
@@ -8478,23 +8468,17 @@ def buscar_factura_devolucion(request):
         }
 
         return JsonResponse({'factura': factura_info})
-<<<<<<< HEAD
 
-=======
     
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Datos inválidos.'}, status=400)
->>>>>>> cansado
+
     except Exception as e:
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': f'Error interno al buscar la factura: {str(e)}'}, status=500)
 
 
-<<<<<<< HEAD
-=======
-
->>>>>>> cansado
 def registrar_movimiento_cuenta(cuenta, monto, tipo_movimiento, usuario, observaciones, referencia=None):
     """
     Registra un movimiento en la cuenta por cobrar para auditoría
@@ -8515,12 +8499,9 @@ def registrar_movimiento_cuenta(cuenta, monto, tipo_movimiento, usuario, observa
         # Si no existe el modelo, solo registrar en logs
         print(f"Movimiento de Cuenta - {cuenta.id}: {observaciones}")
 
-<<<<<<< HEAD
+
 
 @user_passes_test(is_superuser, login_url='/')
-=======
-@user_passes_test(lambda u: u.is_superuser, login_url='/admin/login/')
->>>>>>> cansado
 @csrf_exempt
 @require_http_methods(["POST"])
 @transaction.atomic
@@ -8533,33 +8514,17 @@ def procesar_devolucion(request):
     try:
         data = json.loads(request.body)
 
-<<<<<<< HEAD
-        # Validar datos requeridos
-=======
+
         # Validar campos requeridos
->>>>>>> cansado
+
         required_fields = ['factura_id', 'producto_id', 'motivo', 'cantidad']
         for field in required_fields:
             if field not in data or not data[field]:
                 return JsonResponse({'error': f'El campo {field} es requerido.'}, status=400)
 
         # Obtener la venta y el detalle
-<<<<<<< HEAD
-        venta = get_object_or_404(
-            Venta, numero_factura=data['factura_id'], anulada=False)
-        detalle = get_object_or_404(
-            DetalleVenta, id=data['producto_id'], venta=venta)
 
-        # Validar cantidad
-        cantidad_devolver = int(data['cantidad'])
-        if cantidad_devolver <= 0:
-            return JsonResponse({'error': 'La cantidad a devolver debe ser mayor a 0.'}, status=400)
 
-        if cantidad_devolver > detalle.cantidad:
-            return JsonResponse({'error': 'No puede devolver más unidades de las vendidas.'}, status=400)
-
-        # Realizar la devolución
-=======
         venta = get_object_or_404(Venta, numero_factura=data['factura_id'], anulada=False)
         detalle = get_object_or_404(DetalleVenta, id=data['producto_id'], venta=venta)
 
@@ -8568,25 +8533,19 @@ def procesar_devolucion(request):
             return JsonResponse({'error': 'Cantidad a devolver inválida.'}, status=400)
 
         # --- 1. RESTAURAR STOCK ---
->>>>>>> cansado
+
         producto = detalle.producto
         EntradaProducto.objects.filter(pk=producto.pk).update(
             cantidad=F('cantidad') + cantidad_devolver
         )
-<<<<<<< HEAD
 
-        # Calcular monto a descontar de la cuenta por cobrar
-        monto_devolucion = cantidad_devolver * detalle.precio_unitario
-
-        # Actualizar detalle de venta
-=======
         producto.refresh_from_db()
 
         # --- 2. CALCULAR MONTO DE DEVOLUCIÓN ---
         monto_devolucion = cantidad_devolver * detalle.precio_unitario
 
         # --- 3. ACTUALIZAR DETALLE Y VENTA ---
->>>>>>> cansado
+
         detalle.cantidad -= cantidad_devolver
         if detalle.cantidad == 0:
             detalle.delete()
@@ -8596,34 +8555,7 @@ def procesar_devolucion(request):
 
         # Recalcular totales de la venta
         detalles_restantes = DetalleVenta.objects.filter(venta=venta)
-<<<<<<< HEAD
-        venta.subtotal = sum(
-            detalle.subtotal for detalle in detalles_restantes)
 
-        # Recalcular ITBIS basado en el nuevo subtotal
-        venta.itbis_monto = venta.subtotal * (venta.itbis_porcentaje / 100)
-
-        # Recalcular total con ITBIS
-        venta.total = venta.subtotal + venta.itbis_monto - venta.descuento_monto
-
-        # Recalcular total_a_pagar (sin ITBIS) - IMPORTANTE: Mantener sin ITBIS
-        venta.total_a_pagar = venta.subtotal - venta.descuento_monto
-
-        venta.save()
-
-        # ACTUALIZAR CUENTA POR COBRAR - CORRECCIÓN CRÍTICA
-        try:
-            cuenta = CuentaPorCobrar.objects.get(
-                venta=venta, anulada=False, eliminada=False)
-
-            # IMPORTANTE: Actualizar BOTH campos para mantener consistencia
-            cuenta.monto_total = venta.total_a_pagar  # SIN ITBIS
-
-            # Recalcular el estado basado en el nuevo saldo
-            saldo_pendiente = cuenta.monto_total - cuenta.monto_pagado
-
-            if saldo_pendiente <= 0:
-=======
         nuevo_subtotal = sum(d.subtotal for d in detalles_restantes)
 
         venta.subtotal = nuevo_subtotal
@@ -8641,55 +8573,21 @@ def procesar_devolucion(request):
             saldo_pendiente = cuenta.monto_total - monto_pagado_actual
 
             if saldo_pendiente <= Decimal('0.00'):
->>>>>>> cansado
+
                 cuenta.estado = 'pagada'
             elif monto_pagado_actual > 0:
                 cuenta.estado = 'parcial'
             else:
                 cuenta.estado = 'pendiente'
 
-<<<<<<< HEAD
-            # Verificar vencimiento
-            if cuenta.esta_vencida:
-=======
+
             if cuenta.estado != 'pagada' and cuenta.esta_vencida:
->>>>>>> cansado
+
                 cuenta.estado = 'vencida'
 
             cuenta.save()
 
-<<<<<<< HEAD
-            # Registrar movimiento de devolución
-            registrar_movimiento_cuenta(
-                cuenta,
-                monto_devolucion,
-                'devolucion',
-                request.user,
-                f"Devolución de {cantidad_devolver} unidades del producto {producto.descripcion}"
-            )
 
-            # Devolver datos actualizados para actualización en tiempo real
-            return JsonResponse({
-                'success': True,
-                'mensaje': f'Devolución procesada correctamente. Se han devuelto {cantidad_devolver} unidades.',
-                'numero_devolucion': f'DEV-{timezone.now().strftime("%Y%m%d")}-{venta.id}',
-                'monto_devolucion': str(monto_devolucion),
-                'datos_actualizados': {
-                    'cuenta_id': cuenta.id,
-                    'nuevo_monto_total': float(cuenta.monto_total),
-                    'nuevo_saldo_pendiente': float(max(0, saldo_pendiente)),
-                    'nuevo_estado': cuenta.estado,
-                    'nuevo_total_venta': float(venta.total_a_pagar),
-                    'factura_numero': venta.numero_factura
-                }
-            })
-
-        except CuentaPorCobrar.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': 'No se encontró la cuenta por cobrar asociada a esta factura.'
-            })
-=======
             # Registrar movimiento de auditoría (si tienes la función)
             # registrar_movimiento_cuenta(
             #     cuenta,
@@ -8750,14 +8648,13 @@ def procesar_devolucion(request):
                 'estado_devolucion': venta.estado_devolucion
             }
         })
->>>>>>> cansado
+
 
     except Exception as e:
         traceback.print_exc()
         return JsonResponse({'error': f'Error al procesar la devolución: {str(e)}'}, status=500)
 
-<<<<<<< HEAD
-=======
+
 
 def enviar_notificacion_devolucion(devolucion, venta, detalle, cantidad_devuelta, monto, usuario, monto_pagado):
     """
@@ -8900,7 +8797,7 @@ def generar_pdf_devolucion(request, devolucion_id):
 # Función para verificar si el usuario es superusuario
 # def is_superuser(user):
 #     return user.is_superuser
->>>>>>> cansado
+
 
 @user_passes_test(is_superuser, login_url='/')
 def roles(request):
