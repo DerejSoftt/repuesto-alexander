@@ -240,7 +240,10 @@
                 {% if venta.cliente and venta.cliente.direccion %}
                 <div><strong>Dirección:</strong> {{ venta.cliente.direccion }}</div>
                 {% endif %}
+<<<<<<< HEAD
                 <!-- Aquí va la condición corregida -->
+=======
+>>>>>>> cansado
                 {% if venta.tipo_venta == 'credito' and fecha_vencimiento %}
                 <div><strong>Válido Hasta:</strong> {{ fecha_vencimiento|date:"d/m/Y" }}</div>
                 {% endif %}
@@ -251,7 +254,8 @@
                     <tr>
                         <th width="15%">Código</th>
                         <th width="10%">Cantidad</th>
-                        <th width="45%">Descripción</th>
+                        <th width="35%">Descripción</th>
+                        <th width="10%">Tipo</th> <!-- NUEVA COLUMNA -->
                         <th width="15%">Precio</th>
                         <th width="15%">Importe</th>
                     </tr>
@@ -266,6 +270,7 @@
                             <br><small>{{ detalle.producto.descripcion }}</small>
                             {% endif %}
                         </td>
+                        <td>{{ detalle.get_tipo_precio_display }}</td> <!-- MUESTRA EL TIPO -->
                         <td>${{ detalle.precio_unitario|floatformat:2|intcomma }}</td>
                         <td>${{ detalle.subtotal|floatformat:2|intcomma }}</td>
                     </tr>
@@ -286,10 +291,6 @@
                     <strong>ITBIS ({{ venta.itbis_porcentaje|floatformat:0 }}%) $:</strong>
                     <span>${{ venta.itbis_monto|floatformat:2|intcomma }}</span>
                 </div>
-                <!-- <div>
-                    <strong>Subtotal (con ITBIS) $:</strong>
-                    <span>${{ venta.subtotal|add:venta.itbis_monto|floatformat:2|intcomma }}</span>
-                </div> -->
                 {% if venta.descuento_monto > 0 %}
                 <div>
                     <strong>Descuento ({{ venta.descuento_porcentaje|floatformat:2 }}%) $:</strong>
@@ -303,7 +304,11 @@
             </div>
 
             <div class="note">
+<<<<<<< HEAD
                 <p><strong>Nota:</strong>
+=======
+                <p><strong>Nota:</strong></p>
+>>>>>>> cansado
                 <p><strong>Tipo Pago:</strong> {{ venta.get_metodo_pago_display }}.</p>
                 {% if venta.tipo_venta == 'credito' %}
                 <!-- <p><strong>Venta a Crédito:</strong> Cliente: {{ venta.cliente_nombre }} - Documento: {{ venta.cliente_documento }}</p> -->
@@ -339,6 +344,7 @@
                 <td><input type="text" placeholder="Código" style="width: 95%"></td>
                 <td><input type="number" placeholder="Cant" value="1" style="width: 90%"></td>
                 <td><input type="text" placeholder="Descripción" style="width: 95%"></td>
+                <td><input type="text" placeholder="Tipo" style="width: 95%"></td>
                 <td><input type="number" placeholder="Precio" style="width: 90%"></td>
                 <td>$0.00</td>
             `;
@@ -347,7 +353,11 @@
             // Añadir event listeners para cálculo automático
             const inputs = newRow.querySelectorAll('input');
             inputs[1].addEventListener('input', calculateRowTotal);
+<<<<<<< HEAD
             inputs[3].addEventListener('input', calculateRowTotal);
+=======
+            inputs[4].addEventListener('input', calculateRowTotal);
+>>>>>>> cansado
 
             // Recalcular totales
             calculateTotals();
@@ -357,7 +367,7 @@
         function calculateRowTotal() {
             const row = this.parentElement.parentElement;
             const cantidad = row.querySelector('input:nth-child(2)').value || 0;
-            const precio = row.querySelector('input:nth-child(4)').value || 0;
+            const precio = row.querySelector('input:nth-child(5)').value || 0;
             const importe = cantidad * precio;
 
             row.querySelector('td:last-child').textContent = `$${importe.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`;
@@ -376,7 +386,11 @@
                 const cantidad = cells[1].querySelector('input') ?
                     parseInt(cells[1].querySelector('input').value || 0) :
                     parseInt(cells[1].textContent);
+<<<<<<< HEAD
                 const importe = parseFloat(cells[4].textContent.replace('$', '').replace(/,/g, '') || 0);
+=======
+                const importe = parseFloat(cells[5].textContent.replace('$', '').replace(/,/g, '') || 0);
+>>>>>>> cansado
 
                 totalArticulos += cantidad;
                 subtotal += importe;
