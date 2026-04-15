@@ -2383,10 +2383,10 @@ def ventas_por_usuario_pdf(request):
     try:
         fecha_desde = request.GET.get('fecha_desde')
         fecha_hasta = request.GET.get('fecha_hasta')
-        usuario_id  = request.GET.get('usuario')
+        usuario_id = request.GET.get('usuario')
 
         tz_rd = pytz.timezone('America/Santo_Domingo')
-        ahora_local  = timezone.now().astimezone(tz_rd)
+        ahora_local = timezone.now().astimezone(tz_rd)
         fecha_reporte = ahora_local.strftime('%d/%m/%Y %I:%M %p')
 
         USUARIOS_EXCLUIDOS = ['derej', 'soft']
@@ -2424,7 +2424,8 @@ def ventas_por_usuario_pdf(request):
             .values_list('usuario_id', flat=True).distinct()
         )
 
-        usuarios_con_actividad_ids = set(usuarios_con_ventas) | set(usuarios_con_cobros)
+        usuarios_con_actividad_ids = set(
+            usuarios_con_ventas) | set(usuarios_con_cobros)
 
         # Filtro opcional por usuario específico
         if usuario_id:
@@ -2440,10 +2441,12 @@ def ventas_por_usuario_pdf(request):
                 usuarios_con_actividad_ids = set()
 
         # Aplicar filtro de usuarios a ventas
-        ventas_qs = ventas_qs.filter(vendedor_id__in=usuarios_con_actividad_ids)
+        ventas_qs = ventas_qs.filter(
+            vendedor_id__in=usuarios_con_actividad_ids)
 
         # Aplicar filtro de usuarios a pagos
-        pagos_en_rango = pagos_raw.filter(usuario_id__in=usuarios_con_actividad_ids)
+        pagos_en_rango = pagos_raw.filter(
+            usuario_id__in=usuarios_con_actividad_ids)
 
         # ──────────────────────────────────────────────
         # 3. HELPER: detectar si un pago es descuento/ajuste
@@ -2473,14 +2476,18 @@ def ventas_por_usuario_pdf(request):
             # Devoluciones dentro del rango de fechas
             devoluciones = Devolucion.objects.filter(venta=venta)
             if fecha_desde:
-                devoluciones = devoluciones.filter(fecha_devolucion__date__gte=fecha_desde)
+                devoluciones = devoluciones.filter(
+                    fecha_devolucion__date__gte=fecha_desde)
             if fecha_hasta:
-                devoluciones = devoluciones.filter(fecha_devolucion__date__lte=fecha_hasta)
+                devoluciones = devoluciones.filter(
+                    fecha_devolucion__date__lte=fecha_hasta)
 
             tiene_devolucion = devoluciones.exists()
-            monto_devuelto   = devoluciones.aggregate(total=Sum('monto'))['total'] or Decimal('0.00')
-            quien_devuelve   = ", ".join(
-                devoluciones.values_list('usuario__username', flat=True).distinct()
+            monto_devuelto = devoluciones.aggregate(total=Sum('monto'))[
+                'total'] or Decimal('0.00')
+            quien_devuelve = ", ".join(
+                devoluciones.values_list(
+                    'usuario__username', flat=True).distinct()
             )
 
             # Descuento directo en la venta
@@ -2491,36 +2498,87 @@ def ventas_por_usuario_pdf(request):
                     descuento_v = monto_con_itbis - venta.total
 
             # Método y estado
+            es_credito_venta = venta.tipo_venta != 'contado'
             metodo_pago = (
                 (venta.metodo_pago or 'efectivo')
                 if venta.tipo_venta == 'contado'
                 else 'credito'
             )
 
+            # Helper para normalizar métodos
+            def normalizar_metodo(metodo_str):
+                if not metodo_str:
+                    return None
+                m = metodo_str.upper()
+                if 'TRANSFERENCIA' in m or 'TRANSF' in m:
+                    return 'TRAFER'
+                elif 'EFECTIVO' in m or 'EFE' in m:
+                    return 'EFE'
+                else:
+                    return m[:10]  # Truncar si es muy largo
+
+            # Determinar TIPO Y METODO para mostrar en tabla
+            if es_anulada:
+                tipo_movimiento = 'ANUL'
+                metodo_movimiento = normalizar_metodo(
+                    venta.metodo_pago) or 'EFE'
+            elif tiene_devolucion:
+                tipo_movimiento = 'DEVOL'
+                metodo_movimiento = normalizar_metodo(
+                    venta.metodo_pago) or 'EFE'
+            elif es_credito_venta:
+                tipo_movimiento = 'VENTA'
+                metodo_movimiento = normalizar_metodo(
+                    venta.metodo_pago) or 'CRED'
+            else:
+                tipo_movimiento = 'VENTA'
+                metodo_movimiento = normalizar_metodo(
+                    venta.metodo_pago) or 'EFE'
+
             estado_texto = ""
             if es_anulada:
                 estado_texto = "Anulada"
             elif tiene_devolucion:
-                estado_texto = f"Dev: RD${float(monto_devuelto):,.2f} ({quien_devuelve})"
+                estado_texto = f"Dev: RD${float(monto_devuelto):,.2f}"
 
-            # Texto de descuento: solo el descuento directo de venta (los descuentos
-            # de cobro aparecen en sus propias filas)
-            descuento_texto = f"V: RD${float(descuento_v):,.2f}" if descuento_v > 0 else ""
+            # Determinar montos por columna
+            venta_contado = Decimal('0.00')
+            venta_credito = Decimal('0.00')
+            anulacion = Decimal('0.00')
+            devolucion = Decimal('0.00')
+            descuento = Decimal('0.00')
+
+            if es_anulada:
+                anulacion = venta.total
+            else:
+                if es_credito_venta:
+                    venta_credito = venta.total
+                else:
+                    venta_contado = venta.total
+
+            if tiene_devolucion and monto_devuelto > 0:
+                devolucion = monto_devuelto
+
+            if descuento_v > 0:
+                descuento = descuento_v
 
             rows.append({
-                'fecha':           venta.fecha_venta.date(),
-                'factura':         venta.numero_factura,
-                'usuario':         venta.vendedor.username,
-                'cliente':         venta.cliente_nombre or 'N/A',
-                'tipo':            'venta',
-                'metodo':          metodo_pago,
-                'valor':           venta.total,
-                'descuento_monto': descuento_v,          # para acumuladores
-                'descuento_texto': descuento_texto,       # para mostrar
-                'estado':          estado_texto,
-                'es_anulada':      es_anulada,
+                'fecha':            venta.fecha_venta.date(),
+                'factura':          venta.numero_factura,
+                'usuario':          venta.vendedor.username,
+                'cliente':          venta.cliente_nombre or 'N/A',
+                'tipo':             'venta',
+                'tipo_movimiento':  tipo_movimiento,
+                'metodo_movimiento': metodo_movimiento,
+                'venta_contado':    venta_contado,
+                'venta_credito':    venta_credito,
+                'devolucion':       devolucion,
+                'anulacion':        anulacion,
+                'descuento':        descuento,
+                'cobro':            Decimal('0.00'),
+                'estado':           estado_texto,
+                'es_anulada':       es_anulada,
                 'tiene_devolucion': tiene_devolucion,
-                'monto_devuelto':  monto_devuelto,
             })
 
         # 4b. FILAS DE COBROS Y DESCUENTOS/AJUSTES (pagos en el rango)
@@ -2530,7 +2588,8 @@ def ventas_por_usuario_pdf(request):
             if pago.cuenta and pago.cuenta.venta:
                 v = pago.cuenta.venta
                 cliente_nombre = (
-                    v.cliente.full_name if v.cliente else (v.cliente_nombre or 'N/A')
+                    v.cliente.full_name if v.cliente else (
+                        v.cliente_nombre or 'N/A')
                 )
 
             # Número de factura asociada
@@ -2542,39 +2601,50 @@ def ventas_por_usuario_pdf(request):
 
             if es_descuento(pago):
                 # ── Fila de DESCUENTO/AJUSTE ──
-                # Mostrar en columna Descuento(-); NO suma a cobros reales
                 desc_monto = pago.descuento_monto if pago.descuento_monto > 0 else pago.monto
                 rows.append({
-                    'fecha':           pago.fecha_pago.date(),
-                    'factura':         factura_ref,
-                    'usuario':         pago.usuario.username if pago.usuario else 'Sistema',
-                    'cliente':         cliente_nombre,
-                    'tipo':            'descuento',
-                    'metodo':          pago.metodo_pago or 'descuento',
-                    'valor':           Decimal('0.00'),   # no suma a cobros
-                    'descuento_monto': desc_monto,
-                    'descuento_texto': f"C: RD${float(desc_monto):,.2f}",
-                    'estado':          '',
-                    'es_anulada':      False,
+                    'fecha':            pago.fecha_pago.date(),
+                    'factura':          factura_ref,
+                    'usuario':          pago.usuario.username if pago.usuario else 'Sistema',
+                    'cliente':          cliente_nombre,
+                    'tipo':             'descuento_pago',
+                    'tipo_movimiento':  'DESCU',
+                    'metodo_movimiento': pago.metodo_pago or 'AJUSTE',
+                    'venta_contado':    Decimal('0.00'),
+                    'venta_credito':    Decimal('0.00'),
+                    'devolucion':       Decimal('0.00'),
+                    'anulacion':        Decimal('0.00'),
+                    'descuento':        desc_monto,
+                    'cobro':            Decimal('0.00'),
+                    'estado':           'Descuento',
+                    'es_anulada':       False,
                     'tiene_devolucion': False,
-                    'monto_devuelto':  Decimal('0.00'),
                 })
             elif pago.monto > 0:
                 # ── Fila de COBRO REAL (efectivo / transferencia) ──
+                m_pago = pago.metodo_pago.upper() if pago.metodo_pago else 'EFE'
+                if 'TRANSFERENCIA' in m_pago or 'TRANSF' in m_pago:
+                    m_pago = 'TRAFER'
+                elif 'EFECTIVO' in m_pago or 'EFE' in m_pago:
+                    m_pago = 'EFE'
+                metodo_cobro = f"COB/{m_pago}"
                 rows.append({
-                    'fecha':           pago.fecha_pago.date(),
-                    'factura':         factura_ref,
-                    'usuario':         pago.usuario.username if pago.usuario else 'Sistema',
-                    'cliente':         cliente_nombre,
-                    'tipo':            'cobro',
-                    'metodo':          pago.metodo_pago or 'efectivo',
-                    'valor':           pago.monto,
-                    'descuento_monto': Decimal('0.00'),
-                    'descuento_texto': '',
-                    'estado':          '',
-                    'es_anulada':      False,
+                    'fecha':            pago.fecha_pago.date(),
+                    'factura':          factura_ref,
+                    'usuario':          pago.usuario.username if pago.usuario else 'Sistema',
+                    'cliente':          cliente_nombre,
+                    'tipo':             'cobro',
+                    'tipo_movimiento':  'COBRO',
+                    'metodo_movimiento': metodo_cobro,
+                    'venta_contado':    Decimal('0.00'),
+                    'venta_credito':    Decimal('0.00'),
+                    'devolucion':       Decimal('0.00'),
+                    'anulacion':        Decimal('0.00'),
+                    'descuento':        Decimal('0.00'),
+                    'cobro':            pago.monto,
+                    'estado':           'Cobro',
+                    'es_anulada':       False,
                     'tiene_devolucion': False,
-                    'monto_devuelto':  Decimal('0.00'),
                 })
 
         # Ordenar por fecha descendente
@@ -2584,89 +2654,38 @@ def ventas_por_usuario_pdf(request):
         # ──────────────────────────────────────────────
         # 5. ACUMULADORES (calculados exclusivamente desde `rows`)
         # ──────────────────────────────────────────────
-        v_efectivo       = Decimal('0.00')
-        v_transferencia  = Decimal('0.00')
-        v_credito        = Decimal('0.00')
-        v_descuento      = Decimal('0.00')   # descuentos directos en ventas del rango
-
-        c_efectivo       = Decimal('0.00')
-        c_transferencia  = Decimal('0.00')
-        c_ajuste         = Decimal('0.00')   # descuentos/ajustes sobre CxC en el rango
-
-        dev_efectivo     = Decimal('0.00')
-        dev_transferencia= Decimal('0.00')
-        anul_efectivo    = Decimal('0.00')
-        anul_transferencia = Decimal('0.00')
-
-        v_anulada        = Decimal('0.00')
-        cantidad_anuladas = 0
+        v_contado = Decimal('0.00')
+        v_credito = Decimal('0.00')
+        v_descuentos = Decimal('0.00')
+        v_devoluciones = Decimal('0.00')
+        v_anulaciones = Decimal('0.00')
+        c_cobros = Decimal('0.00')
+        c_descuentos = Decimal('0.00')
 
         for row in rows:
-            tipo = row['tipo']
+            v_contado += row['venta_contado']
+            v_credito += row['venta_credito']
+            v_descuentos += row['descuento']
+            v_devoluciones += row['devolucion']
+            v_anulaciones += row['anulacion']
+            c_cobros += row['cobro']
+            if row['tipo'] == 'descuento_pago':
+                c_descuentos += row['descuento']
 
-            if tipo == 'venta':
-                if row['es_anulada']:
-                    # Venta anulada
-                    v_anulada += row['valor']
-                    cantidad_anuladas += 1
-                    if row['metodo'] == 'efectivo':
-                        anul_efectivo += row['valor']
-                    elif row['metodo'] == 'transferencia':
-                        anul_transferencia += row['valor']
-                else:
-                    # Venta activa
-                    if row['metodo'] == 'efectivo':
-                        v_efectivo += row['valor']
-                    elif row['metodo'] == 'transferencia':
-                        v_transferencia += row['valor']
-                    elif row['metodo'] == 'credito':
-                        v_credito += row['valor']
+        # Descuentos totales (venta + CxC)
+        total_descuentos = v_descuentos + c_descuentos
 
-                    v_descuento += row['descuento_monto']
+        # TOTAL VENDIDO: ventas contado + crédito
+        total_vendido = v_contado + v_credito
 
-                    # Devoluciones
-                    if row['tiene_devolucion'] and row['monto_devuelto'] > 0:
-                        if row['metodo'] == 'efectivo':
-                            dev_efectivo += row['monto_devuelto']
-                        elif row['metodo'] == 'transferencia':
-                            dev_transferencia += row['monto_devuelto']
+        # TOTAL COBROS: cobros de CxC
+        total_cobros_recibidos = c_cobros
 
-            elif tipo == 'cobro':
-                if row['metodo'] == 'efectivo':
-                    c_efectivo += row['valor']
-                elif row['metodo'] == 'transferencia':
-                    c_transferencia += row['valor']
+        # Cantidad de anuladas
+        cantidad_anuladas = sum(1 for r in rows if r['es_anulada'])
 
-            elif tipo == 'descuento':
-                # Descuentos/ajustes de CxC realizados en el rango
-                c_ajuste += row['descuento_monto']
-
-        # ──────────────────────────────────────────────
-        # 6. TARJETAS DE RESUMEN
-        # ──────────────────────────────────────────────
-        # TOTAL VENDIDO: ventas activas creadas en el rango
-        total_vendido = v_efectivo + v_transferencia + v_credito
-
-        # EFECTIVO EN CAJA: lo que entró menos lo que salió
-        efectivo_en_caja = (v_efectivo + c_efectivo) - (dev_efectivo + anul_efectivo)
-
-        # TRANSFERENCIAS NETO
-        total_transferencias_neto = (
-            (v_transferencia + c_transferencia) - (dev_transferencia + anul_transferencia)
-        )
-
-        # CONTADO HOY: ventas activas pagadas de contado (efectivo + transferencia)
-        total_contado_hoy = v_efectivo + v_transferencia
-
-        # COBROS RECIBIDOS: dinero recuperado de CxC
-        total_cobros_recibidos = c_efectivo + c_transferencia
-
-        # TOTAL DESCUENTOS: descuentos en ventas + ajustes/descuentos de cobros CxC
-        total_descuentos = v_descuento + c_ajuste
-
-        total_credito           = v_credito
-        total_facturas_anuladas = v_anulada
-        total_devoluciones      = dev_efectivo + dev_transferencia
+        # Total de facturas anuladas (monto total)
+        total_facturas_anuladas = v_anulaciones
 
         # ──────────────────────────────────────────────────────────────────────
         # 7. GENERACIÓN DEL PDF
@@ -2675,11 +2694,11 @@ def ventas_por_usuario_pdf(request):
         p = canvas.Canvas(buffer, pagesize=landscape(letter))
         width, height = landscape(letter)
 
-        HEADER_BG   = (0.25, 0.25, 0.25)
+        HEADER_BG = (0.25, 0.25, 0.25)
         HEADER_TEXT = (1, 1, 1)
-        ROW_ALT     = (0.93, 0.93, 0.93)
-        ROW_WHITE   = (1, 1, 1)
-        BORDER      = (0.60, 0.60, 0.60)
+        ROW_ALT = (0.93, 0.93, 0.93)
+        ROW_WHITE = (1, 1, 1)
+        BORDER = (0.60, 0.60, 0.60)
 
         def draw_page_header(p, height, fecha_reporte, periodo):
             p.setFillColorRGB(0.15, 0.15, 0.15)
@@ -2707,35 +2726,36 @@ def ventas_por_usuario_pdf(request):
 
         # ── Tarjetas de resumen ──
         cards_data = [
-            ("Total Vendido",   f"RD${float(total_vendido):,.2f}",           None),
-            ("Transacciones",   str(total_registros),                        None),
-            ("Efectivo (Caja)", f"RD${float(efectivo_en_caja):,.2f}",
-             f"({sum(1 for r in rows if r['metodo'] == 'efectivo' and r['tipo'] == 'venta' and not r['es_anulada'])} ventas)"),
-            ("Banco",           f"RD${float(total_transferencias_neto):,.2f}",
-             f"({sum(1 for r in rows if r['metodo'] == 'transferencia' and r['tipo'] == 'venta' and not r['es_anulada'])} trans.)"),
-            ("Total Desctos.",  f"RD${float(total_descuentos):,.2f}",        None),
-            ("Cobros Recib.",   f"RD${float(total_cobros_recibidos):,.2f}",
-             f"({sum(1 for r in rows if r['tipo'] == 'cobro')} cobros)"),
-            ("Contado Hoy",     f"RD${float(total_contado_hoy):,.2f}",
-             f"({sum(1 for r in rows if r['tipo'] == 'venta' and r['metodo'] in ('efectivo', 'transferencia') and not r['es_anulada'])} ventas)"),
-            ("Crédito",         f"RD${float(total_credito):,.2f}",
-             f"({sum(1 for r in rows if r['metodo'] == 'credito' and not r['es_anulada'])} ventas)"),
-            ("Facturas Anul.",  f"RD${float(total_facturas_anuladas):,.2f}",
+            ("Total Vendido",
+             f"{float(total_vendido):,.2f}",           None),
+            ("Transacciones",    str(total_registros),                        None),
+            ("Venta Contado",    f"{float(v_contado):,.2f}",
+             f"({sum(1 for r in rows if r['tipo'] == 'venta' and r['venta_contado'] > 0)} ventas)"),
+            ("Venta Crédito",    f"{float(v_credito):,.2f}",
+             f"({sum(1 for r in rows if r['tipo'] == 'venta' and r['venta_credito'] > 0)} ventas)"),
+            ("Devoluciones",     f"{float(v_devoluciones):,.2f}",
+             f"({sum(1 for r in rows if r['devolucion'] > 0)} devol.)"),
+            ("Anulaciones",      f"{float(v_anulaciones):,.2f}",
              f"({cantidad_anuladas} facturas)" if cantidad_anuladas > 0 else None),
+            ("Total Desctos.",
+             f"{float(total_descuentos):,.2f}",        None),
+            ("Cobros Recib.",    f"{float(total_cobros_recibidos):,.2f}",
+             f"({sum(1 for r in rows if r['cobro'] > 0)} cobros)"),
         ]
 
-        n_cards          = len(cards_data)
-        total_card_area  = width - 1.00 * inch
-        card_spacing     = 0.12 * inch
-        card_width       = (total_card_area - (n_cards - 1) * card_spacing) / n_cards
-        card_height      = 0.70 * inch
-        card_y_bottom    = height - 1.45 * inch - card_height
+        n_cards = len(cards_data)
+        total_card_area = width - 1.00 * inch
+        card_spacing = 0.12 * inch
+        card_width = (total_card_area - (n_cards - 1) * card_spacing) / n_cards
+        card_height = 0.70 * inch
+        card_y_bottom = height - 1.45 * inch - card_height
 
         x = 0.50 * inch
         for label, value, sub in cards_data:
             p.setFillColorRGB(1, 1, 1)
             p.setLineWidth(0)
-            p.roundRect(x, card_y_bottom, card_width, card_height, 4, fill=1, stroke=0)
+            p.roundRect(x, card_y_bottom, card_width,
+                        card_height, 4, fill=1, stroke=0)
             p.setFillColorRGB(0.40, 0.40, 0.40)
             p.setFont("Helvetica", 7)
             p.drawCentredString(x + card_width / 2,
@@ -2744,43 +2764,48 @@ def ventas_por_usuario_pdf(request):
             p.setFillColorRGB(0, 0, 0)
             font_size = 10 if len(value) > 14 else 11
             p.setFont("Helvetica-Bold", font_size)
-            p.drawCentredString(x + card_width / 2, card_y_bottom + card_height * 0.38, value)
+            p.drawCentredString(x + card_width / 2,
+                                card_y_bottom + card_height * 0.38, value)
             if sub:
                 p.setFillColorRGB(0.35, 0.35, 0.35)
                 p.setFont("Helvetica", 6.5)
-                p.drawCentredString(x + card_width / 2, card_y_bottom + 0.10 * inch, sub)
+                p.drawCentredString(x + card_width / 2,
+                                    card_y_bottom + 0.10 * inch, sub)
             x += card_width + card_spacing
 
         # ── Definición de columnas ──
+        # Tipo y Método después de Cliente, sin Estado
         headers = ['Fecha', 'Factura', 'Usuario', 'Cliente',
-                   'Tipo', 'Método', 'Venta (+)', 'Cobro (+)', 'Descuento (-)', 'Estado']
+                   'Tipo', 'Método', 'Ventas', 'Devolución', 'Anulación', 'Descuento', 'Cobro']
         col_x = [
-            0.50 * inch,   # Fecha
+            0.70 * inch,   # Fecha
             1.40 * inch,   # Factura
-            2.45 * inch,   # Usuario
-            3.40 * inch,   # Cliente
-            4.95 * inch,   # Tipo
-            5.65 * inch,   # Método
-            6.60 * inch,   # Venta
-            7.45 * inch,   # Cobro
+            2.25 * inch,   # Usuario
+            3.00 * inch,   # Cliente
+            4.20 * inch,   # Tipo
+            4.85 * inch,   # Método
+            5.75 * inch,   # Ventas
+            6.60 * inch,   # Devolución
+            7.45 * inch,   # Anulación
             8.30 * inch,   # Descuento
-            9.30 * inch,   # Estado
+            9.15 * inch,   # Cobro
         ]
         col_widths = [
-            0.85 * inch,
-            0.95 * inch,
-            0.90 * inch,
-            1.50 * inch,
-            0.65 * inch,
-            0.90 * inch,
-            0.80 * inch,
-            0.80 * inch,
-            0.95 * inch,
-            0.85 * inch,
+            0.70 * inch,   # Fecha
+            0.85 * inch,   # Factura
+            0.75 * inch,   # Usuario
+            1.20 * inch,   # Cliente
+            0.65 * inch,   # Tipo
+            0.90 * inch,   # Método
+            0.85 * inch,   # Ventas
+            0.85 * inch,   # Devolución
+            0.85 * inch,   # Anulación
+            0.85 * inch,   # Descuento
+            0.80 * inch,   # Cobro
         ]
-        table_left  = col_x[0]
+        table_left = col_x[0]
         table_right = col_x[-1] + col_widths[-1]
-        row_height  = 0.20 * inch
+        row_height = 0.20 * inch
 
         def draw_table_header(p, y):
             p.setFillColorRGB(*HEADER_BG)
@@ -2789,7 +2814,8 @@ def ventas_por_usuario_pdf(request):
             p.setFillColorRGB(*HEADER_TEXT)
             p.setFont("Helvetica-Bold", 8)
             for i, header in enumerate(headers):
-                p.drawString(col_x[i] + 0.05 * inch, y - row_height + 0.07 * inch, header)
+                p.drawString(col_x[i] + 0.05 * inch, y -
+                             row_height + 0.07 * inch, header)
             p.setStrokeColorRGB(*BORDER)
             p.line(table_left, y - row_height, table_right, y - row_height)
             return y - row_height
@@ -2803,74 +2829,78 @@ def ventas_por_usuario_pdf(request):
                 p.line(col_x[i], bottom_y, col_x[i], top_y)
 
         def draw_row(p, row, y_pos):
-            """Dibuja una fila de la tabla y avanza y_pos."""
+            """Dibuja una fila de la tabla con movimientos separados por columna."""
             tipo = row['tipo']
 
-            # Color de fondo según estado
+            # Color de fondo según tipo y estado
             if row.get('es_anulada'):
                 bg = (1, 0.85, 0.85)
-                estado_label = "Anulado"
             elif row.get('tiene_devolucion'):
                 bg = (1, 1, 0.85)
-                estado_label = "Devuelto"
-            elif tipo == 'descuento':
+            elif tipo == 'descuento_pago':
                 bg = (0.85, 0.92, 1)
-                estado_label = "Descuento"
             elif tipo == 'cobro':
                 bg = (0.90, 0.95, 1)
-                estado_label = "Cobro"
             else:
                 bg = (0.85, 1, 0.85)
-                estado_label = "Activo"
 
             p.setFillColorRGB(*bg)
             p.rect(table_left, y_pos - row_height,
                    table_right - table_left, row_height, fill=1, stroke=0)
             p.setStrokeColorRGB(*BORDER)
             p.setLineWidth(0.2)
-            p.line(table_left, y_pos - row_height, table_right, y_pos - row_height)
+            p.line(table_left, y_pos - row_height,
+                   table_right, y_pos - row_height)
 
             p.setFillColorRGB(0.10, 0.10, 0.10)
             text_y = y_pos - row_height + 0.07 * inch
 
-            # Columnas Venta / Cobro / Descuento
-            if tipo == 'venta':
-                venta_str = f"RD${float(row['valor']):,.2f}"
-                cobro_str = ""
-                desc_str  = row['descuento_texto']
-            elif tipo == 'cobro':
-                venta_str = ""
-                cobro_str = f"RD${float(row['valor']):,.2f}"
-                desc_str  = ""
-            else:  # descuento/ajuste
-                venta_str = ""
-                cobro_str = ""
-                desc_str  = row['descuento_texto']
+            # Formatear montos SOLO para la columna correspondiente al tipo
+            # Inicializar todas a vacío
+            venta_str = devolucion_str = anulacion_str = descuento_str = cobro_str = ""
+
+            # Mostrar monto SOLO en columna del tipo de movimiento
+            if row['tipo_movimiento'] in ['VENTA', 'VENTA C']:
+                venta_total = row['venta_contado'] + row['venta_credito']
+                venta_str = f"{float(venta_total):,.2f}" if venta_total > 0 else ""
+            elif row['tipo_movimiento'] == 'DEVOL':
+                devolucion_str = f"{float(row['devolucion']):,.2f}" if row['devolucion'] > 0 else ""
+            elif row['tipo_movimiento'] == 'ANUL':
+                anulacion_str = f"{float(row['anulacion']):,.2f}" if row['anulacion'] > 0 else ""
+            elif row['tipo_movimiento'] == 'DESCU':
+                descuento_str = f"{float(row['descuento']):,.2f}" if row['descuento'] > 0 else ""
+            elif row['tipo_movimiento'] == 'COBRO':
+                cobro_str = f"{float(row['cobro']):,.2f}" if row['cobro'] > 0 else ""
 
             cells = [
                 (col_x[0], row['fecha'].strftime('%d/%m/%Y'),   False),
-                (col_x[1], str(row['factura'])[:12],            False),
-                (col_x[2], str(row['usuario'])[:11],            False),
-                (col_x[3], str(row['cliente'])[:18],            False),
-                (col_x[4], str(tipo)[:9],                       False),
-                (col_x[5], str(row['metodo'])[:12],             False),
+                (col_x[1], str(row['factura'])[:16],             False),
+                (col_x[2], str(row['usuario'])[:10],             False),
+                (col_x[3], str(row['cliente'])[:15],             False),
+                (col_x[4], row['tipo_movimiento'],              False),
+                (col_x[5], row['metodo_movimiento'],            False),
                 (col_x[6], venta_str,                           True),
-                (col_x[7], cobro_str,                           True),
-                (col_x[8], desc_str,                            True),
-                (col_x[9], estado_label,                        False),
+                (col_x[7], devolucion_str,                      True),
+                (col_x[8], anulacion_str,                       True),
+                (col_x[9], descuento_str,                       True),
+                (col_x[10], cobro_str,                          True),
             ]
-            p.setFont("Helvetica", 7)
+            p.setFont("Helvetica", 8)
             for i, (cx, text, right_align) in enumerate(cells):
                 if right_align:
-                    p.drawRightString(cx + col_widths[i] - 0.05 * inch, text_y, text)
+                    # Montos en tamaño 9 para mejor visibilidad
+                    p.setFont("Helvetica-Bold", 9)
+                    p.drawRightString(
+                        cx + col_widths[i] - 0.05 * inch, text_y, text)
+                    p.setFont("Helvetica", 8)
                 else:
                     p.drawString(cx + 0.05 * inch, text_y, text)
 
             return y_pos - row_height
 
         # ── Dibujar tabla principal ──
-        y_position  = card_y_bottom - 0.30 * inch
-        y_position  = draw_table_header(p, y_position)
+        y_position = card_y_bottom - 0.30 * inch
+        y_position = draw_table_header(p, y_position)
         table_top_y = y_position
 
         for row in rows:
@@ -2878,57 +2908,13 @@ def ventas_por_usuario_pdf(request):
                 draw_table_border(p, table_top_y, y_position)
                 p.showPage()
                 draw_page_header(p, height, fecha_reporte, periodo)
-                y_position  = height - 1.50 * inch
-                y_position  = draw_table_header(p, y_position)
+                y_position = height - 1.50 * inch
+                y_position = draw_table_header(p, y_position)
                 table_top_y = y_position
 
             y_position = draw_row(p, row, y_position)
 
         draw_table_border(p, table_top_y, y_position)
-
-        # ── Tabla de facturas anuladas (página separada, si las hay) ──
-        filas_anuladas = [r for r in rows if r['es_anulada']]
-        if filas_anuladas:
-            p.showPage()
-            draw_page_header(p, height, fecha_reporte, periodo)
-
-            p.setFillColorRGB(0.20, 0.20, 0.20)
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(0.50 * inch, height - 1.50 * inch, "FACTURAS ANULADAS")
-            p.setFont("Helvetica", 8)
-            p.setFillColorRGB(0.35, 0.35, 0.35)
-            p.drawString(0.50 * inch, height - 1.75 * inch,
-                         f"Total Anulado: RD${float(total_facturas_anuladas):,.2f}  |  "
-                         f"Cantidad: {cantidad_anuladas} factura(s)")
-            p.setStrokeColorRGB(*BORDER)
-            p.setLineWidth(0.8)
-            p.line(0.50 * inch, height - 1.90 * inch,
-                   width - 0.50 * inch, height - 1.90 * inch)
-
-            y_a = height - 2.10 * inch
-            y_a = draw_table_header(p, y_a)
-            top_a = y_a
-
-            for row in filas_anuladas:
-                if y_a < 1.20 * inch:
-                    draw_table_border(p, top_a, y_a)
-                    p.showPage()
-                    draw_page_header(p, height, fecha_reporte, periodo)
-                    p.setFillColorRGB(0.20, 0.20, 0.20)
-                    p.setFont("Helvetica-Bold", 12)
-                    p.drawString(0.50 * inch, height - 1.50 * inch,
-                                 "FACTURAS ANULADAS (continuación)")
-                    p.setStrokeColorRGB(*BORDER)
-                    p.setLineWidth(0.8)
-                    p.line(0.50 * inch, height - 1.65 * inch,
-                           width - 0.50 * inch, height - 1.65 * inch)
-                    y_a  = height - 1.85 * inch
-                    y_a  = draw_table_header(p, y_a)
-                    top_a = y_a
-
-                y_a = draw_row(p, row, y_a)
-
-            draw_table_border(p, top_a, y_a)
 
         p.showPage()
         p.save()
