@@ -1355,13 +1355,14 @@
                                     <th>Producto</th>
                                     <th>Cantidad</th>
                                     <th>Precio Unitario</th>
+                                    <th>Tipo</th>
                                     <th>Subtotal</th>
                                     <th style="text-align: right;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="sale-items">
                                 <tr>
-                                    <td colspan="5" class="empty-state">
+                                    <td colspan="6" class="empty-state">
                                         <div class="empty-state-icon">🛒</div>
                                         <p>No hay productos agregados</p>
                                         <p class="text-muted">Busque y agregue productos a la venta</p>
@@ -1813,7 +1814,7 @@
             if (state.saleItems.length === 0) {
                 DOM.saleItemsTable.innerHTML = `
                     <tr>
-                        <td colspan="5" class="empty-state">
+                        <td colspan="6" class="empty-state">
                             <div class="empty-state-icon">🛒</div>
                             <p>No hay productos agregados</p>
                             <p class="text-muted">Busque y agregue productos a la venta</p>
@@ -1828,6 +1829,7 @@
                     <td>${item.name}</td>
                     <td>${item.quantity}</td>
                     <td>${formatCurrency(item.price)}</td>
+                    <td>${item.tipo_precio === 'mayor' ? 'Por mayor' : 'Unitaria'}</td>
                     <td>${formatCurrency(item.subtotal)}</td>
                     <td style="text-align: right;">
                         <button class="btn btn-icon btn-outline btn-sm delete-item" data-id="${item.id}">
@@ -2039,54 +2041,65 @@
             await showPriceModal(state.selectedProduct);
         };
 
-        // Agregar producto a la venta
+        // Agregar producto a la venta (MODIFICADO para incluir tipo_precio)
         const addProductToSale = () => {
             if (!state.selectedProduct) {
                 showAlert('Debe seleccionar un producto primero', 'error');
                 return;
             }
-            
+
             const quantity = parseInt(DOM.productQuantity.value) || 1;
             if (quantity <= 0) {
                 showAlert('La cantidad debe ser mayor a cero', 'error');
                 return;
             }
-            
+
             if (quantity > state.selectedProduct.stock) {
                 showAlert(`No hay suficiente stock. Disponible: ${state.selectedProduct.stock}`, 'error');
                 return;
             }
-            
+
+            // Precio según el tipo de venta actual
             const currentPrice = state.saleType === 'mayor'
                 ? state.selectedProduct.wholesalePriceWithITBIS
                 : state.selectedProduct.priceWithITBIS;
-            
-            const existingItemIndex = state.saleItems.findIndex(item => item.id === state.selectedProduct.id);
-            
+
+            // Tipo de precio actual
+            const currentTipoPrecio = state.saleType; // 'unitaria' o 'mayor'
+
+            // Buscar si ya existe un item con el mismo ID y el MISMO tipo de precio
+            const existingItemIndex = state.saleItems.findIndex(item => 
+                item.id === state.selectedProduct.id && item.tipo_precio === currentTipoPrecio
+            );
+
             if (existingItemIndex !== -1) {
+                // Mismo producto y mismo tipo: sumamos cantidad
                 state.saleItems[existingItemIndex].quantity += quantity;
-                state.saleItems[existingItemIndex].price = currentPrice;
+                state.saleItems[existingItemIndex].price = currentPrice; // actualizamos por si cambió el precio
                 state.saleItems[existingItemIndex].subtotal = state.saleItems[existingItemIndex].quantity * currentPrice;
             } else {
+                // Producto nuevo o mismo producto pero con distinto tipo de precio
                 state.saleItems.push({
                     id: state.selectedProduct.id,
                     name: state.selectedProduct.name,
                     price: currentPrice,
                     quantity: quantity,
-                    subtotal: quantity * currentPrice
+                    subtotal: quantity * currentPrice,
+                    tipo_precio: currentTipoPrecio   // Guardamos el tipo
                 });
             }
-            
+
             updateTotal();
             renderSaleItems();
-            showAlert(`Producto agregado: ${state.selectedProduct.name} x${quantity}`, 'success');
-            
+            showAlert(`Producto agregado: ${state.selectedProduct.name} x${quantity} (${currentTipoPrecio === 'mayor' ? 'Por mayor' : 'Unitaria'})`, 'success');
+
+            // Limpiar selección actual
             state.selectedProduct = null;
             DOM.productSearch.value = '';
             DOM.productQuantity.value = '1';
         };
 
-        // Preparar campos del formulario antes de enviar (SANITIZADO)
+        // Preparar campos del formulario antes de enviar (SANITIZADO e incluye tipo_precio)
         const prepareFormFields = () => {
             DOM.paymentTypeField.value = state.paymentType;
             DOM.paymentMethodField.value = state.paymentMethod;
@@ -2120,13 +2133,14 @@
             DOM.changeAmountField.value = parseFloat(changeAmount).toFixed(2);
             DOM.totalAPagarField.value = parseFloat(total).toFixed(2);
             
-            // Sanitizar los items de la venta
+            // Sanitizar los items de la venta, incluyendo tipo_precio
             const safeItems = state.saleItems.map(item => ({
                 id: item.id,
                 name: item.name,
                 price: sanitizeNumber(item.price),
                 quantity: parseInt(item.quantity) || 1,
-                subtotal: sanitizeNumber(item.subtotal)
+                subtotal: sanitizeNumber(item.subtotal),
+                tipo_precio: item.tipo_precio || 'unitaria'   // Incluir el tipo
             }));
             
             DOM.saleItemsField.value = JSON.stringify(safeItems);
