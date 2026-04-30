@@ -2844,14 +2844,18 @@ def ventas_por_usuario_pdf(request):
             if fecha_en_rango(devolucion.venta.fecha_venta):
                 continue
 
+            v = devolucion.venta
+            metodo_dev = (v.metodo_pago or 'EFE').upper()[:10]
+
+            # Fila DEVOL
             rows.append({
                 'fecha':            devolucion.fecha_devolucion.date(),
-                'factura':          devolucion.venta.numero_factura,
+                'factura':          v.numero_factura,
                 'usuario':          devolucion.usuario.username if devolucion.usuario else 'Sistema',
-                'cliente':          devolucion.venta.cliente_nombre or 'N/A',
+                'cliente':          v.cliente_nombre or 'N/A',
                 'tipo':             'devolucion',
                 'tipo_movimiento':  'DEVOL',
-                'metodo_movimiento': (devolucion.venta.metodo_pago or 'EFE').upper()[:10],
+                'metodo_movimiento': metodo_dev,
                 'venta_contado':    Decimal('0.00'),
                 'venta_credito':    Decimal('0.00'),
                 'devolucion':       devolucion.monto,
@@ -2862,6 +2866,32 @@ def ventas_por_usuario_pdf(request):
                 'es_anulada':       False,
                 'tiene_devolucion': True,
             })
+
+            # Fila DESCU (si la venta tenia descuento) — independiente
+            desc_4d = v.descuento_monto or Decimal('0.00')
+            if desc_4d == 0:
+                monto_con_itbis_4d = v.subtotal + v.itbis_monto
+                if monto_con_itbis_4d > v.total:
+                    desc_4d = monto_con_itbis_4d - v.total
+            if desc_4d > 0:
+                rows.append({
+                    'fecha':            devolucion.fecha_devolucion.date(),
+                    'factura':          v.numero_factura,
+                    'usuario':          devolucion.usuario.username if devolucion.usuario else 'Sistema',
+                    'cliente':          v.cliente_nombre or 'N/A',
+                    'tipo':             'descuento_venta',
+                    'tipo_movimiento':  'DESCU',
+                    'metodo_movimiento': metodo_dev,
+                    'venta_contado':    Decimal('0.00'),
+                    'venta_credito':    Decimal('0.00'),
+                    'devolucion':       Decimal('0.00'),
+                    'anulacion':        Decimal('0.00'),
+                    'descuento':        desc_4d,
+                    'cobro':            Decimal('0.00'),
+                    'estado':           'Descuento',
+                    'es_anulada':       False,
+                    'tiene_devolucion': False,
+                })
 
         # Ordenar por fecha descendente
         rows.sort(key=lambda x: x['fecha'], reverse=True)
