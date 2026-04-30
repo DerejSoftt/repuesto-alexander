@@ -1292,35 +1292,29 @@
                                 </div>
                             </div>
                             
-                            <!-- DESCUENTO - CONDICIONAL PARA SUPERUSUARIOS -->
-                            {% if user.is_superuser %}
-                            <!-- Para superusuarios: campo editable -->
+                            <!-- DESCUENTO - Ahora disponible para todos con límite del 5% para normales -->
                             <div class="form-group">
-                                <label for="discount-input" class="form-label">Descuento(%)</label>
+                                <label for="discount-input" class="form-label">Descuento (%)</label>
                                 <div class="input-group">
-                                    <input type="number" id="discount-input" class="form-control" placeholder="0" step="0.01" min="0" max="100">
+                                    <input type="number" id="discount-input" class="form-control" 
+                                           placeholder="0" step="0.01" min="0" 
+                                           {% if not user.is_superuser %}max="5"{% endif %} 
+                                           value="0">
                                 </div>
-                            </div>
-                            <div class="discount-display">
-                                <span class="discount-label">Descuento aplicado</span>
-                                <span id="discount-amount" class="discount-value">0% (RD$0.00)</span>
-                            </div>
-                            {% else %}
-                            <!-- Para usuarios normales: campo deshabilitado -->
-                            <div class="form-group">
-                                <label for="discount-input" class="form-label">Descuento(%)</label>
-                                <div class="input-group">
-                                    <input type="number" id="discount-input" class="form-control discount-input-disabled" value="0" step="0.01" min="0" max="100" readonly disabled>
-                                </div>
+                                {% if not user.is_superuser %}
                                 <div class="discount-disabled-message">
-                                    <i class='bx bx-info-circle'></i> Solo el administrador puede aplicar descuentos
+                                    <i class='bx bx-info-circle'></i> Límite de descuento del 5% para usuarios normales
                                 </div>
+                                {% else %}
+                                <div class="discount-disabled-message">
+                                    <i class='bx bx-shield-alt'></i> Administrador: puede aplicar cualquier descuento
+                                </div>
+                                {% endif %}
                             </div>
                             <div class="discount-display">
                                 <span class="discount-label">Descuento aplicado</span>
                                 <span id="discount-amount" class="discount-value">0% (RD$0.00)</span>
                             </div>
-                            {% endif %}
                             
                             <!-- Total a pagar general -->
                             <div class="final-total-display">
@@ -1455,8 +1449,6 @@
                     <input type="date" id="report-fecha-hasta" class="form-control">
                 </div>
                 
-                <!-- Eliminado el campo de selección de usuario -->
-                
                 <div id="report-preview" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
                     <p style="margin: 0; color: #666;"><i class='bx bx-info-circle'></i> Seleccione las fechas para generar el reporte</p>
                 </div>
@@ -1466,7 +1458,6 @@
                     <i class='bx bx-file-pdf'></i>
                     Generar Reporte PDF
                 </button>
-                <!-- Eliminado el botón "Ver Detalle por Usuario" -->
                 <button id="cancel-report-modal" class="btn btn-outline" style="width: 100%;">
                     Cancelar
                 </button>
@@ -1498,22 +1489,18 @@
         <input type="hidden" name="client_name" id="client-name">
         <input type="hidden" name="client_document" id="client-document">
         <input type="hidden" name="subtotal" id="subtotal">
-
-        <!-- AGREGAR ESTOS CAMPOS PARA EL ITBIS -->
         <input type="hidden" name="itbis_monto" id="itbis-monto">
         <input type="hidden" name="itbis_porcentaje" id="itbis-porcentaje">
-
         <input type="hidden" name="discount_percentage" id="discount-percentage">
         <input type="hidden" name="discount_amount" id="discount-amount-field">
         <input type="hidden" name="total" id="total">
         <input type="hidden" name="cash_received" id="cash-received-field">
         <input type="hidden" name="change_amount" id="change-amount-field">
         <input type="hidden" name="sale_items" id="sale-items-field">
-        <!-- Campos adicionales para crédito -->
         <input type="hidden" name="total_a_pagar" id="total-a-pagar-field">
         <input type="hidden" name="fecha_vencimiento" id="fecha-vencimiento-field">
     </form>
- <script>
+<script>
     // Funciones para el sidebar
     document.addEventListener("DOMContentLoaded", () => {
         // Estado de la aplicación
@@ -1614,9 +1601,7 @@
         // Sanitizar números para evitar errores de conversión
         const sanitizeNumber = (value) => {
             if (value === null || value === undefined || value === '') return '0';
-            // Convertir a string y reemplazar comas por puntos
             const str = String(value).replace(',', '.');
-            // Remover cualquier caracter que no sea número, punto o signo negativo
             const cleaned = str.replace(/[^\d.-]/g, '');
             return cleaned || '0';
         };
@@ -1648,12 +1633,10 @@
             DOM.alertModal.classList.add('active');
         };
 
-        // Cerrar alerta personalizada
         const closeAlert = () => {
             DOM.alertModal.classList.remove('active');
         };
 
-        // Función para mostrar el modal de precio
         const showPriceModal = (product) => {
             DOM.unitPriceDisplay.textContent = formatCurrency(product.priceWithITBIS);
             DOM.wholesalePriceDisplay.textContent = formatCurrency(product.wholesalePriceWithITBIS || product.priceWithITBIS);
@@ -1677,7 +1660,7 @@
             });
         };
 
-        // Función para buscar productos via AJAX
+        // Búsqueda de productos via AJAX
         const searchProducts = async (searchTerm) => {
             if (searchTerm.length < 2) {
                 DOM.productResults.innerHTML = `
@@ -1756,7 +1739,6 @@
             }
         };
 
-        // Función debounce para evitar muchas peticiones
         const debounce = (func, wait) => {
             let timeout;
             return function executedFunction(...args) {
@@ -1769,10 +1751,8 @@
             };
         };
 
-        // Búsqueda de productos con debounce
         const debouncedSearch = debounce(searchProducts, 300);
 
-        // Renderizar resultados de búsqueda de clientes
         const renderClientResults = (searchTerm = '') => {
             const allClients = Array.from(DOM.clientResults.querySelectorAll('.client-item'));
             if (!searchTerm.trim()) {
@@ -1808,7 +1788,6 @@
             }
         };
 
-        // Renderizar items de la venta
         const renderSaleItems = () => {
             DOM.saleItemsTable.innerHTML = '';
             if (state.saleItems.length === 0) {
@@ -1855,59 +1834,43 @@
 
         // Actualizar total de la venta
         const updateTotal = () => {
-            // Calcular total con ITBIS
             state.totalSales = state.saleItems.reduce((total, item) => total + safeNumber(item.subtotal), 0);
-            
-            // Calcular subtotal sin ITBIS (18% de ITBIS)
             const itbisPercentage = 18;
             state.subtotalSinITBIS = state.totalSales / (1 + (itbisPercentage / 100));
             state.itbisAmount = state.totalSales - state.subtotalSinITBIS;
-            
             updateDiscount();
-            
             DOM.subtotalAmount.textContent = formatCurrency(state.subtotalSinITBIS);
             DOM.itbisAmount.textContent = formatCurrency(state.itbisAmount);
             DOM.totalWithITBIS.textContent = formatCurrency(state.totalSales);
-            
-            console.log('Actualizando totales:', {
-                subtotalSinITBIS: state.subtotalSinITBIS,
-                itbisAmount: state.itbisAmount,
-                totalSales: state.totalSales
-            });
         };
 
-        // Actualizar descuento y total final
+        // Actualizar descuento y total final (con límite para normales)
         const updateDiscount = () => {
             let discountPercentage;
             
             if (state.isSuperuser) {
-                // Para superusuarios, usar el valor del campo sanitizado
                 discountPercentage = safeNumber(DOM.discountInput.value);
                 state.discountPercentage = Math.max(0, Math.min(discountPercentage, 100));
             } else {
-                // Para usuarios normales, siempre 0
-                state.discountPercentage = 0;
-                if (DOM.discountInput) {
-                    DOM.discountInput.value = 0;
+                discountPercentage = safeNumber(DOM.discountInput.value);
+                // Limitar a 5% para usuarios normales
+                if (discountPercentage > 5) {
+                    discountPercentage = 5;
+                    DOM.discountInput.value = 5;
+                    showAlert('El descuento máximo permitido para usuarios normales es 5%', 'warning');
                 }
+                state.discountPercentage = Math.max(0, Math.min(discountPercentage, 5));
             }
             
             state.discountAmount = (state.totalSales * state.discountPercentage) / 100;
             state.finalTotal = state.totalSales - state.discountAmount;
             
-            // Actualizar display
-            if (state.isSuperuser) {
-                DOM.discountAmountDisplay.textContent = `${state.discountPercentage.toFixed(2)}% (${formatCurrency(state.discountAmount)})`;
-            } else {
-                DOM.discountAmountDisplay.textContent = `0% (${formatCurrency(state.discountAmount)})`;
-            }
-            
+            DOM.discountAmountDisplay.textContent = `${state.discountPercentage.toFixed(2)}% (${formatCurrency(state.discountAmount)})`;
             DOM.finalTotalAmount.textContent = formatCurrency(state.finalTotal);
             DOM.totalAPagarField.value = state.finalTotal;
             calculateChange();
         };
 
-        // Calcular cambio para pago en efectivo
         const calculateChange = () => {
             if (state.paymentType !== 'contado' || state.paymentMethod !== 'efectivo') return;
             state.cashReceived = safeNumber(DOM.cashReceivedInput.value);
@@ -1915,7 +1878,6 @@
             DOM.changeAmountDisplay.textContent = formatCurrency(state.changeAmount);
         };
 
-        // Cambiar tipo de pago (contado/crédito)
         const setPaymentType = (type) => {
             state.paymentType = type;
             DOM.cashPaymentBtn.classList.toggle('active', type === 'contado');
@@ -1927,7 +1889,6 @@
             DOM.totalAPagarField.value = state.finalTotal;
         };
 
-        // Cambiar método de pago (efectivo/tarjeta/transferencia)
         const setPaymentMethod = (method) => {
             state.paymentMethod = method;
             DOM.cashMethodBtn.classList.toggle('active', method === 'efectivo');
@@ -1939,14 +1900,12 @@
             }
         };
 
-        // Cambiar tipo de venta (unitaria/mayor)
         const setSaleType = (type) => {
             state.saleType = type;
             DOM.unitSaleBtn.classList.toggle('active', type === 'unitaria');
             DOM.wholesaleSaleBtn.classList.toggle('active', type === 'mayor');
         };
 
-        // Limpiar toda la interfaz de venta (carrito, cliente y campos)
         const resetSaleForm = () => {
             state.selectedClient = null;
             state.selectedProduct = null;
@@ -1960,10 +1919,7 @@
             state.cashReceived = 0;
             state.changeAmount = 0;
 
-            if (DOM.saleForm) {
-                DOM.saleForm.reset();
-            }
-
+            if (DOM.saleForm) DOM.saleForm.reset();
             DOM.clientSearch.value = '';
             DOM.cashClientName.value = '';
             DOM.cashClientDocument.value = '';
@@ -1971,15 +1927,9 @@
             DOM.productQuantity.value = '1';
             DOM.cashReceivedInput.value = '';
             DOM.changeAmountDisplay.textContent = formatCurrency(0);
-
-            if (DOM.discountInput) {
-                DOM.discountInput.value = 0;
-            }
-
+            if (DOM.discountInput) DOM.discountInput.value = 0;
             const fechaVencInput = document.getElementById('fecha-vencimiento');
-            if (fechaVencInput) {
-                fechaVencInput.value = '';
-            }
+            if (fechaVencInput) fechaVencInput.value = '';
 
             setPaymentType('contado');
             setPaymentMethod('efectivo');
@@ -1990,7 +1940,6 @@
             searchProducts('');
         };
 
-        // Seleccionar cliente
         const selectClient = (clientElement) => {
             const clientId = clientElement.getAttribute('data-id');
             const clientName = clientElement.getAttribute('data-name');
@@ -2009,7 +1958,6 @@
             showAlert(`Cliente seleccionado: ${clientName}`, 'success');
         };
 
-        // Seleccionar producto
         const selectProduct = async (productElement) => {
             const productId = productElement.getAttribute('data-id');
             const productName = productElement.getAttribute('data-name');
@@ -2032,78 +1980,59 @@
             DOM.productSearch.value = productName;
             DOM.productQuantity.max = productStock;
             DOM.productQuantity.value = 1;
-            
             if (DOM.productQuantity.value > productStock) {
                 DOM.productQuantity.value = productStock;
                 showAlert(`Cantidad ajustada al stock disponible: ${productStock}`, 'warning');
             }
-            
             await showPriceModal(state.selectedProduct);
         };
 
-        // Agregar producto a la venta (MODIFICADO para incluir tipo_precio)
         const addProductToSale = () => {
             if (!state.selectedProduct) {
                 showAlert('Debe seleccionar un producto primero', 'error');
                 return;
             }
-
             const quantity = parseInt(DOM.productQuantity.value) || 1;
             if (quantity <= 0) {
                 showAlert('La cantidad debe ser mayor a cero', 'error');
                 return;
             }
-
             if (quantity > state.selectedProduct.stock) {
                 showAlert(`No hay suficiente stock. Disponible: ${state.selectedProduct.stock}`, 'error');
                 return;
             }
-
-            // Precio según el tipo de venta actual
             const currentPrice = state.saleType === 'mayor'
                 ? state.selectedProduct.wholesalePriceWithITBIS
                 : state.selectedProduct.priceWithITBIS;
-
-            // Tipo de precio actual
-            const currentTipoPrecio = state.saleType; // 'unitaria' o 'mayor'
-
-            // Buscar si ya existe un item con el mismo ID y el MISMO tipo de precio
+            const currentTipoPrecio = state.saleType;
             const existingItemIndex = state.saleItems.findIndex(item => 
                 item.id === state.selectedProduct.id && item.tipo_precio === currentTipoPrecio
             );
-
             if (existingItemIndex !== -1) {
-                // Mismo producto y mismo tipo: sumamos cantidad
                 state.saleItems[existingItemIndex].quantity += quantity;
-                state.saleItems[existingItemIndex].price = currentPrice; // actualizamos por si cambió el precio
+                state.saleItems[existingItemIndex].price = currentPrice;
                 state.saleItems[existingItemIndex].subtotal = state.saleItems[existingItemIndex].quantity * currentPrice;
             } else {
-                // Producto nuevo o mismo producto pero con distinto tipo de precio
                 state.saleItems.push({
                     id: state.selectedProduct.id,
                     name: state.selectedProduct.name,
                     price: currentPrice,
                     quantity: quantity,
                     subtotal: quantity * currentPrice,
-                    tipo_precio: currentTipoPrecio   // Guardamos el tipo
+                    tipo_precio: currentTipoPrecio
                 });
             }
-
             updateTotal();
             renderSaleItems();
             showAlert(`Producto agregado: ${state.selectedProduct.name} x${quantity} (${currentTipoPrecio === 'mayor' ? 'Por mayor' : 'Unitaria'})`, 'success');
-
-            // Limpiar selección actual
             state.selectedProduct = null;
             DOM.productSearch.value = '';
             DOM.productQuantity.value = '1';
         };
 
-        // Preparar campos del formulario antes de enviar (SANITIZADO e incluye tipo_precio)
         const prepareFormFields = () => {
             DOM.paymentTypeField.value = state.paymentType;
             DOM.paymentMethodField.value = state.paymentMethod;
-            
             if (state.paymentType === 'credito') {
                 DOM.clientIdField.value = state.selectedClient ? state.selectedClient.id : '';
                 DOM.clientNameField.value = state.selectedClient ? state.selectedClient.name : '';
@@ -2112,8 +2041,6 @@
                 DOM.clientNameField.value = DOM.cashClientName.value.trim();
                 DOM.clientDocumentField.value = DOM.cashClientDocument.value.trim();
             }
-            
-            // Sanitizar todos los valores numéricos antes de enviar
             const subtotalSinITBIS = sanitizeNumber(state.subtotalSinITBIS);
             const itbisMonto = sanitizeNumber(state.itbisAmount);
             const discountPercentage = sanitizeNumber(state.discountPercentage);
@@ -2122,7 +2049,6 @@
             const cashReceived = sanitizeNumber(state.cashReceived);
             const changeAmount = sanitizeNumber(state.changeAmount);
             
-            // Convertir a números, formatear y enviar
             DOM.subtotalField.value = parseFloat(subtotalSinITBIS).toFixed(2);
             DOM.itbisMontoField.value = parseFloat(itbisMonto).toFixed(2);
             DOM.itbisPorcentajeField.value = '18.00';
@@ -2133,40 +2059,31 @@
             DOM.changeAmountField.value = parseFloat(changeAmount).toFixed(2);
             DOM.totalAPagarField.value = parseFloat(total).toFixed(2);
             
-            // Sanitizar los items de la venta, incluyendo tipo_precio
             const safeItems = state.saleItems.map(item => ({
                 id: item.id,
                 name: item.name,
                 price: sanitizeNumber(item.price),
                 quantity: parseInt(item.quantity) || 1,
                 subtotal: sanitizeNumber(item.subtotal),
-                tipo_precio: item.tipo_precio || 'unitaria'   // Incluir el tipo
+                tipo_precio: item.tipo_precio || 'unitaria'
             }));
-            
             DOM.saleItemsField.value = JSON.stringify(safeItems);
-
-            // Copiar fecha de vencimiento si es venta a crédito
             const fechaVencInput = document.getElementById('fecha-vencimiento');
             if (fechaVencInput) {
                 DOM.fechaVencimientoField.value = fechaVencInput.value;
             }
-
-            console.log('Datos preparados para enviar:', {
-                subtotal: DOM.subtotalField.value,
-                itbis_monto: DOM.itbisMontoField.value,
-                total: DOM.totalField.value,
-                items: safeItems
-            });
         };
 
-        // Validar y completar la venta
         const completeSale = async () => {
-            // Validaciones básicas
             if (state.saleItems.length === 0) {
                 showAlert('Debe agregar al menos un producto a la venta', 'error');
                 return;
             }
-            
+            // Validación extra de descuento para normales
+            if (!state.isSuperuser && state.discountPercentage > 5) {
+                showAlert('No puede aplicar un descuento mayor al 5%', 'error');
+                return;
+            }
             if (state.paymentType === 'credito') {
                 if (!state.selectedClient) {
                     showAlert('Debe seleccionar un cliente para venta a crédito', 'error');
@@ -2189,8 +2106,6 @@
                     return;
                 }
             }
-
-            // Validar que el total sea mayor a 0
             if (state.finalTotal <= 0) {
                 showAlert('El total de la venta debe ser mayor a 0', 'error');
                 return;
@@ -2199,21 +2114,15 @@
             try {
                 prepareFormFields();
                 const formData = new FormData(DOM.saleForm);
-                
-                // Mostrar loading
                 DOM.completeSaleButton.innerHTML = '<i class="bx bx-loader bx-spin"></i> Procesando...';
                 DOM.completeSaleButton.disabled = true;
 
                 const response = await fetch(DOM.saleForm.action, {
                     method: 'POST',
                     body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                    }
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                
                 const result = await response.json();
-                
                 if (result.success) {
                     showAlert('Venta procesada correctamente. Redirigiendo al comprobante...', 'success');
                     sessionStorage.setItem('ventaDebeLimpiarse', '1');
@@ -2228,14 +2137,13 @@
                 console.error('Error:', error);
                 showAlert('Error de conexión al procesar la venta', 'error');
             } finally {
-                // Restaurar botón
                 DOM.completeSaleButton.innerHTML = '<i class="bx bx-check"></i> Finalizar Venta';
                 DOM.completeSaleButton.disabled = false;
             }
         };
 
         // ============================================
-        // EVENT LISTENERS (originales)
+        // EVENT LISTENERS
         // ============================================
         DOM.cashPaymentBtn.addEventListener('click', () => setPaymentType('contado'));
         DOM.creditPaymentBtn.addEventListener('click', () => setPaymentType('credito'));
@@ -2245,225 +2153,109 @@
         DOM.unitSaleBtn.addEventListener('click', () => setSaleType('unitaria'));
         DOM.wholesaleSaleBtn.addEventListener('click', () => setSaleType('mayor'));
         
-        DOM.clientSearch.addEventListener('input', (e) => {
-            renderClientResults(e.target.value);
-        });
-        
+        DOM.clientSearch.addEventListener('input', (e) => renderClientResults(e.target.value));
         DOM.clientResults.addEventListener('click', (e) => {
             const clientItem = e.target.closest('.client-item');
-            if (clientItem) {
-                selectClient(clientItem);
-            }
+            if (clientItem) selectClient(clientItem);
         });
-        
-        DOM.productSearch.addEventListener('input', (e) => {
-            debouncedSearch(e.target.value);
-        });
-        
+        DOM.productSearch.addEventListener('input', (e) => debouncedSearch(e.target.value));
         DOM.productResults.addEventListener('click', (e) => {
             const productItem = e.target.closest('.product-item');
-            if (productItem) {
-                selectProduct(productItem);
-            }
+            if (productItem) selectProduct(productItem);
         });
-        
         DOM.addProductButton.addEventListener('click', addProductToSale);
         DOM.discountInput.addEventListener('input', updateDiscount);
         DOM.cashReceivedInput.addEventListener('input', calculateChange);
         DOM.completeSaleButton.addEventListener('click', completeSale);
-        
-        // El botón de cerrar caja ya no existe, así que comentamos estos listeners
-        /*
-        DOM.closeRegisterButton.addEventListener('click', () => {
-            DOM.closeRegisterModal.classList.add('active');
-        });
-        
-        DOM.cancelCloseRegister.addEventListener('click', () => {
-            DOM.closeRegisterModal.classList.remove('active');
-        });
-        
-        DOM.confirmCloseRegister.addEventListener('click', () => {
-            window.location.href = "{% url 'cierredecaja' %}";
-        });
-        */
         
         DOM.alertOkButton.addEventListener('click', closeAlert);
         DOM.priceModalOkButton.addEventListener('click', () => {
             DOM.priceModal.classList.remove('active');
         });
 
-        // Prevenir cambios en el descuento si el usuario no es superusuario
+        // Para usuarios normales: reforzar límite en el input
         if (!state.isSuperuser && DOM.discountInput) {
-            DOM.discountInput.addEventListener('input', (e) => {
-                e.preventDefault();
-                DOM.discountInput.value = 0;
-                showAlert('El descuento solo puede ser aplicado por el administrador', 'warning');
+            DOM.discountInput.addEventListener('input', () => {
+                let val = safeNumber(DOM.discountInput.value);
+                if (val > 5) {
+                    DOM.discountInput.value = 5;
+                    showAlert('El descuento máximo permitido para usuarios normales es 5%', 'warning');
+                }
                 updateDiscount();
             });
-            
-            DOM.discountInput.addEventListener('keydown', (e) => {
-                if (e.key !== 'Tab' && e.key !== 'Enter') {
-                    e.preventDefault();
-                    showAlert('El descuento solo puede ser aplicado por el administrador', 'warning');
-                }
-            });
-            
-            // Establecer estilo de solo lectura
-            DOM.discountInput.classList.add('discount-input-disabled');
-            DOM.discountInput.disabled = true;
         }
 
-        // Inicializar la interfaz limpia
         resetSaleForm();
-
-        // Limpiar también al volver con cache del navegador (back/forward) o recargar
         window.addEventListener('pageshow', () => {
             const navEntry = performance.getEntriesByType('navigation')[0];
             const esRecarga = navEntry && navEntry.type === 'reload';
             const limpiarPendiente = sessionStorage.getItem('ventaDebeLimpiarse') === '1';
-
             if (esRecarga || limpiarPendiente) {
                 resetSaleForm();
                 sessionStorage.removeItem('ventaDebeLimpiarse');
             }
         });
-
-        // Permitir agregar producto con Enter
-        DOM.productSearch.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addProductToSale();
-            }
-        });
-        
-        DOM.productQuantity.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addProductToSale();
-            }
-        });
-
-        // Permitir buscar clientes con Enter
-        DOM.clientSearch.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-            }
-        });
-
-        // Inicializar búsqueda de productos vacía
+        DOM.productSearch.addEventListener('keypress', (e) => { if (e.key === 'Enter') addProductToSale(); });
+        DOM.productQuantity.addEventListener('keypress', (e) => { if (e.key === 'Enter') addProductToSale(); });
+        DOM.clientSearch.addEventListener('keypress', (e) => e.preventDefault());
         searchProducts('');
 
         // ============================================
-        // FUNCIONES PARA REPORTE DE VENTAS (MODIFICADAS)
+        // REPORTE DE VENTAS (sin cambios relevantes)
         // ============================================
-
-        // Actualizar preview del reporte
         function updateReportPreview() {
             const fechaDesde = document.getElementById('report-fecha-desde').value;
             const fechaHasta = document.getElementById('report-fecha-hasta').value;
-            
             const preview = document.getElementById('report-preview');
-            
             if (!fechaDesde && !fechaHasta) {
-                preview.innerHTML = `
-                    <p style="margin: 0; color: #666;">
-                        <i class='bx bx-info-circle'></i> 
-                        Seleccione las fechas para generar el reporte
-                    </p>
-                `;
+                preview.innerHTML = `<p style="margin:0;color:#666;"><i class='bx bx-info-circle'></i> Seleccione las fechas para generar el reporte</p>`;
                 return;
             }
-            
             let periodoText = '';
-            if (fechaDesde && fechaHasta) {
-                periodoText = `${fechaDesde} al ${fechaHasta}`;
-            } else if (fechaDesde) {
-                periodoText = `Desde ${fechaDesde}`;
-            } else if (fechaHasta) {
-                periodoText = `Hasta ${fechaHasta}`;
-            }
-            
+            if (fechaDesde && fechaHasta) periodoText = `${fechaDesde} al ${fechaHasta}`;
+            else if (fechaDesde) periodoText = `Desde ${fechaDesde}`;
+            else if (fechaHasta) periodoText = `Hasta ${fechaHasta}`;
             preview.innerHTML = `
-                <p style="margin: 0 0 5px 0; font-weight: 600; color: #333;">Resumen del reporte:</p>
-                <p style="margin: 0; font-size: 0.9rem; color: #666;">
-                    <i class='bx bx-calendar'></i> Período: ${periodoText}
-                </p>
+                <p style="margin:0 0 5px 0;font-weight:600;color:#333;">Resumen del reporte:</p>
+                <p style="margin:0;font-size:0.9rem;color:#666;"><i class='bx bx-calendar'></i> Período: ${periodoText}</p>
             `;
         }
-
-        // Generar PDF de reporte de ventas para TODOS los usuarios (con cobros)
         function generateSalesReportPDF() {
             const fechaDesde = document.getElementById('report-fecha-desde').value;
             const fechaHasta = document.getElementById('report-fecha-hasta').value;
-            
-            // Usar la vista que genera el PDF agrupado por usuario (incluye cobros)
             let url = "{% url 'ventas_por_usuario_pdf' %}";
             const params = new URLSearchParams();
-            
             if (fechaDesde) params.append('fecha_desde', fechaDesde);
             if (fechaHasta) params.append('fecha_hasta', fechaHasta);
-            
-            if (params.toString()) {
-                url += '?' + params.toString();
-            }
-            
+            if (params.toString()) url += '?' + params.toString();
             window.open(url, '_blank');
             document.getElementById('sales-report-modal').classList.remove('active');
         }
-
-        // Inicializar funciones de reporte
         const printReportBtn = document.getElementById('print-sales-report-btn');
         const reportModal = document.getElementById('sales-report-modal');
         const cancelReportBtn = document.getElementById('cancel-report-modal');
         const generatePdfBtn = document.getElementById('generate-pdf-report');
         const fechaDesdeInput = document.getElementById('report-fecha-desde');
         const fechaHastaInput = document.getElementById('report-fecha-hasta');
-
-        if (printReportBtn) {
-            printReportBtn.addEventListener('click', () => {
-                reportModal.classList.add('active');
-                // Limpiar preview
-                updateReportPreview();
-            });
-        }
-
-        if (cancelReportBtn) {
-            cancelReportBtn.addEventListener('click', () => {
-                reportModal.classList.remove('active');
-            });
-        }
-
-        // Cerrar al hacer clic fuera
-        reportModal.addEventListener('click', (e) => {
-            if (e.target === reportModal) {
-                reportModal.classList.remove('active');
-            }
-        });
-
+        if (printReportBtn) printReportBtn.addEventListener('click', () => { reportModal.classList.add('active'); updateReportPreview(); });
+        if (cancelReportBtn) cancelReportBtn.addEventListener('click', () => reportModal.classList.remove('active'));
+        reportModal.addEventListener('click', (e) => { if (e.target === reportModal) reportModal.classList.remove('active'); });
         if (fechaDesdeInput) fechaDesdeInput.addEventListener('change', updateReportPreview);
         if (fechaHastaInput) fechaHastaInput.addEventListener('change', updateReportPreview);
-
-        if (generatePdfBtn) {
-            generatePdfBtn.addEventListener('click', generateSalesReportPDF);
-        }
+        if (generatePdfBtn) generatePdfBtn.addEventListener('click', generateSalesReportPDF);
     });
 
-    // ============================================
-    // FUNCIONES GLOBALES
-    // ============================================
-
-    // Funciones globales para el modal de imagen
+    // Funciones globales para modales e imágenes
     function openImageModal(imageUrl) {
         const modal = document.getElementById('image-modal');
         const modalImage = document.getElementById('modal-image');
         modalImage.src = imageUrl;
         modal.classList.add('active');
     }
-
     function closeImageModal() {
         const modal = document.getElementById('image-modal');
         modal.classList.remove('active');
     }
-
-    // Funciones para el sidebar
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.querySelector('.sidebar-overlay');
@@ -2471,7 +2263,6 @@
         overlay.classList.toggle('active');
         document.body.classList.toggle('sidebar-open');
     }
-
     function closeSidebar() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.querySelector('.sidebar-overlay');
@@ -2479,50 +2270,17 @@
         overlay.classList.remove('active');
         document.body.classList.remove('sidebar-open');
     }
-
-    // Cerrar sidebar al hacer clic fuera de él en móviles
     document.addEventListener('click', (e) => {
         const sidebar = document.getElementById('sidebar');
         const menuToggle = document.querySelector('.menu-toggle');
-        if (window.innerWidth <= 768 && 
-            !sidebar.contains(e.target) && 
-            !menuToggle.contains(e.target) && 
-            sidebar.classList.contains('active')) {
+        if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !menuToggle.contains(e.target) && sidebar.classList.contains('active')) {
             closeSidebar();
         }
-    });
-
-    // Cerrar modales al hacer clic fuera
-    document.addEventListener('click', (e) => {
-        // Modal de imagen
-        const imageModal = document.getElementById('image-modal');
-        if (e.target === imageModal) {
-            closeImageModal();
-        }
-        
-        // Modal de precio
-        const priceModal = document.getElementById('price-modal');
-        if (e.target === priceModal) {
-            priceModal.classList.remove('active');
-        }
-        
-        // Modal de alerta
-        const alertModal = document.getElementById('alert-modal');
-        if (e.target === alertModal) {
-            alertModal.classList.remove('active');
-        }
-        
-        // Modal de cerrar caja (aunque ya no se use)
-        const closeRegisterModal = document.getElementById('close-register-modal');
-        if (e.target === closeRegisterModal) {
-            closeRegisterModal.classList.remove('active');
-        }
-
-        // Modal de reporte de ventas
-        const salesReportModal = document.getElementById('sales-report-modal');
-        if (e.target === salesReportModal) {
-            salesReportModal.classList.remove('active');
-        }
+        if (e.target === document.getElementById('image-modal')) closeImageModal();
+        if (e.target === document.getElementById('price-modal')) document.getElementById('price-modal').classList.remove('active');
+        if (e.target === document.getElementById('alert-modal')) document.getElementById('alert-modal').classList.remove('active');
+        if (e.target === document.getElementById('close-register-modal')) document.getElementById('close-register-modal').classList.remove('active');
+        if (e.target === document.getElementById('sales-report-modal')) document.getElementById('sales-report-modal').classList.remove('active');
     });
 </script>
 </body>
