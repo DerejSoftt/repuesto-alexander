@@ -2576,10 +2576,11 @@ def ventas_por_usuario_pdf(request):
                 metodo_movimiento = normalizar_metodo(
                     venta.metodo_pago) or 'EFE'
             elif es_credito_venta:
+                # Venta a CRÉDITO: Tipo = VENTA, Método = CRED
                 tipo_movimiento = 'VENTA'
-                metodo_movimiento = normalizar_metodo(
-                    venta.metodo_pago) or 'CRED'
+                metodo_movimiento = 'CRED'
             else:
+                # Venta CONTADO: Tipo = VENTA, Método = método de pago
                 tipo_movimiento = 'VENTA'
                 metodo_movimiento = normalizar_metodo(
                     venta.metodo_pago) or 'EFE'
@@ -2597,21 +2598,24 @@ def ventas_por_usuario_pdf(request):
             devolucion = Decimal('0.00')
             descuento = Decimal('0.00')
 
-            # Guardar el monto original de la venta
-            if es_credito_venta:
-                venta_credito = venta.total
-            else:
-                venta_contado = venta.total
-
-            # Ahora agregar los montos específicos de operaciones (sumados a la venta original)
             if es_anulada:
+                # ANULADA: NO va a Ventas, solo a Anulación
+                # Así "Ventas Contado" no incluye ventas revertidas
                 anulacion = venta.total
+            else:
+                # Venta real (contado o crédito)
+                if es_credito_venta:
+                    venta_credito = venta.total
+                else:
+                    venta_contado = venta.total
 
-            if tiene_devolucion and monto_devuelto > 0:
-                devolucion = monto_devuelto
+                # Devolución parcial o total dentro del rango
+                if tiene_devolucion and monto_devuelto > 0:
+                    devolucion = monto_devuelto
 
-            if descuento_v > 0:
-                descuento = descuento_v
+                # Descuento directo en la venta
+                if descuento_v > 0:
+                    descuento = descuento_v
 
             rows.append({
                 'fecha':            venta.fecha_venta.date(),
@@ -2776,60 +2780,84 @@ def ventas_por_usuario_pdf(request):
         # 5. ACUMULADORES (calculados exclusivamente desde `rows`)
         # ──────────────────────────────────────────────
 
-        v_contado = Decimal('0.00')
-        v_credito = Decimal('0.00')
-        v_descuentos = Decimal('0.00')
-        v_devoluciones = Decimal('0.00')
-        v_anulaciones = Decimal('0.00')
-        c_cobros = Decimal('0.00')
-        c_descuentos = Decimal('0.00')
+        # ── Acumuladores derivados EXCLUSIVAMENTE de las filas de la tabla ──
+        # Esto garantiza consistencia total entre lo que se muestra y los totales.
+        v_contado          = Decimal('0.00')  # ventas contado
+        v_credito          = Decimal('0.00')  # ventas crédito
+        v_devoluciones     = Decimal('0.00')  # devoluciones
+        v_anulaciones      = Decimal('0.00')  # anulaciones
+        v_descuentos_venta = Decimal('0.00')  # descuentos directos en venta
+        c_descuentos       = Decimal('0.00')  # descuentos/ajustes CxC
+        c_cobros           = Decimal('0.00')  # cobros CxC (efectivo + transferencia)
+        # Transferencias (contado + cobros CxC)
+        t_transferencias   = Decimal('0.00')
 
-        # Contadores para tarjetas
+        # Contadores para sub-etiquetas en tarjetas
         count_ventas_contado = 0
         count_ventas_credito = 0
-        count_devoluciones = 0
-        count_anulaciones = 0
-        count_descuentos = 0
-        count_cobros = 0
+        count_devoluciones   = 0
+        count_anulaciones    = 0
+        count_descuentos     = 0
+        count_cobros         = 0
 
         for row in rows:
-            v_contado += row['venta_contado']
-            v_credito += row['venta_credito']
-            v_descuentos += row['descuento']
-            v_devoluciones += row['devolucion']
-            v_anulaciones += row['anulacion']
-            c_cobros += row['cobro']
-            if row['tipo'] == 'descuento_pago':
-                c_descuentos += row['descuento']
+            tipo = row['tipo']
+            metodo = (row.get('metodo_movimiento') or '').upper()
 
-            # Contar por tipo
-            if row['tipo'] == 'venta' and row['venta_contado'] > 0:
+            # Ventas contado / crédito
+            v_contado      += row['venta_contado']
+            v_credito      += row['venta_credito']
+            # Devoluciones / Anulaciones / Descuentos directos
+            v_devoluciones += row['devolucion']
+            v_anulaciones  += row['anulacion']
+            # Cobros CxC
+            c_cobros       += row['cobro']
+
+            # Descuentos: separar origen (venta directa vs CxC)
+            if tipo == 'descuento_pago':
+                c_descuentos       += row['descuento']
+            else:
+                v_descuentos_venta += row['descuento']
+
+            # Transferencias: ventas contado transferencia + cobros CxC transferencia
+            # metodo para ventas: 'TRAFER'; para cobros: 'COB/TRAFER'
+            if tipo == 'venta' and 'TRAFER' in metodo:
+                t_transferencias += row['venta_contado']
+            elif tipo == 'cobro' and 'TRAFER' in metodo:
+                # metodo_movimiento = 'COB/TRAFER' → 'TRAFER' está presente
+                t_transferencias += row['cobro']
+
+            # Contadores
+            if tipo == 'venta' and row['venta_contado'] > 0:
                 count_ventas_contado += 1
-            if row['tipo'] == 'venta' and row['venta_credito'] > 0:
+            if tipo == 'venta' and row['venta_credito'] > 0:
                 count_ventas_credito += 1
             if row['devolucion'] > 0:
                 count_devoluciones += 1
             if row['es_anulada']:
                 count_anulaciones += 1
-            if row['descuento'] > 0 and row['tipo'] == 'descuento_pago':
+            if row['descuento'] > 0 and tipo == 'descuento_pago':
                 count_descuentos += 1
             if row['cobro'] > 0:
                 count_cobros += 1
 
-        # Descuentos totales (venta + CxC)
-        total_descuentos = v_descuentos + c_descuentos
+        # ── Totales derivados (coherentes con la tabla) ──
+        # Total descuentos = descuentos directos en venta + descuentos/ajustes CxC
+        total_descuentos = v_descuentos_venta + c_descuentos
 
-        # TOTAL VENDIDO: ventas contado + crédito
+        # Total ventas: contado + crédito
         total_vendido = v_contado + v_credito
 
-        # TOTAL COBROS: cobros de CxC
+        # Cobros recibidos CxC
         total_cobros_recibidos = c_cobros
 
-        # Cantidad de anuladas
-        cantidad_anuladas = count_anulaciones
-
-        # Total de facturas anuladas (monto total)
+        # Conteos auxiliares
+        cantidad_anuladas       = count_anulaciones
         total_facturas_anuladas = v_anulaciones
+
+        # ── FÓRMULA TOTAL CAJA ──
+        # (Ventas Contado + Cobros CxC) - (Anulaciones + Descuentos + Devoluciones)
+        total_caja = (v_contado + c_cobros) - (v_anulaciones + total_descuentos + v_devoluciones)
 
         # ──────────────────────────────────────────────────────────────────────
         # 7. GENERACIÓN DEL PDF
@@ -2869,21 +2897,39 @@ def ventas_por_usuario_pdf(request):
         draw_page_header(p, height, fecha_reporte, periodo)
 
         # ── Tarjetas de resumen ──
+        # Campos solicitados con sus fórmulas exactas:
+        # Total Caja    = (Ventas Contado + Cobros CxC) - (Anulaciones + Descuentos + Devoluciones)
+        # Total Transf  = suma de todas las transferencias (contado + cobros CxC)
+        # Ventas Contado= suma de todas las ventas al contado
+        # Ventas Crédito= suma de todas las ventas a crédito
+        # Total Devolu  = suma de todas las devoluciones
+        # Total Anula   = suma de todas las anulaciones
+        # Total Descu   = suma de todos los descuentos
+        # Total Cobros  = suma de todos los cobros CxC
         cards_data = [
-            ("Total Vendido",
-             f"{float(total_vendido):,.2f}",           None),
-            ("Transacciones",    str(total_registros),                        None),
-            ("Venta Contado",    f"{float(v_contado):,.2f}",
+            ("Total Caja",
+             f"RD$ {float(total_caja):,.2f}",
+             "(Ctdo+Cobros)-(Anul+Desc+Dev)"),
+            ("Total Transf",
+             f"RD$ {float(t_transferencias):,.2f}",
+             "Transf. contado + CxC"),
+            ("Ventas Contado",
+             f"RD$ {float(v_contado):,.2f}",
              f"({count_ventas_contado} ventas)"),
-            ("Venta Crédito",    f"{float(v_credito):,.2f}",
+            ("Ventas Crédito",
+             f"RD$ {float(v_credito):,.2f}",
              f"({count_ventas_credito} ventas)"),
-            ("Devoluciones",     f"{float(v_devoluciones):,.2f}",
+            ("Total Devolu",
+             f"RD$ {float(v_devoluciones):,.2f}",
              f"({count_devoluciones} devol.)"),
-            ("Anulaciones",      f"{float(v_anulaciones):,.2f}",
+            ("Total Anula",
+             f"RD$ {float(v_anulaciones):,.2f}",
              f"({cantidad_anuladas} facturas)" if cantidad_anuladas > 0 else None),
-            ("Total Desctos.",
-             f"{float(total_descuentos):,.2f}",        None),
-            ("Cobros Recib.",    f"{float(total_cobros_recibidos):,.2f}",
+            ("Total Descu",
+             f"RD$ {float(total_descuentos):,.2f}",
+             None),
+            ("Total Cobros",
+             f"RD$ {float(total_cobros_recibidos):,.2f}",
              f"({count_cobros} cobros)"),
         ]
 
