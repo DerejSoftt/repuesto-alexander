@@ -2656,44 +2656,76 @@ def ventas_por_usuario_pdf(request):
                 })
 
             else:
-                # Venta NO anulada – una sola fila (lógica original)
-                venta_contado = Decimal('0.00')
-                venta_credito = Decimal('0.00')
-                devolucion    = Decimal('0.00')
-                descuento     = Decimal('0.00')
+                # Venta NO anulada → una fila por CADA movimiento distinto:
+                # Fila 1  siempre: VENTA (solo el monto de la venta)
+                # Fila 2  si hay devolución: DEVOL (solo el monto devuelto)
+                # Fila 3  si hay descuento: DESCU (solo el descuento)
 
-                if es_credito_venta:
-                    venta_credito = venta.total
-                else:
-                    venta_contado = venta.total
-
-                if tiene_devolucion and monto_devuelto > 0:
-                    devolucion = monto_devuelto
-
-                # El descuento solo se registra en la fila si NO hay devolución.
-                # Si hay devolución, el descuento ya no aplica (la transacción se está revirtiendo)
-                # y no debe mezclarse con los cálculos de la devolución.
-                if descuento_v > 0 and not tiene_devolucion:
-                    descuento = descuento_v
-
+                # ---- Fila 1: VENTA ----
+                venta_contado_row = venta.total if not es_credito_venta else Decimal('0.00')
+                venta_credito_row = venta.total if es_credito_venta else Decimal('0.00')
+                # Si la venta tiene devolución, la fila VENTA muestra tipo VENTA (no DEVOL)
+                tipo_mov_venta = 'VENTA'
                 rows.append({
                     'fecha':             venta.fecha_venta.date(),
                     'factura':           venta.numero_factura,
                     'usuario':           venta.vendedor.username,
                     'cliente':           venta.cliente_nombre or 'N/A',
                     'tipo':              'venta',
-                    'tipo_movimiento':   tipo_movimiento,
+                    'tipo_movimiento':   tipo_mov_venta,
                     'metodo_movimiento': metodo_movimiento,
-                    'venta_contado':     venta_contado,
-                    'venta_credito':     venta_credito,
-                    'devolucion':        devolucion,
+                    'venta_contado':     venta_contado_row,
+                    'venta_credito':     venta_credito_row,
+                    'devolucion':        Decimal('0.00'),
                     'anulacion':         Decimal('0.00'),
-                    'descuento':         descuento,
+                    'descuento':         Decimal('0.00'),
                     'cobro':             Decimal('0.00'),
-                    'estado':            estado_texto,
+                    'estado':            '',
                     'es_anulada':        False,
-                    'tiene_devolucion':  tiene_devolucion,
+                    'tiene_devolucion':  False,
                 })
+
+                # ---- Fila 2: DEVOL (independiente) ----
+                if tiene_devolucion and monto_devuelto > 0:
+                    rows.append({
+                        'fecha':             venta.fecha_venta.date(),
+                        'factura':           venta.numero_factura,
+                        'usuario':           quien_devuelve or venta.vendedor.username,
+                        'cliente':           venta.cliente_nombre or 'N/A',
+                        'tipo':              'devolucion',
+                        'tipo_movimiento':   'DEVOL',
+                        'metodo_movimiento': normalizar_metodo(venta.metodo_pago) or 'EFE',
+                        'venta_contado':     Decimal('0.00'),
+                        'venta_credito':     Decimal('0.00'),
+                        'devolucion':        monto_devuelto,
+                        'anulacion':         Decimal('0.00'),
+                        'descuento':         Decimal('0.00'),
+                        'cobro':             Decimal('0.00'),
+                        'estado':            f'Dev: RD${float(monto_devuelto):,.2f}',
+                        'es_anulada':        False,
+                        'tiene_devolucion':  True,
+                    })
+
+                # ---- Fila 3: DESCU de venta (independiente) ----
+                if descuento_v > 0:
+                    rows.append({
+                        'fecha':             venta.fecha_venta.date(),
+                        'factura':           venta.numero_factura,
+                        'usuario':           venta.vendedor.username,
+                        'cliente':           venta.cliente_nombre or 'N/A',
+                        'tipo':              'descuento_venta',
+                        'tipo_movimiento':   'DESCU',
+                        'metodo_movimiento': normalizar_metodo(venta.metodo_pago) or 'EFE',
+                        'venta_contado':     Decimal('0.00'),
+                        'venta_credito':     Decimal('0.00'),
+                        'devolucion':        Decimal('0.00'),
+                        'anulacion':         Decimal('0.00'),
+                        'descuento':         descuento_v,
+                        'cobro':             Decimal('0.00'),
+                        'estado':            'Descuento',
+                        'es_anulada':        False,
+                        'tiene_devolucion':  False,
+                    })
 
         # 4b. FILAS DE COBROS Y DESCUENTOS/AJUSTES (pagos en el rango)
         for pago in pagos_en_rango.select_related('cuenta__venta', 'usuario').iterator():
@@ -2895,7 +2927,7 @@ def ventas_por_usuario_pdf(request):
                 count_devoluciones += 1
             if row['es_anulada']:
                 count_anulaciones += 1
-            if row['descuento'] > 0 and tipo == 'descuento_pago':
+            if row['descuento'] > 0 and tipo in ('descuento_pago', 'descuento_venta'):
                 count_descuentos += 1
             if row['cobro'] > 0:
                 count_cobros += 1
@@ -3083,15 +3115,15 @@ def ventas_por_usuario_pdf(request):
 
             # Color de fondo según tipo y estado
             if row.get('es_anulada'):
-                bg = (1, 0.85, 0.85)
+                bg = (1, 0.85, 0.85)        # rojo claro  – anulación
             elif row.get('tiene_devolucion'):
-                bg = (1, 1, 0.85)
-            elif tipo == 'descuento_pago':
-                bg = (0.85, 0.92, 1)
+                bg = (1, 1, 0.85)            # amarillo    – devolución
+            elif tipo in ('descuento_pago', 'descuento_venta'):
+                bg = (0.85, 0.92, 1)         # azul claro  – descuento
             elif tipo == 'cobro':
-                bg = (0.90, 0.95, 1)
+                bg = (0.90, 0.95, 1)         # azul muy claro – cobro CxC
             else:
-                bg = (0.85, 1, 0.85)
+                bg = (0.85, 1, 0.85)         # verde claro – venta normal
 
             p.setFillColorRGB(*bg)
             p.rect(table_left, y_pos - row_height,
