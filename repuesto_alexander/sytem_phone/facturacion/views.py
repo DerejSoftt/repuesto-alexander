@@ -2591,50 +2591,106 @@ def ventas_por_usuario_pdf(request):
             elif tiene_devolucion:
                 estado_texto = f"Dev: RD${float(monto_devuelto):,.2f}"
 
-            # Determinar montos por columna
-            venta_contado = Decimal('0.00')
-            venta_credito = Decimal('0.00')
-            anulacion = Decimal('0.00')
-            devolucion = Decimal('0.00')
-            descuento = Decimal('0.00')
-
+            # ── Determinar montos por columna ──
             if es_anulada:
-                # ANULADA: NO va a Ventas, solo a Anulación
-                # Así "Ventas Contado" no incluye ventas revertidas
-                anulacion = venta.total
+                # ANULADA dentro del rango → DOS filas:
+                #   1. Fila VENTA original (verde) con el monto real en la columna Ventas
+                #   2. Fila ANUL separada   (roja)  con el monto en la columna Anulación
+                # Así el usuario ve ambos movimientos y los acumuladores son consistentes:
+                # v_contado += venta.total  y  v_anulaciones += venta.total → se cancelan en Total Caja
+
+                # Fila 1 – Venta original (sin marcar como anulada visualmente)
+                vc_orig = venta.total if not es_credito_venta else Decimal('0.00')
+                vcred_orig = venta.total if es_credito_venta else Decimal('0.00')
+                if es_credito_venta:
+                    metodo_orig = 'CRED'
+                else:
+                    metodo_orig = normalizar_metodo(venta.metodo_pago) or 'EFE'
+                rows.append({
+                    'fecha':             venta.fecha_venta.date(),
+                    'factura':           venta.numero_factura,
+                    'usuario':           venta.vendedor.username,
+                    'cliente':           venta.cliente_nombre or 'N/A',
+                    'tipo':              'venta',
+                    'tipo_movimiento':   'VENTA',
+                    'metodo_movimiento': metodo_orig,
+                    'venta_contado':     vc_orig,
+                    'venta_credito':     vcred_orig,
+                    'devolucion':        Decimal('0.00'),
+                    'anulacion':         Decimal('0.00'),
+                    'descuento':         Decimal('0.00'),
+                    'cobro':             Decimal('0.00'),
+                    'estado':            '',
+                    'es_anulada':        False,   # verde – es la venta original
+                    'tiene_devolucion':  False,
+                })
+
+                # Fila 2 – Anulación (roja), usa fecha de anulación si está disponible
+                fecha_anul = (
+                    venta.fecha_anulacion.date()
+                    if getattr(venta, 'fecha_anulacion', None)
+                    else venta.fecha_venta.date()
+                )
+                usuario_anul = (
+                    venta.usuario_anulacion.username
+                    if getattr(venta, 'usuario_anulacion', None)
+                    else venta.vendedor.username
+                )
+                rows.append({
+                    'fecha':             fecha_anul,
+                    'factura':           venta.numero_factura,
+                    'usuario':           usuario_anul,
+                    'cliente':           venta.cliente_nombre or 'N/A',
+                    'tipo':              'anulacion',
+                    'tipo_movimiento':   'ANUL',
+                    'metodo_movimiento': normalizar_metodo(venta.metodo_pago) or 'EFE',
+                    'venta_contado':     Decimal('0.00'),
+                    'venta_credito':     Decimal('0.00'),
+                    'devolucion':        Decimal('0.00'),
+                    'anulacion':         venta.total,
+                    'descuento':         Decimal('0.00'),
+                    'cobro':             Decimal('0.00'),
+                    'estado':            'Anulada',
+                    'es_anulada':        True,    # roja
+                    'tiene_devolucion':  False,
+                })
+
             else:
-                # Venta real (contado o crédito)
+                # Venta NO anulada – una sola fila (lógica original)
+                venta_contado = Decimal('0.00')
+                venta_credito = Decimal('0.00')
+                devolucion    = Decimal('0.00')
+                descuento     = Decimal('0.00')
+
                 if es_credito_venta:
                     venta_credito = venta.total
                 else:
                     venta_contado = venta.total
 
-                # Devolución parcial o total dentro del rango
                 if tiene_devolucion and monto_devuelto > 0:
                     devolucion = monto_devuelto
 
-                # Descuento directo en la venta
                 if descuento_v > 0:
                     descuento = descuento_v
 
-            rows.append({
-                'fecha':            venta.fecha_venta.date(),
-                'factura':          venta.numero_factura,
-                'usuario':          venta.vendedor.username,
-                'cliente':          venta.cliente_nombre or 'N/A',
-                'tipo':             'venta',
-                'tipo_movimiento':  tipo_movimiento,
-                'metodo_movimiento': metodo_movimiento,
-                'venta_contado':    venta_contado,
-                'venta_credito':    venta_credito,
-                'devolucion':       devolucion,
-                'anulacion':        anulacion,
-                'descuento':        descuento,
-                'cobro':            Decimal('0.00'),
-                'estado':           estado_texto,
-                'es_anulada':       es_anulada,
-                'tiene_devolucion': tiene_devolucion,
-            })
+                rows.append({
+                    'fecha':             venta.fecha_venta.date(),
+                    'factura':           venta.numero_factura,
+                    'usuario':           venta.vendedor.username,
+                    'cliente':           venta.cliente_nombre or 'N/A',
+                    'tipo':              'venta',
+                    'tipo_movimiento':   tipo_movimiento,
+                    'metodo_movimiento': metodo_movimiento,
+                    'venta_contado':     venta_contado,
+                    'venta_credito':     venta_credito,
+                    'devolucion':        devolucion,
+                    'anulacion':         Decimal('0.00'),
+                    'descuento':         descuento,
+                    'cobro':             Decimal('0.00'),
+                    'estado':            estado_texto,
+                    'es_anulada':        False,
+                    'tiene_devolucion':  tiene_devolucion,
+                })
 
         # 4b. FILAS DE COBROS Y DESCUENTOS/AJUSTES (pagos en el rango)
         for pago in pagos_en_rango.select_related('cuenta__venta', 'usuario').iterator():
