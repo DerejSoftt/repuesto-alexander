@@ -2670,7 +2670,10 @@ def ventas_por_usuario_pdf(request):
                 if tiene_devolucion and monto_devuelto > 0:
                     devolucion = monto_devuelto
 
-                if descuento_v > 0:
+                # El descuento solo se registra en la fila si NO hay devolución.
+                # Si hay devolución, el descuento ya no aplica (la transacción se está revirtiendo)
+                # y no debe mezclarse con los cálculos de la devolución.
+                if descuento_v > 0 and not tiene_devolucion:
                     descuento = descuento_v
 
                 rows.append({
