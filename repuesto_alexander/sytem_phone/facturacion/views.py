@@ -2424,8 +2424,44 @@ def ventas_por_usuario_pdf(request):
             .values_list('usuario_id', flat=True).distinct()
         )
 
+        usuarios_con_anulaciones = (
+            Venta.objects.filter(
+                anulada=True,
+                fecha_anulacion__isnull=False,
+                usuario_anulacion__is_active=True,
+            )
+            .exclude(usuario_anulacion__username__in=USUARIOS_EXCLUIDOS)
+        )
+        if fecha_desde:
+            usuarios_con_anulaciones = usuarios_con_anulaciones.filter(
+                fecha_anulacion__date__gte=fecha_desde)
+        if fecha_hasta:
+            usuarios_con_anulaciones = usuarios_con_anulaciones.filter(
+                fecha_anulacion__date__lte=fecha_hasta)
+        usuarios_con_anulaciones = (
+            usuarios_con_anulaciones
+            .values_list('usuario_anulacion_id', flat=True).distinct()
+        )
+
+        usuarios_con_devoluciones = (
+            Devolucion.objects.filter(
+                usuario__is_active=True,
+            )
+            .exclude(usuario__username__in=USUARIOS_EXCLUIDOS)
+        )
+        if fecha_desde:
+            usuarios_con_devoluciones = usuarios_con_devoluciones.filter(
+                fecha_devolucion__date__gte=fecha_desde)
+        if fecha_hasta:
+            usuarios_con_devoluciones = usuarios_con_devoluciones.filter(
+                fecha_devolucion__date__lte=fecha_hasta)
+        usuarios_con_devoluciones = (
+            usuarios_con_devoluciones
+            .values_list('usuario_id', flat=True).distinct()
+        )
+
         usuarios_con_actividad_ids = set(
-            usuarios_con_ventas) | set(usuarios_con_cobros)
+            usuarios_con_ventas) | set(usuarios_con_cobros) | set(usuarios_con_anulaciones) | set(usuarios_con_devoluciones)
 
         # Filtro opcional por usuario específico
         if usuario_id:
@@ -2439,6 +2475,19 @@ def ventas_por_usuario_pdf(request):
                 usuarios_con_actividad_ids = {usuario_obj.id}
             else:
                 usuarios_con_actividad_ids = set()
+
+        fecha_desde_dt = date.fromisoformat(
+            fecha_desde) if fecha_desde else None
+        fecha_hasta_dt = date.fromisoformat(
+            fecha_hasta) if fecha_hasta else None
+
+        def fecha_en_rango(fecha_base):
+            fecha_valor = fecha_base.date() if hasattr(fecha_base, 'date') else fecha_base
+            if fecha_desde_dt and fecha_valor < fecha_desde_dt:
+                return False
+            if fecha_hasta_dt and fecha_valor > fecha_hasta_dt:
+                return False
+            return True
 
         # Aplicar filtro de usuarios a ventas
         ventas_qs = ventas_qs.filter(
@@ -2489,7 +2538,6 @@ def ventas_por_usuario_pdf(request):
             quien_devuelve = ", ".join(
                 devoluciones.values_list(
                     'usuario__username', flat=True).distinct())
-
 
             # Descuento directo en la venta
             descuento_v = venta.descuento_monto or Decimal('0.00')
@@ -2650,6 +2698,76 @@ def ventas_por_usuario_pdf(request):
                     'tiene_devolucion': False,
                 })
 
+        # 4c. FILAS DE ANULACIONES QUE OCURRIERON EN EL RANGO
+        anulaciones_en_rango = Venta.objects.filter(
+            anulada=True,
+            usuario_anulacion_id__in=usuarios_con_actividad_ids,
+            fecha_anulacion__isnull=False,
+        )
+        if fecha_desde:
+            anulaciones_en_rango = anulaciones_en_rango.filter(
+                fecha_anulacion__date__gte=fecha_desde)
+        if fecha_hasta:
+            anulaciones_en_rango = anulaciones_en_rango.filter(
+                fecha_anulacion__date__lte=fecha_hasta)
+
+        for venta_anulada in anulaciones_en_rango.select_related('cliente', 'usuario_anulacion'):
+            if fecha_en_rango(venta_anulada.fecha_venta):
+                continue
+
+            rows.append({
+                'fecha':            venta_anulada.fecha_anulacion.date(),
+                'factura':          venta_anulada.numero_factura,
+                'usuario':          venta_anulada.usuario_anulacion.username if venta_anulada.usuario_anulacion else 'Sistema',
+                'cliente':          venta_anulada.cliente_nombre or 'N/A',
+                'tipo':             'anulacion',
+                'tipo_movimiento':  'ANUL',
+                'metodo_movimiento': (venta_anulada.metodo_pago or 'EFE').upper()[:10],
+                'venta_contado':    Decimal('0.00'),
+                'venta_credito':    Decimal('0.00'),
+                'devolucion':       Decimal('0.00'),
+                'anulacion':        venta_anulada.total,
+                'descuento':        Decimal('0.00'),
+                'cobro':            Decimal('0.00'),
+                'estado':           'Anulada',
+                'es_anulada':       True,
+                'tiene_devolucion': False,
+            })
+
+        # 4d. FILAS DE DEVOLUCIONES QUE OCURRIERON EN EL RANGO
+        devoluciones_en_rango = Devolucion.objects.filter(
+            usuario_id__in=usuarios_con_actividad_ids,
+        )
+        if fecha_desde:
+            devoluciones_en_rango = devoluciones_en_rango.filter(
+                fecha_devolucion__date__gte=fecha_desde)
+        if fecha_hasta:
+            devoluciones_en_rango = devoluciones_en_rango.filter(
+                fecha_devolucion__date__lte=fecha_hasta)
+
+        for devolucion in devoluciones_en_rango.select_related('venta', 'venta__cliente', 'producto', 'usuario'):
+            if fecha_en_rango(devolucion.venta.fecha_venta):
+                continue
+
+            rows.append({
+                'fecha':            devolucion.fecha_devolucion.date(),
+                'factura':          devolucion.venta.numero_factura,
+                'usuario':          devolucion.usuario.username if devolucion.usuario else 'Sistema',
+                'cliente':          devolucion.venta.cliente_nombre or 'N/A',
+                'tipo':             'devolucion',
+                'tipo_movimiento':  'DEVOL',
+                'metodo_movimiento': (devolucion.venta.metodo_pago or 'EFE').upper()[:10],
+                'venta_contado':    Decimal('0.00'),
+                'venta_credito':    Decimal('0.00'),
+                'devolucion':       devolucion.monto,
+                'anulacion':        Decimal('0.00'),
+                'descuento':        Decimal('0.00'),
+                'cobro':            Decimal('0.00'),
+                'estado':           f"Dev: RD${float(devolucion.monto):,.2f}",
+                'es_anulada':       False,
+                'tiene_devolucion': True,
+            })
+
         # Ordenar por fecha descendente
         rows.sort(key=lambda x: x['fecha'], reverse=True)
         total_registros = len(rows)
@@ -2673,7 +2791,6 @@ def ventas_por_usuario_pdf(request):
         count_anulaciones = 0
         count_descuentos = 0
         count_cobros = 0
-
 
         for row in rows:
             v_contado += row['venta_contado']
@@ -2711,10 +2828,8 @@ def ventas_por_usuario_pdf(request):
         # Cantidad de anuladas
         cantidad_anuladas = count_anulaciones
 
-
         # Total de facturas anuladas (monto total)
         total_facturas_anuladas = v_anulaciones
-
 
         # ──────────────────────────────────────────────────────────────────────
         # 7. GENERACIÓN DEL PDF
@@ -2884,7 +2999,6 @@ def ventas_por_usuario_pdf(request):
             p.setFillColorRGB(0.10, 0.10, 0.10)
             text_y = y_pos - row_height + 0.07 * inch
 
-
             # Formatear montos: mostrar monto original DE LA VENTA + monto específico de la operación
             # Inicializar todas a vacío
             venta_str = devolucion_str = anulacion_str = descuento_str = cobro_str = ""
@@ -2911,6 +3025,16 @@ def ventas_por_usuario_pdf(request):
                 # Solo cobro
                 cobro_str = f"{float(row['cobro']):,.2f}" if row['cobro'] > 0 else ""
 
+            # Si la fila tiene descuento pero no cayó en el tipo DESCU,
+            # igual debe visualizarse en la columna correspondiente.
+            if row['descuento'] > 0 and not descuento_str:
+                descuento_str = f"{float(row['descuento']):,.2f}"
+
+            if row['devolucion'] > 0 and not devolucion_str:
+                devolucion_str = f"{float(row['devolucion']):,.2f}"
+
+            if row['anulacion'] > 0 and not anulacion_str:
+                anulacion_str = f"{float(row['anulacion']):,.2f}"
 
             cells = [
                 (col_x[0], row['fecha'].strftime('%d/%m/%Y'),   False),
@@ -2955,7 +3079,6 @@ def ventas_por_usuario_pdf(request):
             y_position = draw_row(p, row, y_position)
 
         draw_table_border(p, table_top_y, y_position)
-
 
         p.showPage()
         p.save()
@@ -3954,7 +4077,8 @@ def procesar_venta(request):
         cash_received = safe_decimal(data.get('cash_received'), 0)
         change_amount = safe_decimal(data.get('change_amount'), 0)
 
-        print(f"Datos recibidos - Subtotal: {subtotal_sin_itbis}, ITBIS: {itbis_monto}, Total: {total}")
+        print(
+            f"Datos recibidos - Subtotal: {subtotal_sin_itbis}, ITBIS: {itbis_monto}, Total: {total}")
 
         # ============================================
         # PROCESAR DESCUENTO CON LÍMITE PARA USUARIOS NORMALES
@@ -3980,7 +4104,8 @@ def procesar_venta(request):
                     'message': 'El porcentaje de descuento debe estar entre 0 y 100'
                 })
 
-        print(f"Descuento - Porcentaje: {discount_percentage}%, Monto: {discount_amount}")
+        print(
+            f"Descuento - Porcentaje: {discount_percentage}%, Monto: {discount_amount}")
 
         # ============================================
         # VALIDACIONES BÁSICAS
@@ -4002,19 +4127,23 @@ def procesar_venta(request):
         # ============================================
         subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
 
-        itbis_calculado = subtotal_sin_itbis * (itbis_porcentaje / Decimal('100.00'))
+        itbis_calculado = subtotal_sin_itbis * \
+            (itbis_porcentaje / Decimal('100.00'))
         if abs(itbis_monto - itbis_calculado) > Decimal('0.01'):
-            print(f"Advertencia: ITBIS inconsistente. Recibido: {itbis_monto}, Calculado: {itbis_calculado}")
+            print(
+                f"Advertencia: ITBIS inconsistente. Recibido: {itbis_monto}, Calculado: {itbis_calculado}")
             itbis_monto = itbis_calculado
             subtotal_con_itbis = subtotal_sin_itbis + itbis_monto
 
-        print(f"ITBIS - Porcentaje: {itbis_porcentaje}%, Monto: {itbis_monto}, Calculado: {itbis_calculado}")
+        print(
+            f"ITBIS - Porcentaje: {itbis_porcentaje}%, Monto: {itbis_monto}, Calculado: {itbis_calculado}")
 
         # ============================================
         # VALIDACIÓN Y RECÁLCULO DE DESCUENTO Y TOTAL
         # ============================================
         # Recalcular monto de descuento basado en el subtotal_con_itbis
-        discount_amount_calculado = (subtotal_con_itbis * discount_percentage) / Decimal('100.00')
+        discount_amount_calculado = (
+            subtotal_con_itbis * discount_percentage) / Decimal('100.00')
         total_calculado = subtotal_con_itbis - discount_amount_calculado
 
         if abs(discount_amount - discount_amount_calculado) > Decimal('0.01'):
@@ -4023,13 +4152,15 @@ def procesar_venta(request):
             discount_amount = discount_amount_calculado
 
         if abs(total - total_calculado) > Decimal('0.01'):
-            print(f"Advertencia: Total inconsistente. Recibido: {total}, Calculado: {total_calculado}")
+            print(
+                f"Advertencia: Total inconsistente. Recibido: {total}, Calculado: {total_calculado}")
             total = total_calculado
 
         if abs(total_a_pagar - total) > Decimal('0.01'):
             total_a_pagar = total
 
-        print(f"Totales - Subtotal con ITBIS: {subtotal_con_itbis}, Total: {total}, Total a pagar: {total_a_pagar}")
+        print(
+            f"Totales - Subtotal con ITBIS: {subtotal_con_itbis}, Total: {total}, Total a pagar: {total_a_pagar}")
 
         # ============================================
         # PROCESAR CLIENTE
@@ -4052,7 +4183,8 @@ def procesar_venta(request):
                     eliminada=False
                 ).exclude(estado='pagada')
 
-                total_deuda = sum(safe_decimal(cuenta.saldo_pendiente) for cuenta in cuentas_pendientes)
+                total_deuda = sum(safe_decimal(cuenta.saldo_pendiente)
+                                  for cuenta in cuentas_pendientes)
                 total_con_nueva_venta = total_deuda + total
 
                 if total_con_nueva_venta > safe_decimal(cliente.credit_limit):
@@ -4091,7 +4223,8 @@ def procesar_venta(request):
                 producto_nombre = item.get('name', 'Producto Desconocido')
                 cantidad_solicitada = safe_int(item.get('quantity', 0))
                 precio_unitario = safe_decimal(item.get('price', 0))
-                tipo_precio = item.get('tipo_precio', 'unitaria')   # ← NUEVO: extraer tipo de precio
+                # ← NUEVO: extraer tipo de precio
+                tipo_precio = item.get('tipo_precio', 'unitaria')
 
                 if not producto_id:
                     return JsonResponse({'success': False, 'message': f'Producto sin ID: {producto_nombre}'})
@@ -4099,7 +4232,8 @@ def procesar_venta(request):
                 if cantidad_solicitada <= 0:
                     return JsonResponse({'success': False, 'message': f'Cantidad inválida para {producto_nombre}'})
 
-                producto = EntradaProducto.objects.get(id=producto_id, activo=True)
+                producto = EntradaProducto.objects.get(
+                    id=producto_id, activo=True)
 
                 if safe_int(producto.cantidad) < cantidad_solicitada:
                     nombre_producto = getattr(producto, 'descripcion', getattr(
@@ -4173,8 +4307,10 @@ def procesar_venta(request):
             producto.cantidad -= cantidad
             producto.save(update_fields=['cantidad'])
 
-            nombre_producto = getattr(producto, 'descripcion', getattr(producto, 'nombre', 'Producto Desconocido'))
-            print(f"Stock actualizado: {nombre_producto} -{cantidad} (Nuevo stock: {producto.cantidad})")
+            nombre_producto = getattr(producto, 'descripcion', getattr(
+                producto, 'nombre', 'Producto Desconocido'))
+            print(
+                f"Stock actualizado: {nombre_producto} -{cantidad} (Nuevo stock: {producto.cantidad})")
 
             detalle = DetalleVenta(
                 venta=venta,
@@ -4186,7 +4322,8 @@ def procesar_venta(request):
             )
             detalle.save()
 
-            productos_para_cuenta.append(f"{nombre_producto} x{cantidad} - RD${precio_unitario:.2f}")
+            productos_para_cuenta.append(
+                f"{nombre_producto} x{cantidad} - RD${precio_unitario:.2f}")
 
         # ============================================
         # CREAR CUENTA POR COBRAR SI ES VENTA A CRÉDITO
@@ -4198,7 +4335,8 @@ def procesar_venta(request):
 
                 fecha_vencimiento_str = data.get('fecha_vencimiento')
                 if fecha_vencimiento_str:
-                    fecha_vencimiento = datetime.strptime(fecha_vencimiento_str, '%Y-%m-%d').date()
+                    fecha_vencimiento = datetime.strptime(
+                        fecha_vencimiento_str, '%Y-%m-%d').date()
                 else:
                     fecha_vencimiento = timezone.now().date() + timezone.timedelta(days=30)
 
@@ -4234,7 +4372,8 @@ Productos:
             from django.core.mail import EmailMessage
             from django.conf import settings
 
-            email_configured = hasattr(settings, 'EMAIL_HOST') and settings.EMAIL_HOST
+            email_configured = hasattr(
+                settings, 'EMAIL_HOST') and settings.EMAIL_HOST
 
             if email_configured:
                 recipient_list = []
@@ -4289,7 +4428,8 @@ Sistema de Ventas - Super Bestia
                         print(f"✓ Correo enviado a {recipient_list}")
 
                     except ImportError as e:
-                        print(f"✗ Error: generar_pdf_venta no encontrada: {str(e)}")
+                        print(
+                            f"✗ Error: generar_pdf_venta no encontrada: {str(e)}")
                     except Exception as e:
                         print(f"✗ Error al enviar correo: {str(e)}")
                 else:
