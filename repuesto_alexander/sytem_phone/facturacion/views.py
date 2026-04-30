@@ -2856,8 +2856,8 @@ def ventas_por_usuario_pdf(request):
         total_facturas_anuladas = v_anulaciones
 
         # ── FÓRMULA TOTAL CAJA ──
-        # (Ventas Contado + Cobros CxC) - (Anulaciones + Descuentos + Devoluciones)
-        total_caja = (v_contado + c_cobros) - (v_anulaciones + total_descuentos + v_devoluciones)
+        # (Ventas Contado + Cobros CxC) - (Anulaciones + Devoluciones)
+        total_caja = (v_contado + c_cobros) - (v_anulaciones + v_devoluciones)
 
         # ──────────────────────────────────────────────────────────────────────
         # 7. GENERACIÓN DEL PDF
@@ -2898,7 +2898,7 @@ def ventas_por_usuario_pdf(request):
 
         # ── Tarjetas de resumen ──
         # Campos solicitados con sus fórmulas exactas:
-        # Total Caja    = (Ventas Contado + Cobros CxC) - (Anulaciones + Descuentos + Devoluciones)
+        # Total Caja    = (Ventas Contado + Cobros CxC) - (Anulaciones + Devoluciones)
         # Total Transf  = suma de todas las transferencias (contado + cobros CxC)
         # Ventas Contado= suma de todas las ventas al contado
         # Ventas Crédito= suma de todas las ventas a crédito
@@ -2909,7 +2909,7 @@ def ventas_por_usuario_pdf(request):
         cards_data = [
             ("Total Caja",
              f"RD$ {float(total_caja):,.2f}",
-             "(Ctdo+Cobros)-(Anul+Desc+Dev)"),
+             "(Ctdo+Cobros)-(Anul+Dev)"),
             ("Total Transf",
              f"RD$ {float(t_transferencias):,.2f}",
              "Transf. contado + CxC"),
