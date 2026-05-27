@@ -171,6 +171,25 @@ def is_superuser_or_almacen(user):
 # ==============================================================================================
 
 
+def is_superuser_or_usuario_especial(user):
+    """Usuario Especial: acceso a entrada (solo lectura), ventas y CxC sin descuento."""
+    return user.is_superuser or user.groups.filter(name='Usuario Especial').exists()
+
+
+def is_superuser_or_almacen_or_especial(user):
+    """Permite acceso a la vista entrada a Almacén y Usuario Especial (con restricciones en template)."""
+    return user.is_superuser or user.groups.filter(name__in=['Almacén', 'Usuario Especial']).exists()
+
+
+def is_superuser_or_normal_or_especial(user):
+    """Permite acceso a ventas y CxC a Usuario Normal y Usuario Especial."""
+    return user.is_superuser or user.groups.filter(name__in=['Usuario Normal', 'Usuario Especial']).exists()
+
+# ==============================================================================================
+# ==============================Funciones de control de acceso=================================
+# ==============================================================================================
+
+
 def check_module_access(module_name):
     def decorator(view_func):
         @wraps(view_func)
@@ -231,6 +250,10 @@ def index(request):
             # 4) Usuario normal -> caja
             # Si tu "caja" real es ventas, cambia 'cierredecaja' por 'ventas'
             if 'usuario normal' in grupos:
+                return redirect('ventas')
+
+            # 4b) Usuario Especial -> ventas
+            if 'usuario especial' in grupos:
                 return redirect('ventas')
 
             # 5) Cualquier otro rol -> dashboard
@@ -4115,7 +4138,7 @@ def inventario_eliminar(request, id):
 # ================================================================================================
 # ============================ Vista para renderizar la página de ventas ============================
 # ================================================================================================
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
+@user_passes_test(is_superuser_or_normal_or_especial, login_url='/')
 @login_required
 @check_module_access('ventas')
 def ventas(request):
@@ -4930,7 +4953,7 @@ def detalle_venta(request, venta_id):
     })
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
+@user_passes_test(is_superuser_or_normal_or_especial, login_url='/')
 @login_required
 def listadecliente(request):
     return render(request, "facturacion/listadecliente.html")
@@ -5046,7 +5069,7 @@ def editar_cliente(request, cliente_id):
         })
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
+@user_passes_test(is_superuser_or_normal_or_especial, login_url='/')
 @login_required
 def registrodecliente(request):
     return render(request, "facturacion/registrodecliente.html")
@@ -5297,7 +5320,7 @@ def agregar_nuevo_producto(request):
         })
 
 
-@user_passes_test(is_superuser_or_almacen,  login_url='/')
+@user_passes_test(is_superuser_or_almacen_or_especial,  login_url='/')
 @csrf_exempt
 def entrada(request):
     """Vista principal para registro de entradas de productos (inventario)"""
@@ -5816,7 +5839,7 @@ def lista_comprobantes(request):
 ventas
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
+@user_passes_test(is_superuser_or_normal_or_especial, login_url='/')
 @login_required
 def cuentaporcobrar(request):
     search = request.GET.get('search', '')
@@ -7894,7 +7917,7 @@ def generar_reporte_vencidas_pdf(request):
 # ==================================================================================================
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/')
+@user_passes_test(is_superuser_or_almacen_or_especial, login_url='/')
 @login_required
 def gestiondesuplidores(request):
     proveedores = Proveedor.objects.all().order_by('nombre_empresa')
@@ -8045,7 +8068,7 @@ def get_proveedor_data(request, id):
     return JsonResponse(data)
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/')
+@user_passes_test(is_superuser_or_almacen_or_especial, login_url='/')
 @login_required
 def registrosuplidores(request):
     if request.method == 'POST':
@@ -9286,6 +9309,10 @@ def roles(request):
         {
             'name': 'Almacén',
             'permisos': ['entrada', 'registrosuplidores', 'gestiondesuplidores', 'inventario']
+        },
+        {
+            'name': 'Usuario Especial',
+            'permisos': ['entrada', 'ventas', 'cuentaporcobrar', 'compras', 'inventario', 'registrodecliente', 'listadecliente', 'registrosuplidores', 'gestiondesuplidores', 'cuentaporpagar']
         }
     ]
 
@@ -9339,7 +9366,7 @@ def roles(request):
                 modulos_codename.append(modulo["codename"])
 
         # Determinar si es un grupo especial
-        es_especial = group.name in ['Usuario Normal', 'Almacén']
+        es_especial = group.name in ['Usuario Normal', 'Almacén', 'Usuario Especial']
 
         role_data = {
             'id': group.id,
@@ -9355,7 +9382,7 @@ def roles(request):
         roles_data.append(role_data)
 
         # Solo incluir los roles especiales para asignar a usuarios
-        if group.name in ['Usuario Normal', 'Almacén']:
+        if group.name in ['Usuario Normal', 'Almacén', 'Usuario Especial']:
             roles_para_usuarios.append(role_data)
 
     users_data = []
@@ -9470,7 +9497,7 @@ def roles(request):
                 group = get_object_or_404(Group, id=role_id)
 
                 # No permitir editar nombres de grupos especiales
-                if group.name in ['Usuario Normal', 'Almacén'] and name != group.name:
+                if group.name in ['Usuario Normal', 'Almacén', 'Usuario Especial'] and name != group.name:
                     messages.error(
                         request, f'No se puede cambiar el nombre del rol especial "{group.name}".')
                 elif Group.objects.filter(name=name).exclude(id=role_id).exists():
@@ -9501,7 +9528,7 @@ def roles(request):
             group = get_object_or_404(Group, id=role_id)
 
             # No permitir eliminar grupos especiales
-            if group.name in ['Usuario Normal', 'Almacén']:
+            if group.name in ['Usuario Normal', 'Almacén', 'Usuario Especial']:
                 messages.error(
                     request, 'No se pueden eliminar los roles especiales del sistema.')
             elif group.user_set.exists():
@@ -10396,7 +10423,7 @@ def ver_factura(request):
     return render(request, 'facturacion/ver_factura.html', factura_data)
 
 
-@user_passes_test(is_superuser_or_almacen, login_url='/')
+@user_passes_test(is_superuser_or_almacen_or_especial, login_url='/')
 @login_required
 def compras(request):
     proveedores = Proveedor.objects.filter(activo=True)
@@ -10498,7 +10525,7 @@ def guardar_cuenta_por_pagar(request):
         })
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
+@user_passes_test(is_superuser_or_normal_or_especial, login_url='/')
 @login_required
 def cuentaporpagar(request):
     return render(request, "facturacion/cuentaporpagar.html")
