@@ -9312,7 +9312,7 @@ def roles(request):
         },
         {
             'name': 'Usuario Especial',
-            'permisos': ['entrada', 'ventas', 'cuentaporcobrar', 'compras', 'inventario', 'registrodecliente', 'listadecliente', 'registrosuplidores', 'gestiondesuplidores', 'cuentaporpagar']
+            'permisos': ['entrada', 'ventas', 'cuentaporcobrar', 'compras', 'inventario', 'registrodecliente', 'listadecliente', 'registrosuplidores', 'gestiondesuplidores', 'cuentaporpagar', 'cotizacion']
         }
     ]
 
@@ -10193,7 +10193,7 @@ def ultimo_comprobante(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@user_passes_test(is_superuser_or_usuario_normal, login_url='/')
+@user_passes_test(is_superuser_or_normal_or_especial, login_url='/')
 @login_required
 def cotizacion(request):
     return render(request, "facturacion/cotizacion.html")

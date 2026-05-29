@@ -681,11 +681,15 @@
     {% endif %}
 
     
-            <!-- Menú para Usuario Especial -->
+                <!-- Menú para Usuario Especial -->
     {% if user|has_group:"Usuario Especial" and not user.is_superuser %}
     <a href="{% url 'ventas' %}" class="menu-item">
         <i class='bx bx-receipt'></i>
         <span>Facturación</span>
+    </a>
+    <a href="{% url 'cotizacion' %}" class="menu-item">
+        <i class='bx bx-file'></i>
+        <span>Cotización</span>
     </a>
     <a href="{% url 'registrodecliente' %}" class="menu-item">
         <i class='bx bx-user-plus'></i>
